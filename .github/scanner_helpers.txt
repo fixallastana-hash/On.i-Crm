@@ -1,76 +1,69 @@
-private androidx.activity.result.ActivityResultLauncher<com.journeyapps.barcodescanner.ScanOptions> _oniScannerLauncher = null;
-private androidx.activity.result.ActivityResultLauncher<String> _oniPermLauncher = null;
-
-private void initScanner() {
-    if (_oniScannerLauncher != null && _oniPermLauncher != null) return;
-    try {
-        if (_oniPermLauncher == null) {
-            _oniPermLauncher = registerForActivityResult(
-                new androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-                new androidx.activity.result.contract.ActivityResultCallback<Boolean>() {
-                    @Override
-                    public void onActivityResult(Boolean granted) {
-                        if (granted != null && granted) {
-                            _oniLaunchScanner();
-                        }
-                    }
-                }
-            );
-        }
-        if (_oniScannerLauncher == null) {
-            _oniScannerLauncher = registerForActivityResult(
-                new com.journeyapps.barcodescanner.ScanContract(),
-                new androidx.activity.result.contract.ActivityResultCallback<com.journeyapps.barcodescanner.ScanIntentResult>() {
-                    @Override
-                    public void onActivityResult(com.journeyapps.barcodescanner.ScanIntentResult result) {
-                        if (result != null && result.getContents() != null) {
-                            final String barcode = result.getContents();
-                            webView.post(new Runnable() {
-                                public void run() {
-                                    try {
-                                        org.json.JSONObject obj = new org.json.JSONObject();
-                                        obj.put("barcode", barcode);
-                                        String js = "if(window.onBarcodeScanned){try{window.onBarcodeScanned(" + org.json.JSONObject.quote(obj.toString()) + ");}catch(e){}}";
-                                        webView.evaluateJavascript(js, null);
-                                    } catch (Exception ignored) {}
-                                }
-                            });
-                        }
-                    }
-                }
-            );
-        }
-    } catch (Exception e) {
-        // ничего: если registerForActivityResult недоступен — сканер просто не сработает
-    }
-}
-
-private void _oniLaunchScanner() {
-    try {
-        if (_oniScannerLauncher == null) return;
-        com.journeyapps.barcodescanner.ScanOptions options = new com.journeyapps.barcodescanner.ScanOptions();
-        options.setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.ALL_CODE_TYPES);
-        options.setPrompt("Наведите камеру на штрихкод");
-        options.setBeepEnabled(false);
-        options.setOrientationLocked(true);
-        _oniScannerLauncher.launch(options);
-    } catch (Exception e) {}
-}
-
 @JavascriptInterface
 public void scanBarcode() {
     runOnUiThread(new Runnable() {
         public void run() {
             try {
                 if (checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    if (_oniPermLauncher == null) initScanner();
-                    if (_oniPermLauncher == null) return;
-                    _oniPermLauncher.launch(android.Manifest.permission.CAMERA);
+                    requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 3001);
                     return;
                 }
-                if (_oniScannerLauncher == null) initScanner();
                 _oniLaunchScanner();
             } catch (Exception e) {}
         }
     });
+}
+
+private void _oniLaunchScanner() {
+    try {
+        android.content.Intent intent = new android.content.Intent(this, com.journeyapps.barcodescanner.CaptureActivity.class);
+        intent.setAction(com.journeyapps.barcodescanner.Intents.Scan.ACTION);
+        intent.putExtra(com.journeyapps.barcodescanner.Intents.Scan.FORMATS, "ALL_CODE_TYPES");
+        intent.putExtra(com.journeyapps.barcodescanner.Intents.Scan.PROMPT_MESSAGE, "Наведите камеру на штрихкод");
+        intent.putExtra(com.journeyapps.barcodescanner.Intents.Scan.BEEP_ENABLED, false);
+        intent.putExtra(com.journeyapps.barcodescanner.Intents.Scan.ORIENTATION_LOCKED, true);
+        startActivityForResult(intent, 3002);
+    } catch (Exception e) {
+        try {
+            com.journeyapps.barcodescanner.ScanOptions options = new com.journeyapps.barcodescanner.ScanOptions();
+            options.setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.ALL_CODE_TYPES);
+            options.setPrompt("Наведите камеру на штрихкод");
+            options.setBeepEnabled(false);
+            options.setOrientationLocked(true);
+            com.journeyapps.barcodescanner.IntentIntegrator integrator = new com.journeyapps.barcodescanner.IntentIntegrator(this);
+            integrator.initiateScan(options);
+        } catch (Exception ignored) {}
+    }
+}
+
+@Override
+public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == 3001) {
+        if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            _oniLaunchScanner();
+        }
+    }
+}
+
+@Override
+protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+    super.onActivityResult(requestCode, resultCode, data);
+    if (requestCode == 3002) {
+        try {
+            com.journeyapps.barcodescanner.ScanIntentResult result = com.journeyapps.barcodescanner.ScanIntentResult.parseActivityResult(resultCode, data);
+            if (result != null && result.getContents() != null) {
+                final String barcode = result.getContents();
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        try {
+                            org.json.JSONObject obj = new org.json.JSONObject();
+                            obj.put("barcode", barcode);
+                            String js = "if(window.onBarcodeScanned){try{window.onBarcodeScanned(" + org.json.JSONObject.quote(obj.toString()) + ");}catch(e){}}";
+                            webView.evaluateJavascript(js, null);
+                        } catch (Exception ignored) {}
+                    }
+                });
+            }
+        } catch (Exception ignored) {}
+    }
 }
