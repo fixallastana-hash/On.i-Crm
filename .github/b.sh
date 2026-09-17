@@ -76,10 +76,7 @@ EOF
 
 cat > android-project/app/build.gradle <<'EOF'
 plugins { id 'com.android.application' }
-configurations.all {
-  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-}
+
 android {
   namespace 'com.oni.crm'
   compileSdk 34
@@ -97,6 +94,7 @@ android {
   packagingOptions { jniLibs { useLegacyPackaging = true } }
   lint { abortOnError false; checkReleaseBuilds false }
 }
+
 dependencies {
   implementation 'androidx.core:core:1.13.1'
   implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -142,7 +140,6 @@ if [ ! -f android-project/app/src/main/AndroidManifest.xml ]; then
   exit 1
 fi
 
-# Разрешение на камеру для сканера штрихкода
 if ! grep -q 'android.permission.CAMERA' android-project/app/src/main/AndroidManifest.xml; then
   sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />|' android-project/app/src/main/AndroidManifest.xml
   echo "  CAMERA permission added"
