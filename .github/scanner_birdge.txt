@@ -1,0 +1,8 @@
+@JavascriptInterface
+public void scanBarcode() {
+    try {
+        MainActivity.this.runOnUiThread(new Runnable() { public void run() {
+            try { MainActivity.this._oniStartScanner(); } catch (Exception e) {}
+        }});
+    } catch (Exception e) {}
+}
