@@ -1,0 +1,202 @@
+private void triggerVisionFromUri(final Uri uri) {
+    webView.evaluateJavascript("(function(){try{var n=document.getElementById('f-name');return n && n.value.trim().length>0;}catch(e){return false;}})();", value -> {
+        boolean alreadyFilled = "true".equalsIgnoreCase(String.valueOf(value).trim());
+        if (alreadyFilled) return;
+        doTriggerVision(uri);
+    });
+}
+
+private void doTriggerVision(final Uri uri) {
+    new Thread(new Runnable() { public void run() {
+        try {
+            String mime = getContentResolver().getType(uri);
+            if (mime == null || !mime.startsWith("image/")) return;
+            InputStream in = getContentResolver().openInputStream(uri);
+            if (in == null) return;
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            in.close();
+            byte[] bytes = out.toByteArray();
+            if (bytes.length == 0 || bytes.length > 15000000) return;
+            final String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+            final String finalMime = mime;
+            webView.post(new Runnable() { public void run() {
+                try {
+                    String dataUrl = "data:" + finalMime + ";base64," + b64;
+                    String js = "setTimeout(function(){try{var st=document.getElementById('name-lookup-status');if(st)st.textContent='Читаю текст с фото...';if(window.Android&&typeof window.Android.recognizeProductPhoto==='function'){window.Android.recognizeProductPhoto(" + JSONObject.quote(dataUrl) + ",'eng+rus');}}catch(e){}},300);";
+                    webView.evaluateJavascript(js, null);
+                } catch (Exception ignored) {}
+            }});
+        } catch (Exception e) {
+            try { android.util.Log.e("On.i CRM", "vision failed", e); } catch (Exception ignored) {}
+        }
+    }}).start();
+}
+
+private void injectProductHandlers() {
+    String js =
+        "(function(){" +
+        "if(document.readyState==='loading'){return;}" +
+        "var NL=String.fromCharCode(10);" +
+
+        "var OCR=function(raw){" +
+        "  try{" +
+        "    var d=typeof raw==='string'?JSON.parse(raw):(raw||{});" +
+        "    var st=document.getElementById('name-lookup-status');" +
+        "    if(d.status==='fail'){if(st)st.textContent='Ошибка OCR: '+(d.message||'');return;}" +
+        "    var v=d.vision||{};" +
+        "    var t=String(d.text||'').trim();" +
+        "    var ne=document.getElementById('f-name');" +
+        "    var ce=document.getElementById('f-category');" +
+        "    var de=document.getElementById('f-description');" +
+        "    var pe=document.getElementById('f-purpose');" +
+        "    if(v.productName&&ne&&!ne.value.trim())ne.value=v.productName;" +
+        "    if(v.category&&ce&&!ce.value.trim())ce.value=v.category;" +
+        "    var L=[];" +
+        "    if(v.productName)L.push(v.productName);" +
+        "    if(v.author)L.push('Автор: '+v.author);" +
+        "    if(v.brand)L.push('Бренд: '+v.brand);" +
+        "    if(v.form)L.push('Форма: '+v.form);" +
+        "    if(v.quantity)L.push('Количество: '+v.quantity);" +
+        "    if(v.description)L.push(v.description);" +
+        "    if(v.composition)L.push('Состав: '+v.composition);" +
+        "    if(v.dosage)L.push('Как принимать: '+v.dosage);" +
+        "    if(v.warnings)L.push('Важно: '+v.warnings);" +
+        "    if(de&&!de.value.trim()){" +
+        "      if(L.length)de.value=L.filter(Boolean).join(NL+NL);" +
+        "      else if(t)de.value=t;" +
+        "    }" +
+        "    if(pe&&!pe.value.trim()){" +
+        "      if(v.purpose)pe.value=v.purpose;" +
+        "      else if(v.dosage)pe.value='Применение: '+v.dosage;" +
+        "    }" +
+        "    if(st){" +
+        "      if(d.visionUsed)st.textContent='Распознано через ИИ';" +
+        "      else if(t)st.textContent='Текст с фото ('+t.length+' симв.)';" +
+        "      else st.textContent='OCR не нашёл текст';" +
+        "    }" +
+        "  }catch(e){console.error('ocr err',e);}" +
+        "};" +
+        "try{Object.defineProperty(window,'onProductOcrResult',{configurable:true,get:function(){return OCR;},set:function(){}});}catch(e){window.onProductOcrResult=OCR;}" +
+
+        "window.onAITestResult=function(raw){" +
+        "  try{" +
+        "    var d=typeof raw==='string'?JSON.parse(raw):(raw||{});" +
+        "    var st=document.getElementById('oni-ai-status');" +
+        "    if(st) st.textContent = d.message || 'проверка завершена';" +
+        "    if(d.state) window.__oniAIState = d.state;" +
+        "  }catch(e){console.error('test result',e);}" +
+        "};" +
+
+        "window.openAISettings=function(){" +
+        "  var ex=document.getElementById('oni-ai-settings-ov');if(ex)ex.remove();" +
+        "  var state={gemini:{enabled:true,keySet:false,model:'gemini-3.6-flash',status:'unknown'},openai:{enabled:false,keySet:false,model:'gpt-4o-mini',status:'unknown'},deepseek:{enabled:false,keySet:false,model:'deepseek-chat',status:'unknown'}};" +
+        "  try{if(window.Android&&typeof window.Android.getAIState==='function'){var s=JSON.parse(window.Android.getAIState()||'{}');if(s&&typeof s==='object')state=Object.assign(state,s);}}catch(e){}" +
+        "  window.__oniAIState = state;" +
+        "  var ov=document.createElement('div');ov.className='sheet-overlay';ov.id='oni-ai-settings-ov';" +
+        "  function statusBadge(s){" +
+        "    if(s==='ready')return '🟢 подключён';" +
+        "    if(s==='disabled')return '⚪ выключен';" +
+        "    if(s==='no_key')return '🔑 ключ не задан';" +
+        "    if(s==='rate_limited')return '🟡 лимит исчерпан';" +
+        "    if(s==='invalid_key')return '🔴 ключ неверный';" +
+        "    if(s==='error')return '🔴 ошибка';" +
+        "    return '⚪ не проверен';" +
+        "  }" +
+        "  var html='<div class=\"sheet\" style=\"max-height:92vh;overflow-y:auto;\">';" +
+        "  html+='<div class=\"sheet-handle\"></div>';" +
+        "  html+='<div class=\"sheet-head\"><div class=\"sheet-title\">Настройки ИИ</div><button class=\"sheet-close\" id=\"oni-ai-set-close\">✕</button></div>';" +
+        "  html+='<div class=\"sheet-body\">';" +
+
+        "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
+        "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">OpenAI</div><div class=\"ai-provider-state\">'+statusBadge(state.openai.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-openai\" type=\"checkbox\" '+(state.openai.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
+        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-openai-model\" value=\"'+(state.openai.model||'gpt-4o-mini')+'\"></div>';" +
+        "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-openai-key\" type=\"password\" placeholder=\"'+(state.openai.keySet?'уже сохранён':'sk-...')+'\"></div>';" +
+        "  html+='</div></div>';" +
+
+        "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
+        "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">DeepSeek</div><div class=\"ai-provider-state\">'+statusBadge(state.deepseek.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-deepseek\" type=\"checkbox\" '+(state.deepseek.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
+        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-deepseek-model\" value=\"'+(state.deepseek.model||'deepseek-chat')+'\"></div>';" +
+        "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-deepseek-key\" type=\"password\" placeholder=\"'+(state.deepseek.keySet?'уже сохранён':'sk-...')+'\"></div>';" +
+        "  html+='</div></div>';" +
+
+        "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
+        "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">Google Gemini</div><div class=\"ai-provider-state\">'+statusBadge(state.gemini.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-gemini\" type=\"checkbox\" '+(state.gemini.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
+        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-gemini-model\" value=\"'+(state.gemini.model||'gemini-3.6-flash')+'\"></div>';" +
+        "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-gemini-key\" type=\"password\" placeholder=\"'+(state.gemini.keySet?'уже сохранён':'AIza...')+'\"></div>';" +
+        "  html+='</div></div>';" +
+
+        "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-head\"><div class=\"panel-title\">Проверка подключения</div></div><div class=\"panel-body\"><div id=\"oni-ai-status\" class=\"form-hint\">Нажмите Проверить, чтобы узнать статус.</div></div></div>';" +
+
+        "  html+='</div>';" +
+        "  html+='<div class=\"sheet-foot\" style=\"display:grid;grid-template-columns:1fr 1fr;gap:8px;\"><button class=\"btn\" id=\"oni-ai-test\">Проверить</button><button class=\"btn btn-primary\" id=\"oni-ai-save\">Сохранить</button></div>';" +
+        "  html+='</div>';" +
+        "  ov.innerHTML=html;" +
+        "  document.body.appendChild(ov);" +
+        "  document.getElementById('oni-ai-set-close').onclick=function(){ov.remove();};" +
+        "  ov.onclick=function(e){if(e.target===ov)ov.remove();};" +
+
+        "  function collectState(){" +
+        "    return {" +
+        "      gemini:{enabled:document.getElementById('oni-ai-gemini').checked,key:document.getElementById('oni-ai-gemini-key').value.trim(),model:document.getElementById('oni-ai-gemini-model').value.trim()||'gemini-3.6-flash'}," +
+        "      openai:{enabled:document.getElementById('oni-ai-openai').checked,key:document.getElementById('oni-ai-openai-key').value.trim(),model:document.getElementById('oni-ai-openai-model').value.trim()||'gpt-4o-mini'}," +
+        "      deepseek:{enabled:document.getElementById('oni-ai-deepseek').checked,key:document.getElementById('oni-ai-deepseek-key').value.trim(),model:document.getElementById('oni-ai-deepseek-model').value.trim()||'deepseek-chat'}" +
+        "    };" +
+        "  }" +
+
+        "  document.getElementById('oni-ai-test').onclick=function(){" +
+        "    var st=document.getElementById('oni-ai-status');" +
+        "    if(st)st.textContent='Проверяю подключение…';" +
+        "    try{if(window.Android&&typeof window.Android.saveAIState==='function'){window.Android.saveAIState(JSON.stringify(collectState()));}}catch(e){console.error('presave',e);}" +
+        "    try{if(window.Android&&typeof window.Android.testAIConnection==='function'){window.Android.testAIConnection();}}catch(e){if(st)st.textContent='Метод недоступен';}" +
+        "  };" +
+
+        "  document.getElementById('oni-ai-save').onclick=function(){" +
+        "    try{" +
+        "      if(window.Android&&typeof window.Android.saveAIState==='function'){" +
+        "        window.Android.saveAIState(JSON.stringify(collectState()));" +
+        "      }" +
+        "      if(window.showToast)showToast('Настройки сохранены');" +
+        "      ov.remove();" +
+        "    }catch(e){console.error('save err',e);}" +
+        "  };" +
+        "};" +
+
+        "var rebind=function(){" +
+        "  var btn=document.getElementById('name-lookup');" +
+        "  if(!btn||btn.__oniPatched)return;" +
+        "  btn.__oniPatched=true;" +
+        "  btn.onclick=function(){" +
+        "    var q=String((document.getElementById('f-name')||{}).value||'').trim();" +
+        "    var st=document.getElementById('name-lookup-status');" +
+        "    if(!q){if(st)st.textContent='Сначала введите название товара';return;}" +
+        "    var gem={};try{if(window.Android&&typeof window.Android.getGeminiSettings==='function')gem=JSON.parse(window.Android.getGeminiSettings()||'{}');}catch(e){}" +
+        "    var flags={gemini:true};" +
+        "    try{if(window.Android&&typeof window.Android.getProviderFlags==='function'){var ff=JSON.parse(window.Android.getProviderFlags()||'{}');if(ff&&typeof ff==='object')flags=Object.assign(flags,ff);}}catch(e){}" +
+        "    var type=(document.getElementById('f-category')||{}).value||'';" +
+        "    var hasByAI = !!(window.Android && typeof window.Android.lookupProductByAI==='function');" +
+        "    if(gem.keySet && flags.gemini!==false){" +
+        "      if(st)st.textContent='ИИ определяет товар…';" +
+        "      if(hasByAI){window.Android.lookupProductByAI(q,type,'');return;}" +
+        "      if(st)st.textContent='В Java нет метода поиска товара.';" +
+        "      return;" +
+        "    }" +
+        "    if(flags.deepseek){" +
+        "      if(st)st.textContent='ИИ определяет товар…';" +
+        "      if(hasByAI){window.Android.lookupProductByAI(q,type,'');return;}" +
+        "      if(st)st.textContent='В Java нет метода поиска товара.';" +
+        "      return;" +
+        "    }" +
+        "    if(st)st.textContent='Включите Gemini или DeepSeek в разделе AI';" +
+        "  };" +
+        "};" +
+
+        "function hideAI(){var b=document.getElementById('menu-ai-assistant');if(b)b.style.display='none';}" +
+        "var observer=function(){hideAI();rebind();};" +
+        "try{new MutationObserver(observer).observe(document.body,{childList:true,subtree:true});}catch(e){}" +
+        "observer();setTimeout(observer,1000);setTimeout(observer,2500);setTimeout(observer,5000);" +
+        "console.log('[On.i] injected v9 (test button)');" +
+        "})();";
+    webView.evaluateJavascript(js, null);
+}
