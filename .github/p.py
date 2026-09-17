@@ -98,7 +98,7 @@ names = [
     'callOpenAI','callGeminiWithSearch','callDeepSeekWithSearch','extractAnswerText',
     'pickStringFromJson','pickStringFromArray','askAIChat','postAIChatResult','injectAIChat',
     'askGuide','postGuideResult','injectGuideChat',
-    'scanBarcode','_oniStartScanner','_oniLaunchScanner',
+    'scanBarcode','_oniStartScanner','_oniLaunchScanner','_oniHandleScanResult',
     'testAIConnection','postOcrResult','postProductLookupResult',
     'callOpenAIWithImage','callDeepSeekWithImage','extractJsonObject',
     'askAIAssistant','buildAIProductPrompt',
@@ -183,13 +183,30 @@ if sa.exists() and pause in s and "private void _oniStartScanner()" not in s:
 else:
     if not sa.exists(): print("  WARNING: scanner_activity.txt not found")
 
-# Чистим старые вызовы inject* от прошлых прогонов p.py
+# Врезаем вызов _oniHandleScanResult внутрь уже существующего onActivityResult
+if "_oniHandleScanResult" not in s:
+    print("  WARNING: _oniHandleScanResult not found, skip hook")
+else:
+    actres_pat = re.compile(
+        r'(protected\s+void\s+onActivityResult\s*\(\s*int\s+requestCode\s*,\s*int\s+resultCode\s*,\s*(?:android\.content\.)?Intent\s+)(\w+)(\s*\)\s*\{)',
+        re.MULTILINE
+    )
+    m2 = actres_pat.search(s)
+    if m2:
+        param = m2.group(2)
+        insert_at = m2.end()
+        hook = '\n        try { _oniHandleScanResult(requestCode, resultCode, ' + param + '); } catch (Exception ignored) {}\n'
+        s = s[:insert_at] + hook + s[insert_at:]
+        print("  _oniHandleScanResult hooked into existing onActivityResult")
+    else:
+        print("  WARNING: existing onActivityResult not found, scanner result hook skipped")
+
+# Чистим старые вызовы inject* и initScanner от прошлых прогонов
 for _m in ('injectProductHandlers', 'injectAIChat', 'injectGuideChat'):
     s = re.sub(
         r'[ \t]*webView\.postDelayed\(new Runnable\(\) \{ public void run\(\) \{ '
         + _m + r'\(\); \} \}, \d+\);\n?',
         '', s)
-# Чистим устаревший initScanner() из прошлой неудачной попытки
 s = re.sub(r'[ \t]*initScanner\(\);\s*\n?', '', s)
 
 base_load = 'webView.loadUrl("file:///android_asset/index.html");'
