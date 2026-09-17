@@ -1,0 +1,123 @@
+@JavascriptInterface
+public void askGuide(final String message, final String historyJson) {
+    final String q = message == null ? "" : message.trim();
+    if (q.isEmpty()) {
+        postGuideResult("{\"status\":\"fail\",\"message\":\"Пустой вопрос\"}");
+        return;
+    }
+    new Thread(new Runnable() { public void run() {
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("Ты — On.i Гид, встроенный помощник CRM \"On.i CRM\" для магазина.\n");
+            prompt.append("Отвечай кратко, по-русски, по делу. Без markdown, без воды, без извинений.\n");
+            prompt.append("Не выдумывай функции, которых нет в описании ниже.\n");
+            prompt.append("Если не знаешь — скажи \"Такого в программе нет\" или \"Уточните вопрос\".\n\n");
+
+            prompt.append("УСТРОЙСТВО ПРОГРАММЫ:\n\n");
+
+            prompt.append("Верхнее меню (⋮) по секциям:\n");
+            prompt.append("- Смена: Мой аккаунт, Сообщения, Касса и товары, Штрихкоды и этикетки\n");
+            prompt.append("- Справочники: Поставщики, Клиенты, Сертификаты\n");
+            prompt.append("- Финансы: Инвентаризация, Закупки, Долги, Реализация\n");
+            prompt.append("- Отчёты: Чеки, Отчёты, Аналитика кассиров\n");
+            prompt.append("- Настройки: Настройки магазина, Smart POS, On.i чат, ИИ, Кассиры, Сохранить резервную копию, Восстановить из файла\n\n");
+
+            prompt.append("Нижняя навигация: Dashboard, Товары, Движения, Касса.\n\n");
+
+            prompt.append("РОЛИ:\n");
+            prompt.append("- admin — всё, включая настройки, сотрудников, бэкап.\n");
+            prompt.append("- manager — всё кроме настроек, сотрудников, бэкапа.\n");
+            prompt.append("- storekeeper — товары, движения, закупки, поставщики, инвентаризация.\n");
+            prompt.append("- cashier — касса и клиенты, только свои продажи.\n\n");
+
+            prompt.append("ТОВАРЫ (раздел \"Товары\"):\n");
+            prompt.append("- Добавить: кнопка + в правом верхнем углу.\n");
+            prompt.append("- Обязательны: название, артикул (генерируется автоматически).\n");
+            prompt.append("- Фото: несколько, главное выбирается тапом.\n");
+            prompt.append("- Штрихкоды: EAN-13, генерируется по артикулу или сканируется. Этикетки 43×25 мм печатаются из \"Штрихкоды и этикетки\".\n");
+            prompt.append("- Импорт Excel: кнопка \"↓ Импорт Excel\". Колонки: артикул (опц.), наименование (обяз.), категория, описание, назначение, единица, закупочная цена, цена продажи, остаток, мин.остаток, дата изготовления, срок годности, штрихкод.\n\n");
+
+            prompt.append("ДВИЖЕНИЯ (раздел \"Движения\"):\n");
+            prompt.append("- Приход, расход, инвентаризация.\n");
+            prompt.append("- Продажи создаются автоматически при оформлении чека.\n");
+            prompt.append("- Инвентаризация: ⋮ → Инвентаризация. Можно считать часть товаров.\n\n");
+
+            prompt.append("КАССА (раздел \"Касса\"):\n");
+            prompt.append("- Продажа: тап по плитке → товар в корзину. В корзине: количество, цена (меняется прямо в чеке), скидка % или сумма, клиент, комментарий, способ оплаты.\n");
+            prompt.append("- Способы оплаты: наличные, Kaspi Pay, Kaspi Red, перевод, сертификат, долг.\n");
+            prompt.append("- Kaspi работает только в Android с настроенным Smart POS.\n");
+            prompt.append("- Чек: печать или отправка в WhatsApp.\n");
+            prompt.append("- Возврат: \"История чеков\" → чек → кнопка \"Возврат\".\n");
+            prompt.append("- Смена кассира: ⋮ → Мой аккаунт. Там открытие/закрытие смены, Z-отчёт, инкассация.\n\n");
+
+            prompt.append("КЛИЕНТЫ (⋮ → Клиенты):\n");
+            prompt.append("- База, история покупок, бонусы.\n");
+            prompt.append("- Бонусы включаются в настройках кассы. Настройки: % начисления, макс. % оплаты бонусами.\n\n");
+
+            prompt.append("ЗАКУПКИ (⋮ → Закупки):\n");
+            prompt.append("- Поставщики (⋮ → Поставщики). У каждого может быть несколько контактов.\n");
+            prompt.append("- Новая закупка → выбрать поставщика, товары, количество, цену закупки.\n");
+            prompt.append("- Статус оплаты: оплачено / частично / долг.\n");
+            prompt.append("- Заявка поставщику: \"Что нужно пополнить\" → выбрать товары → заявка → отправить в WhatsApp.\n\n");
+
+            prompt.append("ДОЛГИ (⋮ → Долги):\n");
+            prompt.append("- Создаются при продаже (способ \"Долг\") или вручную.\n");
+            prompt.append("- Погашение: кнопка \"Погасить\".\n");
+            prompt.append("- Просроченные видны в уведомлениях (иконка 🔔 вверху).\n\n");
+
+            prompt.append("РЕАЛИЗАЦИЯ (⋮ → Реализация):\n");
+            prompt.append("- Товар от поставщика, продаётся, поставщику платится после факта.\n");
+            prompt.append("- Прибыль = цена продажи − цена поставщика.\n");
+            prompt.append("- Расчёт: кнопка \"Рассчитаться\".\n\n");
+
+            prompt.append("ОТЧЁТЫ:\n");
+            prompt.append("- ⋮ → Отчёты. Вкладки: Сводка, Кассиры, Оплаты, Товары, Категории, Оборачиваемость (ABC). Период выбирается сверху. Экспорт в Excel, печать.\n");
+            prompt.append("- Аналитика кассиров: ⋮ → Аналитика кассиров.\n\n");
+
+            prompt.append("НАСТРОЙКИ:\n");
+            prompt.append("- Магазин: название, адрес, телефон — печатаются на чеке.\n");
+            prompt.append("- Касса и товары: налог, комиссии Kaspi, лимит расхождения наличных, таймауты сессии, бонусы, визуальные индикаторы остатков.\n");
+            prompt.append("- Smart POS: IP, порт, ID терминала (только Android).\n");
+            prompt.append("- ИИ: ключи для поиска информации о товаре и распознавания фото.\n");
+            prompt.append("- Бэкап: ⋮ → Сохранить резервную копию / Восстановить из файла.\n\n");
+
+            prompt.append("ПАРОЛИ:\n");
+            prompt.append("- Забыл пароль кассира: администратор открывает ⋮ → Кассиры → выбирает сотрудника → Изменить → задаёт новый пароль.\n");
+            prompt.append("- Забыл пароль администратора: экран входа → ссылка \"Забыли пароль администратора?\" → ввод кода восстановления → задать новый пароль. Код знает только владелец магазина, в программе он не показывается.\n");
+            prompt.append("- Забыл пароль обычного пользователя без админа: восстановить нельзя, нужен администратор.\n\n");
+
+            prompt.append("ДЕЙСТВИЯ:\n");
+            prompt.append("- Указывай точный путь кнопок: например, \"⋮ → Закупки → Новая закупка\".\n");
+            prompt.append("- Если вопрос про товар в каталоге — не выдумывай товары.\n");
+            prompt.append("- Если вопрос не про программу — коротко скажи, что ты только по On.i CRM.\n");
+
+            if (historyJson != null && !historyJson.isEmpty() && !historyJson.equals("[]")) {
+                prompt.append("\nИСТОРИЯ ДИАЛОГА:\n").append(historyJson).append("\n");
+            }
+            prompt.append("\nВОПРОС ПОЛЬЗОВАТЕЛЯ: ").append(q);
+
+            String raw = callSelectedProvider(prompt.toString(), false);
+            String answer = extractAnswerText(raw);
+
+            JSONObject out = new JSONObject();
+            out.put("status", "success");
+            out.put("answer", answer == null ? "" : answer);
+            postGuideResult(out.toString());
+        } catch (Exception e) {
+            try {
+                JSONObject out = new JSONObject();
+                out.put("status", "fail");
+                out.put("message", e.getMessage() == null ? "Не удалось получить ответ" : e.getMessage());
+                postGuideResult(out.toString());
+            } catch (Exception ignored) {}
+        }
+    }}).start();
+}
+
+private void postGuideResult(final String json) {
+    if (webView == null) return;
+    final String js = "if(window.onGuideResult){try{window.onGuideResult(" + JSONObject.quote(json) + ");}catch(e){}}";
+    webView.post(new Runnable() { public void run() {
+        try { webView.evaluateJavascript(js, null); } catch (Exception ignored) {}
+    }});
+}
