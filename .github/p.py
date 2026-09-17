@@ -98,6 +98,7 @@ names = [
     'callOpenAI','callGeminiWithSearch','callDeepSeekWithSearch','extractAnswerText',
     'pickStringFromJson','pickStringFromArray','askAIChat','postAIChatResult','injectAIChat',
     'askGuide','postGuideResult','injectGuideChat',
+    'initScanner','scanBarcode','_oniLaunchScanner',
     'testAIConnection','postOcrResult','postProductLookupResult',
     'callOpenAIWithImage','callDeepSeekWithImage','extractJsonObject',
     'askAIAssistant','buildAIProductPrompt',
@@ -109,6 +110,10 @@ for n in names:
     if ok:
         removed += 1
 print("  removed methods: {}".format(removed))
+
+# Очищаем старые объявления полей сканера (иначе будет дубль при повторной сборке)
+s = re.sub(r'[ \t]*private\s+androidx\.activity\.result\.ActivityResultLauncher<[^>\n]+>\s+_oniScannerLauncher\s*=\s*null;\s*\n?', '', s)
+s = re.sub(r'[ \t]*private\s+androidx\.activity\.result\.ActivityResultLauncher<[^>\n]+>\s+_oniPermLauncher\s*=\s*null;\s*\n?', '', s)
 
 s = s.replace(
     'throw new IOException("Включите OpenAI или DeepSeek и добавьте API-ключ")',
@@ -135,12 +140,13 @@ hf = pathlib.Path(".github/deepseek_helpers.txt")
 gb = pathlib.Path(".github/gemini_bridge.txt")
 bf = pathlib.Path(".github/bridge_method.txt")
 gh = pathlib.Path(".github/guide_helpers.txt")
+sh = pathlib.Path(".github/scanner_helpers.txt")
 ph = pathlib.Path(".github/product_handlers.txt")
 acf = pathlib.Path(".github/ai_chat.txt")
 gcf = pathlib.Path(".github/guide_chat.txt")
 
 combined = ""
-for path in (hf, gb, bf, gh):
+for path in (hf, gb, bf, gh, sh):
     if path.exists():
         combined += path.read_text(encoding="utf-8").rstrip() + "\n\n"
     else:
@@ -173,17 +179,26 @@ if gcf.exists() and pause in s and "private void injectGuideChat()" not in s:
 else:
     if not gcf.exists(): print("  WARNING: guide_chat.txt not found")
 
-# Чистим все старые вызовы inject* от прошлых прогонов p.py,
+# Чистим старые вызовы inject* и initScanner от прошлых прогонов p.py,
 # чтобы не было дублей при повторной сборке.
 for _m in ('injectProductHandlers', 'injectAIChat', 'injectGuideChat'):
     s = re.sub(
         r'[ \t]*webView\.postDelayed\(new Runnable\(\) \{ public void run\(\) \{ '
         + _m + r'\(\); \} \}, \d+\);\n?',
         '', s)
+s = re.sub(r'[ \t]*initScanner\(\);\n?', '', s)
 
-old_load = 'webView.loadUrl("file:///android_asset/index.html");'
+base_load = 'webView.loadUrl("file:///android_asset/index.html");'
+# Оставляем только одно вхождение base_load
+if s.count(base_load) > 1:
+    first_idx = s.find(base_load)
+    before = s[:first_idx]
+    after = s[first_idx + len(base_load):].replace(base_load, '')
+    s = before + base_load + after
+
 new_load = (
     'webView.loadUrl("file:///android_asset/index.html");\n'
+    '        initScanner();\n'
     '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 500);\n'
     '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 1500);\n'
     '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 3500);\n'
@@ -195,9 +210,9 @@ new_load = (
     '        webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 3500);'
 )
 
-if old_load in s:
-    s = s.replace(old_load, new_load, 1)
-    print("  inject scheduled")
+if base_load in s:
+    s = s.replace(base_load, new_load, 1)
+    print("  inject scheduled + initScanner")
 
 before = len(re.findall(r'\btess\s*\.\s*recycle\s*\(\s*\)', s))
 s = re.sub(r'\btess\s*\.\s*recycle\s*\(\s*\)\s*;?', 'tess.end();', s)
