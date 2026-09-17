@@ -84,6 +84,7 @@ def remove_method(src, name):
 
 
 names = [
+    'getAIState','saveAIState',
     'saveGeminiSettings','getGeminiSettings','saveProviderFlags','getProviderFlags',
     'lookupProductByAI','lookupProductByName','resolveExplicitProductCategory',
     'detectCategoryFromProductName','detectCategoryFromResults','detectProductSubtype',
@@ -92,10 +93,11 @@ names = [
     'normalizeSearchName','similarPerfumeTitle','fetchUrlText','htmlMetaContent',
     'parseFragranticaStructured','fetchFragranticaPerfume','structuredFieldCount',
     'mergeStructured','translateToRussian','triggerVisionFromUri','doTriggerVision',
-    'injectProductHandlers','recognizeProductPhoto','lookupProductDescriptionFull',
+    'recognizeProductPhoto','lookupProductDescriptionFull',
     'callSelectedProvider','callDeepSeekReasoner','readAll','callGemini','callDeepSeek',
     'callOpenAI','callGeminiWithSearch','callDeepSeekWithSearch','extractAnswerText',
     'pickStringFromJson','pickStringFromArray','askAIChat','postAIChatResult','injectAIChat',
+    'askGuide','postGuideResult','injectGuideChat',
     'testAIConnection','postOcrResult','postProductLookupResult',
     'callOpenAIWithImage','callDeepSeekWithImage','extractJsonObject',
     'askAIAssistant','buildAIProductPrompt',
@@ -117,7 +119,6 @@ s = s.replace(
     'throw new IOException("Все AI-провайдеры отключены. Включите Gemini или DeepSeek в разделе AI.")'
 )
 
-# === ЯКОРЬ: closeApp (внутри AndroidBridge) ===
 anchor_re = re.compile(
     r'([ \t]*@JavascriptInterface[ \t]*\r?\n'
     r'[ \t]*public[ \t]+void[ \t]+closeApp[ \t]*\([ \t]*\)[ \t]*\{)',
@@ -129,8 +130,6 @@ if not anchor_match:
     raise SystemExit(0)
 insert_pos = anchor_match.start(1)
 print("  [dbg] closeApp anchor found at", insert_pos)
-print("  [dbg] context before:", repr(s[insert_pos-160:insert_pos]))
-print("  [dbg] context after :", repr(s[insert_pos:insert_pos+160]))
 
 hf = pathlib.Path(".github/deepseek_helpers.txt")
 gb = pathlib.Path(".github/gemini_bridge.txt")
@@ -138,6 +137,7 @@ bf = pathlib.Path(".github/bridge_method.txt")
 gh = pathlib.Path(".github/guide_helpers.txt")
 ph = pathlib.Path(".github/product_handlers.txt")
 acf = pathlib.Path(".github/ai_chat.txt")
+gcf = pathlib.Path(".github/guide_chat.txt")
 
 combined = ""
 for path in (hf, gb, bf, gh):
@@ -149,25 +149,37 @@ for path in (hf, gb, bf, gh):
 if combined:
     s = s[:insert_pos] + combined + s[insert_pos:]
     print("  helpers inserted (before closeApp)")
-    print("  [dbg] after insert tail:", repr(s[insert_pos+len(combined)-80:insert_pos+len(combined)+160]))
 
 pause = "    @Override protected void onPause() {"
 
-if ph.exists() and pause in s and "injectProductHandlers" not in s:
+if ph.exists() and pause in s and "private void injectProductHandlers()" not in s:
     block = ph.read_text(encoding="utf-8")
     s = s.replace(pause, block + pause, 1)
     print("  product_handlers inserted (in MainActivity)")
+else:
+    if not ph.exists(): print("  WARNING: product_handlers.txt not found")
 
 if acf.exists() and pause in s and "private void injectAIChat()" not in s:
     block = acf.read_text(encoding="utf-8")
     s = s.replace(pause, block + pause, 1)
     print("  ai_chat inserted (in MainActivity)")
+else:
+    if not acf.exists(): print("  WARNING: ai_chat.txt not found")
 
-gcf = pathlib.Path(".github/guide_chat.txt")
 if gcf.exists() and pause in s and "private void injectGuideChat()" not in s:
     block = gcf.read_text(encoding="utf-8")
     s = s.replace(pause, block + pause, 1)
     print("  guide_chat inserted (in MainActivity)")
+else:
+    if not gcf.exists(): print("  WARNING: guide_chat.txt not found")
+
+# Чистим все старые вызовы inject* от прошлых прогонов p.py,
+# чтобы не было дублей при повторной сборке.
+for _m in ('injectProductHandlers', 'injectAIChat', 'injectGuideChat'):
+    s = re.sub(
+        r'[ \t]*webView\.postDelayed\(new Runnable\(\) \{ public void run\(\) \{ '
+        + _m + r'\(\); \} \}, \d+\);\n?',
+        '', s)
 
 old_load = 'webView.loadUrl("file:///android_asset/index.html");'
 new_load = (
@@ -183,7 +195,7 @@ new_load = (
     '        webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 3500);'
 )
 
-if old_load in s and "injectProductHandlers();" not in s.split("onCreate")[1].split("private void configureWebView")[0]:
+if old_load in s:
     s = s.replace(old_load, new_load, 1)
     print("  inject scheduled")
 
