@@ -95,6 +95,14 @@ android {
   lint { abortOnError false; checkReleaseBuilds false }
 }
 
+configurations.all {
+  resolutionStrategy {
+    force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+    force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+    force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+  }
+}
+
 dependencies {
   implementation 'androidx.core:core:1.13.1'
   implementation 'androidx.appcompat:appcompat:1.6.1'
