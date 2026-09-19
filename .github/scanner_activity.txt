@@ -8,12 +8,12 @@ private void _oniStartScanner() {
     } catch (Exception e) {}
 }
 
-private static class LandscapeCaptureActivity extends com.journeyapps.barcodescanner.CaptureActivity {
-}
-
 private void _oniLaunchScanner() {
     try {
-        android.content.Intent intent = new android.content.Intent(this, MainActivity.LandscapeCaptureActivity.class);
+        android.content.Intent intent = new android.content.Intent(
+            this,
+            com.journeyapps.barcodescanner.CaptureActivity.class
+        );
         intent.setAction("com.google.zxing.client.android.SCAN");
         intent.putExtra("SCAN_FORMATS", "ALL_CODE_TYPES");
         intent.putExtra("PROMPT_MESSAGE", "Наведите камеру на штрихкод");
@@ -33,7 +33,9 @@ private void _oniHandleScanResult(int requestCode, int resultCode, android.conte
             try {
                 org.json.JSONObject obj = new org.json.JSONObject();
                 obj.put("barcode", barcode);
-                String js = "if(window.onBarcodeScanned){try{window.onBarcodeScanned(" + org.json.JSONObject.quote(obj.toString()) + ");}catch(e){}}";
+                String js = "if(window.onBarcodeScanned){try{window.onBarcodeScanned(" +
+                    org.json.JSONObject.quote(obj.toString()) +
+                    ");}catch(e){}}";
                 webView.evaluateJavascript(js, null);
             } catch (Exception ignored) {}
         }});
@@ -41,10 +43,14 @@ private void _oniHandleScanResult(int requestCode, int resultCode, android.conte
 }
 
 @Override
-public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+public void onRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     if (requestCode == 3001) {
-        if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (grantResults.length > 0 &&
+            grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             _oniLaunchScanner();
         }
     }
