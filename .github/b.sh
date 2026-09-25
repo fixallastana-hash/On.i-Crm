@@ -2,9 +2,12 @@
 set -e
 
 echo "=== STEP 1: check repo override ==="
-if [ -f android-project/app/src/main/assets/index.html ]; then
-  cp android-project/app/src/main/assets/index.html /tmp/oni_index_override.html
-  echo "Saved repo index.html ($(wc -c < /tmp/oni_index_override.html) bytes)"
+OVERRIDE=""
+OVERRIDE_SRC=$(find android-project -type f -iname 'index.html' 2>/dev/null | head -1)
+if [ -n "$OVERRIDE_SRC" ]; then
+  cp "$OVERRIDE_SRC" /tmp/oni_index_override.html
+  OVERRIDE="$OVERRIDE_SRC"
+  echo "Saved repo override: $OVERRIDE_SRC ($(wc -c < /tmp/oni_index_override.html) bytes)"
 else
   echo "No repo override found (that is ok)"
 fi
@@ -32,8 +35,8 @@ if [ -n "$REMAIN_ZIPS" ]; then
 fi
 
 echo "=== STEP 3: locate index.html inside ZIP ==="
-if [ -f /tmp/oni_index_override.html ]; then
-  echo "Repo override found, using it instead of ZIP index.html"
+if [ -n "$OVERRIDE" ]; then
+  echo "Repo override found ($OVERRIDE), using it instead of ZIP index.html"
   IDXFILE=""
 else
   IDXFILE=$(find work -type f -iname 'index*.html' -path '*assets*' | head -1)
@@ -182,7 +185,7 @@ fi
 echo "=== STEP 8: restore repo override if exists ==="
 if [ -f /tmp/oni_index_override.html ]; then
   cp /tmp/oni_index_override.html android-project/app/src/main/assets/index.html
-  echo "Restored repo override ($(wc -c < android-project/app/src/main/assets/index.html) bytes)"
+  echo "Restored repo override → assets/index.html ($(wc -c < android-project/app/src/main/assets/index.html) bytes)"
 fi
 
 echo "=== STEP 9: final check ==="
