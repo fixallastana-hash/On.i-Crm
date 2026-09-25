@@ -2,23 +2,8 @@
 set -e
 
 echo "=== STEP 1: check repo override ==="
-echo "  cwd: $PWD"
-echo "  [debug] top-level listing:"
-ls -la | head -30
-echo "  [debug] android-project exists? $([ -d android-project ] && echo YES || echo NO)"
-if [ -d android-project ]; then
-  echo "  [debug] android-project tree (depth 5, first 40 dirs):"
-  find android-project -maxdepth 5 -type d | head -40
-  echo "  [debug] any index*.html inside android-project:"
-  find android-project -type f -iname 'index*.html' | head -10
-fi
-echo "  [debug] git status:"
-git status --short | head -20
-echo "  [debug] is android-project ignored by git?"
-git check-ignore -v android-project 2>/dev/null || echo "  (not ignored)"
-
 OVERRIDE=""
-OVERRIDE_SRC=$(find android-project -type f -iname 'index.html' 2>/dev/null | head -1)
+OVERRIDE_SRC=$(find . -maxdepth 6 -type f -iname 'index.html' -not -path './.git/*' 2>/dev/null | head -1)
 if [ -n "$OVERRIDE_SRC" ]; then
   cp "$OVERRIDE_SRC" /tmp/oni_index_override.html
   OVERRIDE="$OVERRIDE_SRC"
