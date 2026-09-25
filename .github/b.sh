@@ -16,21 +16,40 @@ echo "Found ZIP: $Z"
 rm -rf work android-project
 mkdir work
 unzip -q "$Z" -d work
-for i in 1 2 3; do
+
+# Nested ZIPs: разворачиваем до 10 раз
+for i in $(seq 1 10); do
   I=$(find work -type f -name '*.zip' | head -1)
   [ -z "$I" ] && break
+  echo "  unzip [$i]: $I"
   unzip -q -o "$I" -d work
   rm -f "$I"
 done
+REMAIN_ZIPS=$(find work -type f -name '*.zip' | head -5)
+if [ -n "$REMAIN_ZIPS" ]; then
+  echo "WARNING: ZIPs still remain after 10 iterations:"
+  echo "$REMAIN_ZIPS"
+fi
 
 echo "=== STEP 3: locate index.html inside ZIP ==="
-IDXFILE=$(find work -type f \( -name 'index.html' -o -name 'index.html.html' \) -path '*assets*' | head -1)
-[ -z "$IDXFILE" ] && IDXFILE=$(find work -type f \( -name 'index.html' -o -name 'index.html.html' \) | head -1)
-[ -z "$IDXFILE" ] && IDXFILE=$(find work -type f -name 'index.html*' ! -name '*.zip' | head -1)
+IDXFILE=$(find work -type f -iname 'index*.html' -path '*assets*' | head -1)
+[ -z "$IDXFILE" ] && IDXFILE=$(find work -type f -iname 'index*.html' | head -1)
 echo "IDXFILE=$IDXFILE"
 if [ -z "$IDXFILE" ]; then
   echo "ERROR: index.html not found anywhere in ZIP"
-  find work -type f | head -80
+  echo "--- all .html files (first 40) ---"
+  find work -type f -iname '*.html' | head -40
+  echo "--- all 'assets' dirs ---"
+  find work -type d -iname assets | head -10
+  echo "--- all 'assets' dirs content (first 60) ---"
+  for d in $(find work -type d -iname assets | head -5); do
+    echo "  [$d]"
+    ls -la "$d" | head -20
+  done
+  echo "--- top-level work/ ---"
+  find work -maxdepth 3 -type d | head -30
+  echo "--- deepest files ---"
+  find work -type f | awk -F/ '{print NF, $0}' | sort -rn | head -20
   exit 1
 fi
 echo "Found index.html inside ZIP: $IDXFILE ($(wc -c < "$IDXFILE") bytes)"
