@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
+echo "=== STEP 0: SCAN ALL index*.html IN REPO ==="
+find . -maxdepth 6 -type f -iname 'index*.html' -not -path './.git/*' 2>/dev/null | while read -r f; do
+  echo "  [repo] $f"
+  echo "         size: $(wc -c < "$f") bytes"
+  echo "         sha256: $(sha256sum "$f" | cut -d' ' -f1)"
+  echo "         head: $(head -c 80 "$f" | tr -d '\n' | tr -d '\r')"
+done
+echo "  (end of repo scan)"
+
 echo "=== STEP 1: check repo override ==="
 OVERRIDE=""
 OVERRIDE_SRC=$(find . -maxdepth 6 -type f -iname 'index.html' -not -path './.git/*' 2>/dev/null | head -1)
@@ -8,6 +17,7 @@ if [ -n "$OVERRIDE_SRC" ]; then
   cp "$OVERRIDE_SRC" /tmp/oni_index_override.html
   OVERRIDE="$OVERRIDE_SRC"
   echo "Saved repo override: $OVERRIDE_SRC ($(wc -c < /tmp/oni_index_override.html) bytes)"
+  echo "  sha256: $(sha256sum /tmp/oni_index_override.html | cut -d' ' -f1)"
 else
   echo "No repo override found (that is ok)"
 fi
@@ -16,6 +26,8 @@ echo "=== STEP 2: find and unzip ==="
 Z=$(find . -maxdepth 2 -type f -name '*.zip' -not -path './.git/*' | head -1)
 [ -z "$Z" ] && { echo "no-zip"; exit 1; }
 echo "Found ZIP: $Z"
+echo "  ZIP size: $(wc -c < "$Z") bytes"
+echo "  ZIP sha256: $(sha256sum "$Z" | cut -d' ' -f1)"
 rm -rf work android-project
 mkdir work
 unzip -q "$Z" -d work
@@ -23,15 +35,19 @@ unzip -q "$Z" -d work
 for i in $(seq 1 10); do
   I=$(find work -type f -name '*.zip' | head -1)
   [ -z "$I" ] && break
-  echo "  unzip [$i]: $I"
+  echo "  unzip [$i]: $I ($(wc -c < "$I") bytes)"
   unzip -q -o "$I" -d work
   rm -f "$I"
 done
-REMAIN_ZIPS=$(find work -type f -name '*.zip' | head -5)
-if [ -n "$REMAIN_ZIPS" ]; then
-  echo "WARNING: ZIPs still remain after 10 iterations:"
-  echo "$REMAIN_ZIPS"
-fi
+
+echo "=== STEP 2b: SCAN ALL index*.html IN UNPACKED ZIP ==="
+find work -type f -iname 'index*.html' 2>/dev/null | while read -r f; do
+  echo "  [zip] $f"
+  echo "        size: $(wc -c < "$f") bytes"
+  echo "        sha256: $(sha256sum "$f" | cut -d' ' -f1)"
+  echo "        head: $(head -c 80 "$f" | tr -d '\n' | tr -d '\r')"
+done
+echo "  (end of zip scan)"
 
 echo "=== STEP 3: locate index.html inside ZIP ==="
 if [ -n "$OVERRIDE" ]; then
@@ -43,10 +59,10 @@ else
   echo "IDXFILE=$IDXFILE"
   if [ -z "$IDXFILE" ]; then
     echo "ERROR: index.html not found anywhere in ZIP and no repo override"
-    find work -type f -iname '*.html' | head -40
     exit 1
   fi
   echo "Found index.html inside ZIP: $IDXFILE ($(wc -c < "$IDXFILE") bytes)"
+  echo "  sha256: $(sha256sum "$IDXFILE" | cut -d' ' -f1)"
 fi
 
 echo "=== STEP 4: locate Android project files ==="
@@ -181,8 +197,11 @@ if [ -f /tmp/oni_index_override.html ]; then
   echo "Restored repo override → assets/index.html ($(wc -c < android-project/app/src/main/assets/index.html) bytes)"
 fi
 
-echo "=== STEP 9: final check ==="
-ls -lh android-project/app/src/main/assets/index.html
+echo "=== STEP 9: FINAL — what goes into APK ==="
+echo "  path: android-project/app/src/main/assets/index.html"
+echo "  size: $(wc -c < android-project/app/src/main/assets/index.html) bytes"
+echo "  sha256: $(sha256sum android-project/app/src/main/assets/index.html | cut -d' ' -f1)"
+echo "  head: $(head -c 80 android-project/app/src/main/assets/index.html | tr -d '\n' | tr -d '\r')"
 echo "=============================================="
 
 echo "=== STEP 10: download traineddata ==="
