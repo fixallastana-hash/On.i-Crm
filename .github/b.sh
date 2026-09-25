@@ -124,6 +124,7 @@ configurations.all {
 
 dependencies {
   implementation 'androidx.core:core:1.13.1'
+  implementation 'androidx.webkit:webkit:1.11.0'
   implementation 'androidx.appcompat:appcompat:1.6.1'
   implementation 'androidx.activity:activity:1.8.2'
   implementation 'com.rmtheis:tess-two:9.1.0'
@@ -198,5 +199,6 @@ sed -i -E 's/[[:space:]]+package="[^"]*"//g' android-project/app/src/main/Androi
 
 python3 .github/p.py
 python3 .github/patch_index.py 2>/dev/null || true
+python3 .github/patch_webview.py
 
 echo "PROJECT_DIR=$PWD/android-project" >> "$GITHUB_ENV"
