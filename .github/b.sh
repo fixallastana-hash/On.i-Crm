@@ -32,27 +32,25 @@ if [ -n "$REMAIN_ZIPS" ]; then
 fi
 
 echo "=== STEP 3: locate index.html inside ZIP ==="
-IDXFILE=$(find work -type f -iname 'index*.html' -path '*assets*' | head -1)
-[ -z "$IDXFILE" ] && IDXFILE=$(find work -type f -iname 'index*.html' | head -1)
-echo "IDXFILE=$IDXFILE"
-if [ -z "$IDXFILE" ]; then
-  echo "ERROR: index.html not found anywhere in ZIP"
-  echo "--- all .html files (first 40) ---"
-  find work -type f -iname '*.html' | head -40
-  echo "--- all 'assets' dirs ---"
-  find work -type d -iname assets | head -10
-  echo "--- all 'assets' dirs content (first 60) ---"
-  for d in $(find work -type d -iname assets | head -5); do
-    echo "  [$d]"
-    ls -la "$d" | head -20
-  done
-  echo "--- top-level work/ ---"
-  find work -maxdepth 3 -type d | head -30
-  echo "--- deepest files ---"
-  find work -type f | awk -F/ '{print NF, $0}' | sort -rn | head -20
-  exit 1
+if [ -f /tmp/oni_index_override.html ]; then
+  echo "Repo override found, using it instead of ZIP index.html"
+  IDXFILE=""
+else
+  IDXFILE=$(find work -type f -iname 'index*.html' -path '*assets*' | head -1)
+  [ -z "$IDXFILE" ] && IDXFILE=$(find work -type f -iname 'index*.html' | head -1)
+  echo "IDXFILE=$IDXFILE"
+  if [ -z "$IDXFILE" ]; then
+    echo "ERROR: index.html not found anywhere in ZIP and no repo override"
+    echo "--- all .html files (first 40) ---"
+    find work -type f -iname '*.html' | head -40
+    echo "--- all 'assets' dirs ---"
+    find work -type d -iname assets | head -10
+    echo "--- deepest files ---"
+    find work -type f | awk -F/ '{print NF, $0}' | sort -rn | head -20
+    exit 1
+  fi
+  echo "Found index.html inside ZIP: $IDXFILE ($(wc -c < "$IDXFILE") bytes)"
 fi
-echo "Found index.html inside ZIP: $IDXFILE ($(wc -c < "$IDXFILE") bytes)"
 
 echo "=== STEP 4: locate Android project files ==="
 MAIN_ACT=$(find work -type f -name MainActivity.java | head -1)
@@ -124,7 +122,6 @@ configurations.all {
 
 dependencies {
   implementation 'androidx.core:core:1.13.1'
-  implementation 'androidx.webkit:webkit:1.11.0'
   implementation 'androidx.appcompat:appcompat:1.6.1'
   implementation 'androidx.activity:activity:1.8.2'
   implementation 'com.rmtheis:tess-two:9.1.0'
@@ -174,8 +171,13 @@ if ! grep -q 'android.permission.CAMERA' android-project/app/src/main/AndroidMan
 fi
 
 echo "=== STEP 7: copy index.html ==="
-cp "$IDXFILE" android-project/app/src/main/assets/index.html
-echo "Copied: $(wc -c < android-project/app/src/main/assets/index.html) bytes"
+if [ -n "$IDXFILE" ]; then
+  cp "$IDXFILE" android-project/app/src/main/assets/index.html
+  echo "Copied from ZIP: $(wc -c < android-project/app/src/main/assets/index.html) bytes"
+else
+  echo "Skipping ZIP copy (repo override will be used in STEP 8)"
+  touch android-project/app/src/main/assets/index.html
+fi
 
 echo "=== STEP 8: restore repo override if exists ==="
 if [ -f /tmp/oni_index_override.html ]; then
@@ -199,6 +201,5 @@ sed -i -E 's/[[:space:]]+package="[^"]*"//g' android-project/app/src/main/Androi
 
 python3 .github/p.py
 python3 .github/patch_index.py 2>/dev/null || true
-python3 .github/patch_webview.py
 
 echo "PROJECT_DIR=$PWD/android-project" >> "$GITHUB_ENV"
