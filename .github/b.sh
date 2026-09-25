@@ -2,6 +2,21 @@
 set -e
 
 echo "=== STEP 1: check repo override ==="
+echo "  cwd: $PWD"
+echo "  [debug] top-level listing:"
+ls -la | head -30
+echo "  [debug] android-project exists? $([ -d android-project ] && echo YES || echo NO)"
+if [ -d android-project ]; then
+  echo "  [debug] android-project tree (depth 5, first 40 dirs):"
+  find android-project -maxdepth 5 -type d | head -40
+  echo "  [debug] any index*.html inside android-project:"
+  find android-project -type f -iname 'index*.html' | head -10
+fi
+echo "  [debug] git status:"
+git status --short | head -20
+echo "  [debug] is android-project ignored by git?"
+git check-ignore -v android-project 2>/dev/null || echo "  (not ignored)"
+
 OVERRIDE=""
 OVERRIDE_SRC=$(find android-project -type f -iname 'index.html' 2>/dev/null | head -1)
 if [ -n "$OVERRIDE_SRC" ]; then
@@ -20,7 +35,6 @@ rm -rf work android-project
 mkdir work
 unzip -q "$Z" -d work
 
-# Nested ZIPs: разворачиваем до 10 раз
 for i in $(seq 1 10); do
   I=$(find work -type f -name '*.zip' | head -1)
   [ -z "$I" ] && break
@@ -44,12 +58,7 @@ else
   echo "IDXFILE=$IDXFILE"
   if [ -z "$IDXFILE" ]; then
     echo "ERROR: index.html not found anywhere in ZIP and no repo override"
-    echo "--- all .html files (first 40) ---"
     find work -type f -iname '*.html' | head -40
-    echo "--- all 'assets' dirs ---"
-    find work -type d -iname assets | head -10
-    echo "--- deepest files ---"
-    find work -type f | awk -F/ '{print NF, $0}' | sort -rn | head -20
     exit 1
   fi
   echo "Found index.html inside ZIP: $IDXFILE ($(wc -c < "$IDXFILE") bytes)"
@@ -62,8 +71,7 @@ if [ -z "$MAIN_ACT" ]; then
   find work -type f | head -100
   exit 1
 fi
-S=$(dirname "$MAIN_ACT")
-echo "MainActivity dir: $S"
+echo "MainActivity dir: $(dirname "$MAIN_ACT")"
 
 echo "=== STEP 5: create project skeleton ==="
 mkdir -p android-project/app/src/main/java/com/oni/crm
