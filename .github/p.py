@@ -217,7 +217,7 @@ if s.count(base_load) > 1:
     s = before + base_load + after
 
 new_load = (
-    'webView.loadUrl("file:///android_asset/index.html");\n'
+    'webView.loadUrl("https://appassets.androidplatform.net/assets/index.html");\n'
     '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 500);\n'
     '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 1500);\n'
     '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 3500);\n'
@@ -237,6 +237,69 @@ before = len(re.findall(r'\btess\s*\.\s*recycle\s*\(\s*\)', s))
 s = re.sub(r'\btess\s*\.\s*recycle\s*\(\s*\)\s*;?', 'tess.end();', s)
 after = len(re.findall(r'\btess\s*\.\s*recycle\s*\(\s*\)', s))
 print("  tess.recycle() replaced:", before, "remaining:", after)
+
+# === Asset Loader: отдавать assets через https://appassets.androidplatform.net/ ===
+_asset_loader = (
+    '                Uri _reqUrl = request.getUrl();\n'
+    '                if (_reqUrl != null && "appassets.androidplatform.net".equalsIgnoreCase(_reqUrl.getHost())) {\n'
+    '                    String _path = _reqUrl.getPath();\n'
+    '                    if (_path != null && _path.startsWith("/assets/")) {\n'
+    '                        String _assetPath = _path.substring("/assets/".length());\n'
+    '                        if (_assetPath.contains("..") || _assetPath.isEmpty()) {\n'
+    '                            return new WebResourceResponse("text/plain", "utf-8", 400, "Bad Request", null, null);\n'
+    '                        }\n'
+    '                        try {\n'
+    '                            String _mime = android.webkit.MimeTypeMap.getSingleton()\n'
+    '                                .getMimeTypeFromExtension(android.webkit.MimeTypeMap.getFileExtensionFromUrl(_assetPath));\n'
+    '                            if (_mime == null) {\n'
+    '                                if (_assetPath.endsWith(".html") || _assetPath.endsWith(".htm")) _mime = "text/html";\n'
+    '                                else if (_assetPath.endsWith(".js") || _assetPath.endsWith(".mjs")) _mime = "application/javascript";\n'
+    '                                else if (_assetPath.endsWith(".css")) _mime = "text/css";\n'
+    '                                else if (_assetPath.endsWith(".json") || _assetPath.endsWith(".webmanifest")) _mime = "application/json";\n'
+    '                                else if (_assetPath.endsWith(".svg")) _mime = "image/svg+xml";\n'
+    '                                else if (_assetPath.endsWith(".png")) _mime = "image/png";\n'
+    '                                else if (_assetPath.endsWith(".woff2")) _mime = "font/woff2";\n'
+    '                                else _mime = "application/octet-stream";\n'
+    '                            }\n'
+    '                            java.io.InputStream _assetStream = getAssets().open(_assetPath);\n'
+    '                            return new WebResourceResponse(_mime, null, _assetStream);\n'
+    '                        } catch (java.io.IOException _e) {\n'
+    '                            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, null);\n'
+    '                        }\n'
+    '                    }\n'
+    '                }\n'
+)
+
+_sit_re = re.compile(
+    r'(public\s+WebResourceResponse\s+shouldInterceptRequest\s*'
+    r'\(\s*WebView\s+\w+\s*,\s*WebResourceRequest\s+\w+\s*\)\s*\{\s*\n)',
+    re.MULTILINE
+)
+_sit_m = _sit_re.search(s)
+if _sit_m:
+    s = s[:_sit_m.end()] + _asset_loader + s[_sit_m.end():]
+    print("  asset loader inserted into shouldInterceptRequest")
+else:
+    print("  WARNING: shouldInterceptRequest not found")
+
+_ovr_re = re.compile(
+    r'(public\s+boolean\s+shouldOverrideUrlLoading\s*'
+    r'\(\s*WebView\s+\w+\s*,\s*WebResourceRequest\s+\w+\s*\)\s*\{\s*\n'
+    r'[ \t]*Uri\s+(\w+)\s*=\s*\w+\.getUrl\(\);\s*\n)',
+    re.MULTILINE
+)
+_ovr_m = _ovr_re.search(s)
+if _ovr_m:
+    _ovr_uri_var = _ovr_m.group(2)
+    _ovr_guard = (
+        '                String _host = ' + _ovr_uri_var + '.getHost()==null?"":' + _ovr_uri_var + '.getHost().toLowerCase(java.util.Locale.ROOT);\n'
+        '                if ("appassets.androidplatform.net".equals(_host)) return false;\n'
+    )
+    s = s[:_ovr_m.end()] + _ovr_guard + s[_ovr_m.end():]
+    print("  shouldOverrideUrlLoading guard inserted")
+else:
+    print("  WARNING: shouldOverrideUrlLoading not found")
+# === END Asset Loader ===
 
 s = re.sub(r';\s*;', ';', s)
 
