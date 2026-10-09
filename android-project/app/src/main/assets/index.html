@@ -1833,6 +1833,20 @@ async function loginViaFirebase(login, password){
               }
               var added = 0;
               var updated = 0;
+              // Подтягиваем tombstones с сервера — чтобы удаления с других устройств виделись здесь.
+              if(m.name === 'products'){
+                try{
+                  var _srvTombSnap = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('productTombstones').get();
+                  if(_srvTombSnap && _srvTombSnap.size > 0){
+                    var _srvTombMap = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+                    _srvTombSnap.forEach(function(doc){
+                      var d = doc.data() || {};
+                      if(d && d.id){ _srvTombMap[String(d.id)] = Number(d.deletedAt) || Date.now(); }
+                    });
+                    localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_srvTombMap));
+                  }
+                }catch(e){}
+              }
               var _recentDel = {};
               try{ _recentDel = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
               for(var ai=0; ai<arr.length; ai++){
@@ -5613,6 +5627,16 @@ async function deleteProduct(id){
     var _now = Date.now();
     Object.keys(_rd).forEach(function(k){ if(_now - Number(_rd[k]) > 3600000) delete _rd[k]; });
     localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rd));
+    try{
+      if(fbDb && fbAuth && fbAuth.currentUser){
+        var _safeTid = String(id).replace(/[\/\s]+/g, '_');
+        await fbDb.collection('shops').doc(FB_SHOP_ID).collection('productTombstones').doc(_safeTid).set({
+          id: String(id),
+          deletedAt: Date.now(),
+          byUser: (activeUser && activeUser.id) || null
+        });
+      }
+    }catch(e){}
   }catch(e){}
 
   const saved = await persist('products');
