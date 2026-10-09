@@ -5,3 +5,9 @@ Thumbs.db
 # Temp
 *.tmp
 *.bak
+# Firebase CLI
+.firebase/
+
+# Backups from patches
+*.bak
+*.bak-*
