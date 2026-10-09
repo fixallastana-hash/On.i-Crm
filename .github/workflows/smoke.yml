@@ -1,4 +1,4 @@
-﻿name: Smoke test
+name: Smoke test
 on:
   push:
     branches: [main]
@@ -11,20 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unpack Index.html from zip
-        run: |
-          mkdir -p /tmp/oni
-          unzip -o "On.i-CRM-Android-Project-v13-Kaspi-SmartPOS.zip" -d /tmp/oni
-
-      - name: Find Index.html
-        id: find
-        run: |
-          P=$(find /tmp/oni -type f -name "Index.html" | head -n 1)
-          echo "path=$P" >> "$GITHUB_OUTPUT"
-
       - name: Run smoke test
-        env:
-          ONI_INDEX_PATH: ${{ steps.find.outputs.path }}
         shell: pwsh
+        env:
+          ONI_INDEX_PATH: ${{ github.workspace }}/android-project/app/src/main/assets/index.html
         run: |
           ./scripts/smoke-test.ps1

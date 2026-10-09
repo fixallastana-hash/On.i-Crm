@@ -1,0 +1,36 @@
+plugins { id 'com.android.application' }
+
+android {
+  namespace 'com.oni.crm'
+  compileSdk 34
+  defaultConfig {
+    applicationId "com.oni.crm"
+    minSdk 24
+    targetSdk 34
+    versionCode 1
+    versionName "1.0"
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  packagingOptions { jniLibs { useLegacyPackaging = true } }
+  lint { abortOnError false; checkReleaseBuilds false }
+}
+
+configurations.all {
+  resolutionStrategy {
+    force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+    force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+    force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+  }
+}
+
+dependencies {
+  implementation 'androidx.core:core:1.13.1'
+  implementation 'androidx.appcompat:appcompat:1.6.1'
+  implementation 'androidx.activity:activity:1.8.2'
+  implementation 'com.rmtheis:tess-two:9.1.0'
+  implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+  implementation fileTree(dir: 'libs', include: ['*.jar'])
+}
