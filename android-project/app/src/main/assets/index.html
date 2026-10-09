@@ -1607,7 +1607,7 @@ async function loginViaFirebase(login, password){
           try{
             await _delBatch.commit();
             _log('tombstones deleted: ' + _tombIds.length);
-            try{ localStorage.removeItem('sklad_crm_recent_deletes'); }catch(e){}
+            // tombstones НЕ удаляем - пусть живут 24 часа, чтобы pull смог их дообработать.
           }catch(e){
             _log('tombstone delete failed: ' + ((e && e.message) || e));
           }
@@ -1879,6 +1879,49 @@ async function loginViaFirebase(login, password){
       }catch(e){
         _log('ошибка: '+e);
       }
+      // Добиваем tombstones: если товар помечен удалённым, но ещё есть в Firestore или локально — убираем.
+      try{
+        var _tombNow = {};
+        try{ _tombNow = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
+        var _tombKeys = Object.keys(_tombNow);
+        if(_tombKeys.length > 0){
+          var _nowT = Date.now();
+          var _alive = {};
+          var _removedTomb = 0;
+          for(var _ti=0; _ti<_tombKeys.length; _ti++){
+            var _k = String(_tombKeys[_ti]);
+            if(_nowT - Number(_tombNow[_k]) > 86400000){ _removedTomb++; continue; }
+            _alive[_k] = _tombNow[_k];
+          }
+          if(_removedTomb > 0){
+            try{ localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_alive)); }catch(e){}
+          }
+          var _aliveKeys = Object.keys(_alive);
+          if(_aliveKeys.length > 0){
+            var _delBatch = fbDb.batch();
+            var _batchCount = 0;
+            var _localBefore = products.length;
+            for(var _ai=0; _ai<_aliveKeys.length; _ai++){
+              var _id = String(_aliveKeys[_ai]);
+              var _safe = _id.replace(/[\/\s]+/g, '_');
+              var _ref = fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').doc(_safe);
+              _delBatch.delete(_ref);
+              _batchCount++;
+            }
+            try{
+              if(_batchCount > 0){ await _delBatch.commit(); }
+            }catch(e){ _log('tombstone batch failed: ' + ((e && e.message) || e)); }
+            var _tombSet = {};
+            for(var _bi=0; _bi<_aliveKeys.length; _bi++){ _tombSet[String(_aliveKeys[_bi])] = true; }
+            products = products.filter(function(p){ return !p || !_tombSet[String(p.id)]; });
+            if(products.length !== _localBefore){
+              changed = true;
+              try{ await persist('products'); }catch(e){}
+            }
+          }
+        }
+      }catch(e){ _log('tombstone pull error: ' + ((e && e.message) || e)); }
+
       if(!_employeeCheckedOnce && fbAuth && fbAuth.currentUser && activeUser && activeUser.id!=='admin'){
         _employeeCheckedOnce = true;
         try{
