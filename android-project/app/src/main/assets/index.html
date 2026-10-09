@@ -579,7 +579,21 @@ button:active{transform:scale(.975);}
 .nav-products-label{font-size:12.5px;font-weight:700;color:currentColor;}
 </style>
 
-</head>
+<style id="oni-no-zoom">
+html, body { touch-action: pan-x pan-y; -ms-touch-action: pan-x pan-y; }
+</style>
+<script id="oni-no-zoom-js">
+(function(){
+  try{
+    document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, {passive:false});
+    document.addEventListener('gesturechange', function(e){ e.preventDefault(); }, {passive:false});
+    document.addEventListener('gestureend', function(e){ e.preventDefault(); }, {passive:false});
+    document.addEventListener('touchstart', function(e){
+      if(e.touches && e.touches.length > 1){ e.preventDefault(); }
+    }, {passive:false});
+  }catch(e){}
+})();
+</script></head>
 <body>
 
 <div id="loading" class="loading-screen">загрузка данных…</div>
@@ -4763,23 +4777,41 @@ function exitProductSelection(){
 function toggleProductSelection(id){
   if(productSelectionSet.has(id)) productSelectionSet.delete(id);
   else productSelectionSet.add(id);
-  safeRender();
+  var _row=document.querySelector('[data-ps-row="'+String(id).replace(/"/g,'\\"')+'"]');
+  if(_row){
+    var _box=_row.firstElementChild;
+    if(_box){
+      var _checked=productSelectionSet.has(id);
+      _box.style.background=_checked?'var(--primary)':'';
+      _box.style.borderColor=_checked?'var(--primary)':'var(--border)';
+      _box.style.color=_checked?'#fff':'';
+      _box.textContent=_checked?'\u2713':'';
+    }
+  }
+  var _n=productSelectionSet.size;
+  var _del=document.getElementById('ps-delete');
+  if(_del) _del.disabled=(_n===0);
+  var _counter=document.querySelector('[data-ps-counter]');
+  if(_counter) _counter.textContent='\u0412\u044b\u0431\u0440\u0430\u043d\u043e: '+_n;
 }
 
 function renderProductSelectionView(){
   const all=products.filter(p=>!p.isCategoryPlaceholder);
+  const _q=String(productSearch||'').trim();
+  const filtered=_q?all.filter(p=>smartProductSearch(productSearchText(p),_q)):all;
   const n=productSelectionSet.size;
   return `
     <div class="panel" style="position:sticky;top:0;z-index:5;margin-bottom:10px;">
       <div class="panel-body" style="display:flex;align-items:center;gap:8px;padding:10px 12px;">
         <button type="button" class="btn" id="ps-cancel">Отмена</button>
-        <div style="flex:1;font-weight:700;font-size:13px;">Выбрано: ${n}</div>
+        <div style="flex:1;font-weight:700;font-size:13px;" data-ps-counter>Выбрано: ${n}</div>
         <button type="button" class="btn" id="ps-select-all">Все</button>
         <button type="button" class="btn btn-primary" id="ps-delete" ${n===0?'disabled':''}>Удалить</button>
       </div>
+      <div style="padding:0 12px 10px;"><div class="search" style="margin:0;"><input id="ps-search" placeholder="Поиск по товару..." value="${escapeHtml(productSearch)}"></div></div>
     </div>
     <div class="panel">
-      ${all.map(p=>{
+      ${(filtered.length?filtered:[]).map(p=>{
         const checked=productSelectionSet.has(p.id);
         return `<div class="list-row" data-ps-row="${escapeHtml(p.id)}" style="cursor:pointer;">
           <div style="width:22px;height:22px;border-radius:6px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;${checked?'background:var(--primary);border-color:var(--primary);color:#fff;':''}">${checked?'✓':''}</div>
@@ -4856,6 +4888,19 @@ function viewProducts(){
 }
 function bindProducts(){
   if(productSelectionMode){
+    const _psi=document.getElementById('ps-search');
+    if(_psi){
+      _psi.oninput=function(){
+        productSearch=_psi.value;
+        const _q=String(productSearch||'').trim();
+        document.querySelectorAll('[data-ps-row]').forEach(function(row){
+          const _p=products.find(function(x){return x.id===row.dataset.psRow;});
+          if(!_p) return;
+          const _show=!_q||smartProductSearch(productSearchText(_p),_q);
+          row.style.display=_show?'':'none';
+        });
+      };
+    }
     const c=document.getElementById('ps-cancel'); if(c)c.onclick=exitProductSelection;
     const sa=document.getElementById('ps-select-all');
     if(sa)sa.onclick=()=>{
