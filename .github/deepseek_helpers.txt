@@ -128,37 +128,39 @@ private String callDeepSeekReasoner(String input) throws Exception {
 }
 
 private String callSelectedProvider(String input, boolean webSearch) throws Exception {
-    SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
+    if (aiIdToken != null && !aiIdToken.isEmpty()) {
+        try {
+            android.util.Log.i("On.i AI", "Using aiProxy (server)");
+            String r = callAiProxy(input, "auto", null, null);
+            if (r != null && !r.trim().isEmpty()) {
+                return r;
+            }
+            android.util.Log.w("On.i AI", "aiProxy empty, fallback");
+        } catch (Exception e) {
+            android.util.Log.w("On.i AI", "aiProxy failed: " + (e.getMessage() == null ? "" : e.getMessage()));
+        }
+    }
 
+    SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     boolean geminiOn = sp.getBoolean("geminiEnabled", true);
     boolean openaiOn = sp.getBoolean("openaiEnabled", false);
     boolean deepseekOn = sp.getBoolean("deepseekEnabled", false);
-
     String geminiKey = sp.getString("geminiApiKey", "").trim();
     String openaiKey = sp.getString("apiKey", "").trim();
     String deepseekKey = sp.getString("deepseekApiKey", "").trim();
-
     boolean geminiUsable = geminiOn && !geminiKey.isEmpty();
     boolean openaiUsable = openaiOn && !openaiKey.isEmpty();
     boolean deepseekUsable = deepseekOn && !deepseekKey.isEmpty();
 
-    android.util.Log.i("On.i AI", "Flags: gemini=" + geminiUsable + " openai=" + openaiUsable + " deepseek=" + deepseekUsable + " webSearch=" + webSearch);
-
     if (geminiUsable) {
         try {
-            if (webSearch) {
-                android.util.Log.i("On.i AI", "Using Gemini with web search");
-                return callGeminiWithSearch(input);
-            }
-            android.util.Log.i("On.i AI", "Using Gemini");
+            if (webSearch) return callGeminiWithSearch(input);
             return callGemini(input);
         } catch (Exception e) {
-            android.util.Log.w("On.i AI", "Gemini failed, fallback", e);
+            android.util.Log.w("On.i AI", "Gemini direct failed", e);
         }
     }
-
     if (openaiUsable) return callOpenAI(input, webSearch);
-
     if (deepseekUsable) {
         boolean useReasoner = false;
         if (input != null) {
@@ -169,18 +171,12 @@ private String callSelectedProvider(String input, boolean webSearch) throws Exce
             }
         }
         if (useReasoner) {
-            try {
-                return callDeepSeekReasoner(input);
-            } catch (Exception e) {
-                return callDeepSeek(input);
-            }
+            try { return callDeepSeekReasoner(input); } catch (Exception e) { return callDeepSeek(input); }
         }
         return callDeepSeek(input);
     }
-
-    throw new IOException("Все AI-провайдеры отключены. Включите Gemini или DeepSeek в разделе AI.");
+    throw new IOException("Все AI-провайдеры недоступны.");
 }
-
 private String extractAnswerText(String raw) {
     if (raw == null) return "";
     String text = raw.trim();
