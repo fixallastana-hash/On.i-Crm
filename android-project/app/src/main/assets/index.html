@@ -1250,6 +1250,7 @@ async function loginViaFirebase(login, password){
           _employeeCheckedOnce = false;
         }catch(e){}
         await _fbLoadActiveShop(u.uid);
+        try{ startProductsWatcher(); }catch(e){}
         try{ _fbSyncPull(); }catch(e){}
         return {ok:true, uid:u.uid, email:email};
       }catch(err){
@@ -1756,6 +1757,43 @@ async function loginViaFirebase(login, password){
 
     /* Фаза 4: периодический pull из Firestore для синхронизации 
        между устройствами. Не трогает UI, если ничего не изменилось. */
+    /* onSnapshot: Firestore сам присылает изменения в products.
+       Когда данные меняются — дёргаем pull немедленно (не ждём таймер). */
+    function startProductsWatcher(){
+      try{
+        if(!fbAuth || !fbAuth.currentUser) return;
+        if(!fbDb) return;
+        if(window._productsWatcherUnsub){
+          try{ window._productsWatcherUnsub(); }catch(e){}
+          window._productsWatcherUnsub = null;
+        }
+        var initialFired = false;
+        var unsub = fbDb.collection('shops').doc(FB_SHOP_ID).collection('products')
+          .onSnapshot(function(snap){
+            if(!initialFired){ initialFired = true; return; }
+            var now = Date.now();
+            if((now - _lastPersistAt) < 5000) return;
+            try{ if(_fbSync.running && _fbSync.running.products) return; }catch(e){}
+            setTimeout(function(){
+              try{ _fbSyncPull().catch(function(){}); }catch(e){}
+            }, 200);
+          }, function(err){
+            console.warn('[products-watcher]', err && err.message);
+          });
+        window._productsWatcherUnsub = unsub;
+        console.log('[products-watcher] subscribed');
+      }catch(e){ console.warn('[products-watcher] failed', e); }
+    }
+    function stopProductsWatcher(){
+      try{
+        if(window._productsWatcherUnsub){
+          window._productsWatcherUnsub();
+          window._productsWatcherUnsub = null;
+          console.log('[products-watcher] unsubscribed');
+        }
+      }catch(e){}
+    }
+
     var _fbSyncPullTimer = null;
     var _fbSyncPullRunning = false;
 
@@ -3317,6 +3355,7 @@ async function logoutAccount(silent){
   }
   logSessionEvent(sh?'logout_with_shift':'logout',{shiftId:sh?sh.id:null});
   stopSessionTimer();
+  try{ stopProductsWatcher(); }catch(e){}
   cart=[]; posSearch=''; posCategory='Частые'; posCategoryOpen=false; pendingKaspiSale=null;
   activeUser=null; currentShiftId=null; clearAuthSession(); currentView='orders'; ordersSubView='pos';
   if(document.getElementById('topbar-menu'))document.getElementById('topbar-menu').classList.remove('open');
@@ -4204,6 +4243,7 @@ async function init(){
   if(restoredSession){
     document.getElementById('auth-root').innerHTML='';
     document.getElementById('app').style.display='block';
+    try{ startProductsWatcher(); }catch(e){}
     startSessionTimer(); setupRoleMenu(); safeRender(); maybeOpenPresetWizard();
   }else{
     clearAuthSession();
