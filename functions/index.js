@@ -59,7 +59,7 @@ async function checkAndIncrementGemini() {
 async function callGemini(prompt, imageBase64, imageMime) {
   const key = GEMINI_API_KEY.value();
   if (!key) throw new Error("GEMINI_API_KEY не задан");
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
   const genAI = new GoogleGenerativeAI(key);
   const m = genAI.getGenerativeModel({ model });
 

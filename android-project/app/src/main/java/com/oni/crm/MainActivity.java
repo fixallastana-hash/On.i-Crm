@@ -2092,24 +2092,14 @@ private void injectProductHandlers() {
         "    var q=String((document.getElementById('f-name')||{}).value||'').trim();" +
         "    var st=document.getElementById('name-lookup-status');" +
         "    if(!q){if(st)st.textContent='Сначала введите название товара';return;}" +
-        "    var gem={};try{if(window.Android&&typeof window.Android.getGeminiSettings==='function')gem=JSON.parse(window.Android.getGeminiSettings()||'{}');}catch(e){}" +
-        "    var flags={gemini:true};" +
-        "    try{if(window.Android&&typeof window.Android.getProviderFlags==='function'){var ff=JSON.parse(window.Android.getProviderFlags()||'{}');if(ff&&typeof ff==='object')flags=Object.assign(flags,ff);}}catch(e){}" +
         "    var type=(document.getElementById('f-category')||{}).value||'';" +
-        "    var hasByAI = !!(window.Android && typeof window.Android.lookupProductByAI==='function');" +
-        "    if(gem.keySet && flags.gemini!==false){" +
+        "    var desc=(document.getElementById('f-description')||{}).value||'';" +
+        "    if(window.Android && typeof window.Android.lookupProductByAI==='function'){" +
         "      if(st)st.textContent='ИИ определяет товар…';" +
-        "      if(hasByAI){window.Android.lookupProductByAI(q,type,'');return;}" +
-        "      if(st)st.textContent='В Java нет метода поиска товара.';" +
-        "      return;" +
+        "      window.Android.lookupProductByAI(q,type,desc);" +
+        "    } else {" +
+        "      if(st)st.textContent='ИИ доступен только в приложении Android';" +
         "    }" +
-        "    if(flags.deepseek){" +
-        "      if(st)st.textContent='ИИ определяет товар…';" +
-        "      if(hasByAI){window.Android.lookupProductByAI(q,type,'');return;}" +
-        "      if(st)st.textContent='В Java нет метода поиска товара.';" +
-        "      return;" +
-        "    }" +
-        "    if(st)st.textContent='Включите Gemini или DeepSeek в разделе AI';" +
         "  };" +
         "};" +
 
