@@ -8,24 +8,75 @@ public void lookupProductByAI(final String query, final String typeHint, final S
     new Thread(new Runnable() { public void run() {
         try {
             String promptTemplate = """
-Ты — эксперт по товарам с широкой базой знаний. Ты знаешь миллионы книг, товаров, брендов на разных языках, включая казахские книги.
+Ты — эксперт по товарам с широкой базой знаний. Ты знаешь миллионы книг, товаров, брендов на разных языках, включая казахские.
 
-ОПРЕДЕЛИ ЯЗЫК ПО НАЗВАНИЮ:
-1. Казахские буквы (ә, ғ, қ, ң, ө, ұ, ү, һ, і) или казахские слова → ЯЗЫК: КАЗАХСКИЙ
-2. Русские буквы без казахских → ЯЗЫК: РУССКИЙ
-3. Латинские буквы → язык оригинала может быть любым (iPhone, Louis Vuitton, Nivea)
+КРИТИЧНО — ЯЗЫК ОТВЕТА ЗАВИСИТ ОТ ЯЗЫКА НАЗВАНИЯ ТОВАРА (проверяй ПЕРВЫМ ДЕЛОМ):
+— Если название содержит казахские буквы (ә, ғ, қ, ң, ө, ұ, ү, һ, і) или казахские слова → ВСЕ поля (productName, author, category, subtype, description, purpose, composition, dosage, notes, warnings, reasoning) заполняй на КАЗАХСКОМ языке.
+— Если название на кириллице без казахских букв → на РУССКОМ.
+— Если название на латинице (iPhone, Nivea, Louis Vuitton) → описание на русском, бренд и модель НЕ переводить.
+— НИКОГДА не переводи казахские названия книг на русский и наоборот. Если книга «Абай жолы» — так и пиши «Абай жолы», а не «Путь Абая».
 
-ОТВЕЧАЙ НА ТОМ ЖЕ ЯЗЫКЕ:
-— Казахская книга → description, purpose, subtype на КАЗАХСКОМ.
-— Русская книга → на русском
-— Товары и бренды → на русском
+ПРИМЕРЫ ЯЗЫКА:
+Название «Абай жолы» → {"productName":"Абай жолы","author":"Мұхтар Әуезов","category":"Книга","description":"Мұхтар Әуезовтің қазақ ақыны Абай Құнанбаев туралы романы...","purpose":"Көркем әдебиет"}
+Название «Преступление и наказание» → {"productName":"Преступление и наказание","author":"Фёдор Достоевский","category":"Книга","description":"Роман Достоевского...","purpose":"Художественная литература"}
 
-ВСПОМИНАЙ ИЗ БАЗЫ:
-Пример казахской классики:
-— Абай жолы (Мухтар Әуезов, 1942)
-— Көшпенділер (Ілияс Есенберлин, 1969)
-— Қан мен тер (Әбдіжәміл Нұрпейісов, 1961)
-— Адамзаттың асыл тәжі (Дамира Өмірзақызы, 2004)
+ШАГ 1. ОПРЕДЕЛИ ОДНУ КАТЕГОРИЮ:
+— Книга: роман, повесть, учебник, энциклопедия, манга
+— Парфюм: духи, туалетная вода, одеколон
+— БАД / витамины: витамины, минералы, добавки
+— Косметика: крем, шампунь, гель, маска, помада
+— Электроника: телефон, наушники, ноутбук
+— Продукты: чай, кофе, шоколад, специи, снеки
+— Одежда, Дом, Игрушки, Инструменты, Канцелярия, Средство для суставов, Другое
+
+ШАГ 2. ЗАПОЛНИ ПОЛЯ СТРОГО по правилам категории. Запреты важнее JSON-схемы:
+
+КНИГА:
+  ✓ author — настоящий автор, если известен
+  ✗ notes = "", composition = "", dosage = "" — ВСЕГДА пустые
+  ✗ НЕ пиши в notes аромат/запах/вкус
+  ✗ НЕ пиши в composition состав бумаги
+  ✗ НЕ пиши в dosage способы чтения
+
+ПАРФЮМ:
+  ✓ notes — реальные ноты аромата, если точно знаешь
+  ✗ author = "", composition = "", dosage = ""
+
+БАД / витамины:
+  ✓ composition, dosage — если точно знаешь
+  ✗ notes = "", author = ""
+
+КОСМЕТИКА:
+  ✓ composition, dosage — если точно знаешь
+  ✗ notes = "", author = ""
+
+ЭЛЕКТРОНИКА:
+  ✗ notes = "", composition = "", dosage = "", author = ""
+
+ПРОДУКТЫ (чай, кофе, шоколад, специи):
+  ✓ composition — что внутри (листья, зёрна, какао)
+  ✓ dosage — как заваривать / как употреблять
+  ✓ description — РАЗВЁРНУТО 4-6 предложений: страна, вкус, польза, как заваривать
+  ✗ notes = "", author = ""
+
+ШАГ 3. ЯЗЫК:
+— Казахские буквы (ә, ғ, қ, ң, ө, ұ, ү, һ, і) → на казахском
+— Русские буквы → на русском
+— Латинские буквы (iPhone, Nivea) → бренды НЕ переводить, описание на русском
+
+ПРИМЕРЫ (обрати внимание на пустые поля):
+
+Книга:
+{"identified":true,"confidence":95,"productName":"Преступление и наказание","brand":"","category":"Книга","subtype":"Роман","description":"Роман Достоевского, 1866 год.","purpose":"Художественная литература","composition":"","dosage":"","notes":"","year":"1866","author":"Фёдор Михайлович Достоевский","warnings":"","reasoning":"Классика"}
+
+Парфюм:
+{"identified":true,"confidence":92,"productName":"Louis Vuitton L'Immensité","brand":"Louis Vuitton","category":"Парфюм","subtype":"Мужской","description":"Мужской парфюм, 2018.","purpose":"Парфюмерия","composition":"","dosage":"","notes":"бергамот, грейпфрут, кедр","year":"2018","author":"","warnings":"","reasoning":"Знаю бренд"}
+
+БАД:
+{"identified":true,"confidence":95,"productName":"Vitamin D3","brand":"Solgar","category":"БАД / витамины","subtype":"Витамин D3","description":"Витамин D3 для костей и иммунитета.","purpose":"Иммунитет, кости","composition":"Холекальциферол 50 мкг","dosage":"1 капсула в день","notes":"","year":"","author":"","warnings":"","reasoning":"Стандартный БАД"}
+
+Чай:
+{"identified":true,"confidence":90,"productName":"Чай чёрный Akbar Premium","brand":"Akbar","category":"Продукты","subtype":"Чёрный чай","description":"Цейлонский чёрный чай из высокогорных плантаций Шри-Ланки. Крупнолистовой, с насыщенным вкусом и лёгкой терпкостью. Содержит антиоксиданты, бодрит, улучшает пищеварение. Заваривать 1 ч.л. на 200 мл при 95°C, 3-5 минут.","purpose":"Утренний и дневной чай","composition":"Цейлонский чёрный чай","dosage":"1 ч.л. на 200 мл, 95°C, 3-5 мин","notes":"","year":"","author":"","warnings":"Содержит кофеин","reasoning":"Знаю бренд"}
 
 НЕ ВЫДУМЫВАЙ. Если не уверен — identified=false.
 
@@ -45,6 +96,32 @@ public void lookupProductByAI(final String query, final String typeHint, final S
             if (startBrace >= 0 && endBrace > startBrace) text = text.substring(startBrace, endBrace + 1);
 
             org.json.JSONObject parsed = new org.json.JSONObject(text);
+
+            // Жёстко обнуляем запрещённые поля по категории
+            String _cat = parsed.optString("category", "").trim();
+            if ("Книга".equalsIgnoreCase(_cat)) {
+                parsed.put("notes", "");
+                parsed.put("composition", "");
+                parsed.put("dosage", "");
+            } else if ("Парфюм".equalsIgnoreCase(_cat)) {
+                parsed.put("author", "");
+            } else if ("БАД / витамины".equalsIgnoreCase(_cat)
+                    || "БАД".equalsIgnoreCase(_cat)
+                    || "Витамины".equalsIgnoreCase(_cat)) {
+                parsed.put("notes", "");
+                parsed.put("author", "");
+            } else if ("Косметика".equalsIgnoreCase(_cat)) {
+                parsed.put("notes", "");
+                parsed.put("author", "");
+            } else if ("Электроника".equalsIgnoreCase(_cat)) {
+                parsed.put("notes", "");
+                parsed.put("composition", "");
+                parsed.put("dosage", "");
+                parsed.put("author", "");
+            } else if ("Продукты".equalsIgnoreCase(_cat)) {
+                parsed.put("notes", "");
+                parsed.put("author", "");
+            }
 
             org.json.JSONObject out = new org.json.JSONObject();
             out.put("status", "success");
