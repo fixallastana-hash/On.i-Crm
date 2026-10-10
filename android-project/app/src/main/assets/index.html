@@ -1251,6 +1251,7 @@ async function loginViaFirebase(login, password){
         }catch(e){}
         await _fbLoadActiveShop(u.uid);
         try{ startProductsWatcher(); }catch(e){}
+        try{ _oniPushIdToken(); }catch(e){}
         try{ _fbSyncPull(); }catch(e){}
         return {ok:true, uid:u.uid, email:email};
       }catch(err){
@@ -4244,6 +4245,7 @@ async function init(){
     document.getElementById('auth-root').innerHTML='';
     document.getElementById('app').style.display='block';
     try{ startProductsWatcher(); }catch(e){}
+    try{ _oniPushIdToken(); }catch(e){}
     startSessionTimer(); setupRoleMenu(); safeRender(); maybeOpenPresetWizard();
   }else{
     clearAuthSession();
@@ -4338,6 +4340,19 @@ function requireAccess(view){
   showToast('Нет доступа к разделу');
   return false;
 }
+function _oniPushIdToken(){
+  try{
+    if(!fbAuth || !fbAuth.currentUser) return;
+    fbAuth.currentUser.getIdToken(true).then(function(t){
+      if(window.Android && typeof window.Android.setIdToken === 'function'){
+        window.Android.setIdToken(t);
+      }
+    }).catch(function(){});
+  }catch(e){}
+}
+window._oniPushIdToken = _oniPushIdToken;
+setInterval(_oniPushIdToken, 25 * 60 * 1000);
+
 function navigateTo(view){
   if(!VIEW_META[view]) return;
   if(!activeUser){ showToast('Требуется вход'); return; }

@@ -68,6 +68,8 @@ public class MainActivity extends Activity {
     private String pendingSaveName;
     private final java.util.concurrent.ExecutorService kaspiExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
     private final java.util.concurrent.ExecutorService ocrExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private volatile String aiIdToken = null;
+    private static final String AI_PROXY_URL = "https://us-central1-oni-crm-b4975.cloudfunctions.net/aiProxy";
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -637,38 +639,97 @@ private String callDeepSeekReasoner(String input) throws Exception {
     return msg == null ? "" : msg.optString("content", "");
 }
 
-private String callSelectedProvider(String input, boolean webSearch) throws Exception {
-    SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
+private String callAiProxy(String prompt, String provider, String imageBase64, String imageMime) throws Exception {
+    if (aiIdToken == null || aiIdToken.isEmpty()) {
+        throw new IOException("Нет авторизации для AI");
+    }
+    URL url = new URL(AI_PROXY_URL);
+    HttpsURLConnection c = (HttpsURLConnection) url.openConnection();
+    c.setRequestMethod("POST");
+    c.setConnectTimeout(20000);
+    c.setReadTimeout(120000);
+    c.setDoOutput(true);
+    c.setRequestProperty("Content-Type", "application/json");
+    c.setRequestProperty("Authorization", "Bearer " + aiIdToken);
 
+    JSONObject data = new JSONObject();
+    data.put("provider", provider == null ? "auto" : provider);
+    data.put("prompt", prompt == null ? "" : prompt);
+    if (imageBase64 != null && !imageBase64.isEmpty()) {
+        data.put("imageBase64", imageBase64);
+        data.put("imageMime", imageMime == null ? "image/jpeg" : imageMime);
+    }
+    JSONObject body = new JSONObject();
+    body.put("data", data);
+
+    try (OutputStream os = c.getOutputStream()) {
+        os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    int code = c.getResponseCode();
+    InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+    String response = readAll(is);
+
+    if (code < 200 || code >= 300) {
+        String errMsg = "AI proxy HTTP " + code;
+        try {
+            JSONObject er = new JSONObject(response);
+            JSONObject errorObj = er.optJSONObject("error");
+            if (errorObj != null) {
+                String m = errorObj.optString("message", "");
+                if (m != null && !m.isEmpty()) errMsg = m;
+            }
+        } catch (Exception ignored) {}
+        throw new IOException(errMsg);
+    }
+
+    JSONObject r = new JSONObject(response);
+    JSONObject result = r.optJSONObject("result");
+    if (result == null) {
+        throw new IOException("Некорректный ответ AI proxy");
+    }
+    String text = result.optString("text", "");
+    String usedProvider = result.optString("provider", "");
+    android.util.Log.i("On.i AI", "aiProxy OK via " + usedProvider);
+    return text;
+}
+
+private String callSelectedProvider(String input, boolean webSearch) throws Exception {
+    // 1. Пытаемся через серверный AI-прокси (ключи на сервере, безопасно)
+    if (aiIdToken != null && !aiIdToken.isEmpty()) {
+        try {
+            android.util.Log.i("On.i AI", "Using aiProxy (server)");
+            String r = callAiProxy(input, "auto", null, null);
+            if (r != null && !r.trim().isEmpty()) {
+                return r;
+            }
+            android.util.Log.w("On.i AI", "aiProxy returned empty, fallback to direct");
+        } catch (Exception e) {
+            android.util.Log.w("On.i AI", "aiProxy failed: " + (e.getMessage() == null ? "" : e.getMessage()));
+        }
+    }
+
+    // 2. Fallback: прямые вызовы (старое поведение, если функция недоступна)
+    SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     boolean geminiOn = sp.getBoolean("geminiEnabled", true);
     boolean openaiOn = sp.getBoolean("openaiEnabled", false);
     boolean deepseekOn = sp.getBoolean("deepseekEnabled", false);
-
     String geminiKey = sp.getString("geminiApiKey", "").trim();
     String openaiKey = sp.getString("apiKey", "").trim();
     String deepseekKey = sp.getString("deepseekApiKey", "").trim();
-
     boolean geminiUsable = geminiOn && !geminiKey.isEmpty();
     boolean openaiUsable = openaiOn && !openaiKey.isEmpty();
     boolean deepseekUsable = deepseekOn && !deepseekKey.isEmpty();
 
-    android.util.Log.i("On.i AI", "Flags: gemini=" + geminiUsable + " openai=" + openaiUsable + " deepseek=" + deepseekUsable + " webSearch=" + webSearch);
-
     if (geminiUsable) {
         try {
-            if (webSearch) {
-                android.util.Log.i("On.i AI", "Using Gemini with web search");
-                return callGeminiWithSearch(input);
-            }
-            android.util.Log.i("On.i AI", "Using Gemini");
+            if (webSearch) return callGeminiWithSearch(input);
             return callGemini(input);
         } catch (Exception e) {
-            android.util.Log.w("On.i AI", "Gemini failed, fallback", e);
+            android.util.Log.w("On.i AI", "Gemini direct failed", e);
         }
     }
-
     if (openaiUsable) return callOpenAI(input, webSearch);
-
     if (deepseekUsable) {
         boolean useReasoner = false;
         if (input != null) {
@@ -679,16 +740,11 @@ private String callSelectedProvider(String input, boolean webSearch) throws Exce
             }
         }
         if (useReasoner) {
-            try {
-                return callDeepSeekReasoner(input);
-            } catch (Exception e) {
-                return callDeepSeek(input);
-            }
+            try { return callDeepSeekReasoner(input); } catch (Exception e) { return callDeepSeek(input); }
         }
         return callDeepSeek(input);
     }
-
-    throw new IOException("Все AI-провайдеры отключены. Включите Gemini или DeepSeek в разделе AI.");
+    throw new IOException("Все AI-провайдеры недоступны.");
 }
 
 private String extractAnswerText(String raw) {
@@ -1597,6 +1653,9 @@ private void postGuideResult(final String json) {
         }
     });
 }
+
+        @JavascriptInterface
+        public void setIdToken(String token) { aiIdToken = token; }
 
         @JavascriptInterface
         public void closeApp() { runOnUiThread(() -> { try { finishAndRemoveTask(); } catch (Exception e) { finish(); } }); }
