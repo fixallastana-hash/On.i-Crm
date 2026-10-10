@@ -705,7 +705,11 @@ private String callSelectedProvider(String input, boolean webSearch) throws Exce
             }
             android.util.Log.w("On.i AI", "aiProxy returned empty, fallback to direct");
         } catch (Exception e) {
-            android.util.Log.w("On.i AI", "aiProxy failed: " + (e.getMessage() == null ? "" : e.getMessage()));
+            final String em = (e.getMessage() == null ? "err" : e.getMessage());
+            android.util.Log.w("On.i AI", "aiProxy failed: " + em);
+            try { webView.post(new Runnable(){ public void run(){
+                try { webView.evaluateJavascript("if(window.showToast)showToast('AI: ' + " + org.json.JSONObject.quote(em) + ")", null); } catch(Exception ex){}
+            }}); } catch(Exception ex){}
         }
     }
 
@@ -1655,7 +1659,15 @@ private void postGuideResult(final String json) {
 }
 
         @JavascriptInterface
-        public void setIdToken(String token) { aiIdToken = token; }
+        public void setIdToken(String token) {
+            aiIdToken = token;
+            try {
+                final String tt = (token == null || token.isEmpty()) ? "empty" : "ok";
+                webView.post(new Runnable(){ public void run(){
+                    try { webView.evaluateJavascript("if(window.showToast)showToast('Token: " + tt + "')", null); } catch(Exception e){}
+                }});
+            } catch(Exception e){}
+        }
 
         @JavascriptInterface
         public void closeApp() { runOnUiThread(() -> { try { finishAndRemoveTask(); } catch (Exception e) { finish(); } }); }
