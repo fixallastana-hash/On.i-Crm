@@ -11,13 +11,8 @@ private void injectAIChat() {
 
         "function checkAIStatus(){" +
         "  try{" +
-        "    var st={};" +
-        "    if(window.Android&&typeof window.Android.getAIState==='function'){st=JSON.parse(window.Android.getAIState()||'{}');}" +
-        "    else if(window.__oniAIState){st=window.__oniAIState;}" +
-        "    var g = st.gemini && st.gemini.enabled && st.gemini.keySet;" +
-        "    var oa = st.openai && st.openai.enabled && st.openai.keySet;" +
-        "    var ds = st.deepseek && st.deepseek.enabled && st.deepseek.keySet;" +
-        "    return !!(g||oa||ds);" +
+        "    var u = (window.firebase && firebase.auth && firebase.auth().currentUser) ? true : false;" +
+        "    return u;" +
         "  }catch(e){return false;}" +
         "}" +
 

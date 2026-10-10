@@ -895,7 +895,7 @@ const defaultModulesConfig = {
   suppliers:true, purchases:true, consignment:false,
   inventory:true, multiWarehouse:false, production:false,
   debts:true, bonuses:false, giftcards:false, zreports:true,
-  kaspiSmartPOS:true, aiLookup:false, marketplace:false,
+  kaspiSmartPOS:true, marketplace:false,
   employeesChat:true, cashierAnalytics:true
 };
 
@@ -4191,7 +4191,7 @@ async function init(){
   document.getElementById('menu-store-settings').onclick=()=>{ closeTopbarMenu(); openStoreSettings(); };
   document.getElementById('menu-kaspi-settings').onclick=()=>{ closeTopbarMenu(); if(!isModOn('kaspiSmartPOS')){showToast('Модуль «Smart POS» выключен');return;} openKaspiSettings(); };
   document.getElementById('menu-fiscal-settings').onclick=()=>{ closeTopbarMenu(); openFiscalSettings(); };
-  document.getElementById('menu-ai-settings').onclick=()=>{ closeTopbarMenu(); if(!isModOn('aiLookup')){showToast('Модуль «ИИ» выключен');return;} openAISettings(); };
+  // menu-ai-settings скрыт (ключи на сервере)
   document.getElementById('menu-cash-settings').onclick=()=>{ closeTopbarMenu(); openCashSettings(); };
   document.getElementById('menu-barcodes').onclick=()=>{ closeTopbarMenu(); openBarcodesMenu(); };
   document.getElementById('menu-oni-chat').onclick=()=>{ closeTopbarMenu(); if(!isModOn('employeesChat')){showToast('Модуль «On.i чат» выключен');return;} if(typeof window.openAIChat==='function'){ window.openAIChat(); } else { showToast('On.i чат доступен только в Android-приложении'); } };
@@ -7106,7 +7106,7 @@ const MODULE_GROUPS={
     ['debts','Долги'],['bonuses','Бонусы'],['giftcards','Сертификаты'],['zreports','Z-отчёты']
   ]},
   integrations:{title:'🤖 Интеграции',items:[
-    ['kaspiSmartPOS','Kaspi Smart POS'],['aiLookup','ИИ-поиск'],['marketplace','Маркетплейс']
+    ['kaspiSmartPOS','Kaspi Smart POS'],['marketplace','Маркетплейс']
   ]},
   team:{title:'👥 Команда',items:[
     ['employeesChat','On.i чат'],['cashierAnalytics','Аналитика кассиров']
@@ -7230,8 +7230,8 @@ const MODULE_PRESETS={
   mini_shop:{name:'Мини-магазин',desc:'Склад, поставщики, закупки, инвентаризация, долги и касса.',icon:'🏪',modules:{suppliers:true,purchases:true,inventory:true,debts:true,kaspiSmartPOS:true}},
   coffee_shop:{name:'Кофейня',desc:'Склад, закупки, производство, инвентаризация, бонусы и касса.',icon:'☕',modules:{purchases:true,production:true,inventory:true,bonuses:true,kaspiSmartPOS:true}},
   consignment:{name:'Реализация',desc:'Товары, поставщики, реализация, инвентаризация, долги и касса.',icon:'🤝',modules:{suppliers:true,consignment:true,inventory:true,debts:true,kaspiSmartPOS:true}},
-  marketplace:{name:'Маркетплейс',desc:'Закупки, несколько складов, маркетплейс, ИИ и касса.',icon:'🛒',modules:{purchases:true,multiWarehouse:true,marketplace:true,inventory:true,kaspiSmartPOS:true,aiLookup:true}},
-  full:{name:'Полный набор',desc:'Все доступные модули On.i CRM.',icon:'🚀',modules:{suppliers:true,purchases:true,consignment:true,inventory:true,multiWarehouse:true,production:true,debts:true,bonuses:true,giftcards:true,zreports:true,kaspiSmartPOS:true,aiLookup:true,marketplace:true,employeesChat:true,cashierAnalytics:true}},
+  marketplace:{name:'Маркетплейс',desc:'Закупки, несколько складов, маркетплейс и касса.',icon:'🛒',modules:{purchases:true,multiWarehouse:true,marketplace:true,inventory:true,kaspiSmartPOS:true}},
+  full:{name:'Полный набор',desc:'Все доступные модули On.i CRM.',icon:'🚀',modules:{suppliers:true,purchases:true,consignment:true,inventory:true,multiWarehouse:true,production:true,debts:true,bonuses:true,giftcards:true,zreports:true,kaspiSmartPOS:true,marketplace:true,employeesChat:true,cashierAnalytics:true}},
   only_pos:{name:'Только касса',desc:'Минимальная конфигурация для продаж и кассовых операций.',icon:'💳',modules:{zreports:true,kaspiSmartPOS:true}}
 };
 
