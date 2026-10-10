@@ -11,3 +11,7 @@ Thumbs.db
 # Backups from patches
 *.bak
 *.bak-*
+
+# Firebase Agent Skills (не нужны в репо)
+.agents/
+skills-lock.json
