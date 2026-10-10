@@ -1827,6 +1827,37 @@ async function loginViaFirebase(login, password){
 
       _fbSyncPullRunning = true;
       try{
+                // HARD DELETE: убрать локальные товары, которых нет в Firestore > 60 сек
+        try{
+          var _fsSnapH = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').get();
+          var _fsIdsH = {};
+          _fsSnapH.forEach(function(doc){
+            var d = doc.data() || {};
+            if(d && d.id) _fsIdsH[String(d.id)] = true;
+            if(doc.id) _fsIdsH[String(doc.id)] = true;
+          });
+          var _tombH = {};
+          try{
+            var _localH = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+            Object.keys(_localH).forEach(function(k){ _tombH[String(k)] = true; });
+          }catch(e){}
+          var _nowH = Date.now();
+          var _removedH = 0;
+          products = products.filter(function(p){
+            if(!p || !p.id) return true;
+            var sid = String(p.id);
+            if(_fsIdsH[sid]) return true;
+            if(_tombH[sid]){ _removedH++; return false; }
+            var t = Date.parse(p.updatedAt || p.createdAt || 0) || 0;
+            if(_nowH - t < 60000) return true;
+            _removedH++;
+            return false;
+          });
+          if(_removedH > 0){
+            try{ await persist('products'); }catch(e){}
+          }
+        }catch(e){ try{ console.warn('[pull] hard delete', e); }catch(_){} }
+
         var before = JSON.stringify({
           p:products, m:movements, o:orders, d:debts, c:consignments,
           ct:contacts, s:suppliers, pu:purchases, gc:giftCards,
