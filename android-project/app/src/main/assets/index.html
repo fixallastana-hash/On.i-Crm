@@ -4116,7 +4116,7 @@ async function init(){
     if(_fbSyncPullTimer){ clearInterval(_fbSyncPullTimer); }
     _fbSyncPullTimer = setInterval(function(){
       _fbSyncPull().catch(function(){});
-    }, 2000);
+    }, 8000);
 
     /* Pull при возврате в приложение (разблокировка, разворот). */
     document.addEventListener('visibilitychange', function(){
@@ -4301,7 +4301,6 @@ function requireAccess(view){
 function navigateTo(view){
   if(!VIEW_META[view]) return;
   if(!activeUser){ showToast('Требуется вход'); return; }
-  try{ if(typeof _fbSyncPull === 'function') _fbSyncPull().catch(function(){}); }catch(e){}
   if(!canAccess(view)){
     const fallback = defaultViewFor(userRole());
     showToast('Нет доступа к этому разделу');
