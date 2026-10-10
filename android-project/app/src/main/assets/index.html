@@ -3273,7 +3273,7 @@ function setupRoleMenu(){
   show('menu-store-settings', A);
   show('menu-kaspi-settings', A && isModOn('kaspiSmartPOS'));
   show('menu-fiscal-settings', A);
-  show('menu-ai-settings',    A && isModOn('aiLookup'));
+  show('menu-ai-settings',    false); // ключи на сервере, вводить в приложении не нужно
   show('menu-cash-settings',  A);
   show('menu-barcodes',        (A || M || S));
   show('backup-download',     A);
