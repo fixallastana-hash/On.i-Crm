@@ -12,9 +12,9 @@ echo "index.html: $(wc -c < android-project/app/src/main/assets/index.html) byte
 echo "MainActivity: $(wc -c < android-project/app/src/main/java/com/oni/crm/MainActivity.java) bytes"
 
 echo "=== patch: p.py ==="
-python3 .github/p.py || echo "p.py FAILED"
+python3 .github/p.py
 
 echo "=== patch: patch_index.py ==="
-python3 .github/patch_index.py 2>/dev/null || true
+python3 .github/patch_index.py
 
 echo "=== prepare done ==="
