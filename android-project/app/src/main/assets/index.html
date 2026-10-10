@@ -694,6 +694,7 @@ let _employeeCheckedOnce = false;
       fbApp=firebase.initializeApp(firebaseConfig);
       fbDb=firebase.firestore();
       fbAuth=firebase.auth();
+      try{ fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){console.warn('[auth] setPersistence failed', e);}); }catch(e){console.warn('[auth] setPersistence threw', e);}
     } else {
       console.warn('[firebase] SDK not loaded');
     }
@@ -4240,6 +4241,12 @@ async function init(){
   setupRoleMenu();
   currentView='orders'; ordersSubView='pos';
   document.getElementById('app').style.display='none';
+  try{
+    fbAuth.onAuthStateChanged(function(u){
+      if(u){ setTimeout(function(){ try{ _oniPushIdToken(); }catch(e){} }, 500); }
+    });
+  }catch(e){}
+
   const restoredSession=restoreAuthSession();
   if(restoredSession){
     document.getElementById('auth-root').innerHTML='';
@@ -4340,15 +4347,19 @@ function requireAccess(view){
   showToast('Нет доступа к разделу');
   return false;
 }
-function _oniPushIdToken(){
+function _oniPushIdToken(_tries){
+  _tries = _tries || 0;
   try{
-    if(!fbAuth || !fbAuth.currentUser) return;
+    if(!fbAuth || !fbAuth.currentUser){
+      if(_tries < 6){ setTimeout(function(){ _oniPushIdToken(_tries+1); }, 1500); }
+      return;
+    }
     fbAuth.currentUser.getIdToken(true).then(function(t){
       if(window.Android && typeof window.Android.setIdToken === 'function'){
         window.Android.setIdToken(t);
       }
-    }).catch(function(){});
-  }catch(e){}
+    }).catch(function(e){ console.warn('[ai] getIdToken failed', e && e.message); });
+  }catch(e){ console.warn('[ai] pushIdToken error', e); }
 }
 window._oniPushIdToken = _oniPushIdToken;
 setInterval(_oniPushIdToken, 25 * 60 * 1000);
