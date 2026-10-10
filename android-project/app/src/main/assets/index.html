@@ -4855,7 +4855,7 @@ function renderProductSelectionView(){
   const filtered=_q?all.filter(p=>smartProductSearch(productSearchText(p),_q)):all;
   const n=productSelectionSet.size;
   return `
-    <div class="panel" style="position:sticky;top:0;z-index:5;margin-bottom:10px;">
+    <div class="panel" style="position:sticky;top:58px;z-index:45;margin-bottom:10px;">
       <div class="panel-body" style="display:flex;align-items:center;gap:8px;padding:10px 12px;">
         <button type="button" class="btn" id="ps-cancel">Отмена</button>
         <div style="flex:1;font-weight:700;font-size:13px;" data-ps-counter>Выбрано: ${n}</div>
