@@ -5606,6 +5606,7 @@ function openCategoryManager(){
 }
 
 async function deleteProduct(id){
+  try{ console.log('[deleteProduct] START id=', id, 'fbDb=', !!fbDb, 'user=', (fbAuth && fbAuth.currentUser) ? fbAuth.currentUser.uid : null); }catch(_){}
   if(!requireAccess('products')) return;
   const p=products.find(x=>x.id===id);
   if(!p){ showToast('Товар не найден'); return; }
@@ -5635,8 +5636,25 @@ async function deleteProduct(id){
           deletedAt: Date.now(),
           byUser: (activeUser && activeUser.id) || null
         });
+        console.log('[deleteProduct] TOMBSTONE OK');
+      } else {
+        console.log('[deleteProduct] SKIP tombstone: fbDb=', !!fbDb, 'user=', (fbAuth && fbAuth.currentUser));
       }
-    }catch(e){}
+    }catch(e){
+      console.error('[deleteProduct] TOMBSTONE FAILED:', e);
+      try{ showToast('Tombstone error: ' + ((e && e.message) || e)); }catch(_){}
+    }
+    // Прямое удаление документа из products в Firestore — не ждём pull
+    try{
+      if(fbDb && fbAuth && fbAuth.currentUser){
+        var _safePid = String(id).replace(/[\/\s]+/g, '_');
+        await fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').doc(_safePid).delete();
+        console.log('[deleteProduct] PRODUCTS DOC DELETED:', _safePid);
+      }
+    }catch(e){
+      console.error('[deleteProduct] PRODUCTS DELETE FAILED:', e);
+      try{ showToast('Delete error: ' + ((e && e.message) || e)); }catch(_){}
+    }
   }catch(e){}
 
   const saved = await persist('products');
