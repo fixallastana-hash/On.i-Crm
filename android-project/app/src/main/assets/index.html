@@ -4818,6 +4818,7 @@ function enterProductSelection(initialId){
   productSelectionMode = true;
   productSelectionSet = new Set();
   if(initialId) productSelectionSet.add(initialId);
+  productSearch='';
   if(navigator.vibrate) try{navigator.vibrate(30);}catch(e){}
   safeRender();
 }
@@ -4862,7 +4863,7 @@ function renderProductSelectionView(){
         <button type="button" class="btn" id="ps-select-all">Все</button>
         <button type="button" class="btn btn-primary" id="ps-delete" ${n===0?'disabled':''}>Удалить</button>
       </div>
-      <div style="padding:0 12px 10px;"><div class="search" style="margin:0;"><input id="ps-search" placeholder="Поиск по товару..." value="${escapeHtml(productSearch)}"></div></div>
+      <div style="padding:0 12px 10px;"><div class="search" style="margin:0;"><input id="ps-search" placeholder="Поиск по товару..." value="${escapeHtml(productSearch)}"></div><button type="button" id="ps-clear" style="margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Очистить поиск и показать все</button></div>
     </div>
     <div class="panel">
       ${(filtered.length?filtered:[]).map(p=>{
@@ -4955,6 +4956,12 @@ function bindProducts(){
         });
       };
     }
+    var _psc=document.getElementById('ps-clear');
+    if(_psc){ _psc.onclick=function(){
+      productSearch='';
+      var _pi=document.getElementById('ps-search'); if(_pi) _pi.value='';
+      document.querySelectorAll('[data-ps-row]').forEach(function(row){ row.style.display=''; });
+    }; }
     const c=document.getElementById('ps-cancel'); if(c)c.onclick=exitProductSelection;
     const sa=document.getElementById('ps-select-all');
     if(sa)sa.onclick=()=>{
@@ -8413,6 +8420,7 @@ window.onAndroidBack=function(){
     if(!activeUser) return true;
     const root=document.getElementById('modal-root');
     if(root && root.innerHTML.trim()){ root.innerHTML=''; if(typeof window._inventoryPrevScanner!=='undefined'){ window.onBarcodeScanned=window._inventoryPrevScanner; window._inventoryPrevScanner=undefined; } return true; }
+    if(typeof productSelectionMode!=='undefined' && productSelectionMode){ if(typeof exitProductSelection==='function') exitProductSelection(); return true; }
     if(typeof posCategoryOpen!=='undefined' && posCategoryOpen){ posCategoryOpen=false; if(typeof safeRender==='function')safeRender(); return true; }
     if(typeof ordersSubView!=='undefined' && currentView==='orders' && ordersSubView!=='pos'){ ordersSubView='pos'; if(typeof saveUiState==='function')saveUiState(); if(typeof safeRender==='function')safeRender(); return true; }
     if(typeof currentView!=='undefined' && currentView!=='orders'){ currentView='orders'; ordersSubView='pos'; if(typeof saveUiState==='function')saveUiState(); if(typeof safeRender==='function')safeRender(); return true; }
