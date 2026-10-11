@@ -2037,9 +2037,10 @@ async function loginViaFirebase(login, password){
               var added = 0;
               var updated = 0;
               // Подтягиваем tombstones с сервера — чтобы удаления с других устройств виделись здесь.
-              if(m.name === 'products'){
+              if(m.name === 'products' || m.name === 'movements'){
                 try{
-                  var _srvTombSnap = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('productTombstones').get();
+                  var _tombCol = (m.name === 'products') ? 'productTombstones' : 'movementTombstones';
+                  var _srvTombSnap = await fbDb.collection('shops').doc(FB_SHOP_ID).collection(_tombCol).get();
                   if(_srvTombSnap && _srvTombSnap.size > 0){
                     var _srvTombMap = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
                     _srvTombSnap.forEach(function(doc){
@@ -2055,7 +2056,12 @@ async function loginViaFirebase(login, password){
               for(var ai=0; ai<arr.length; ai++){
                 var item = arr[ai];
                 if(!item || !item.id) continue;
-                if(m.name === 'products' && _recentDel[String(item.id)]) continue;
+                if((m.name === 'products' || m.name === 'movements') && _recentDel[String(item.id)]){
+                  var _di = -1;
+                  for(var _k=0;_k<local.length;_k++){ if(local[_k] && local[_k].id === item.id){ _di=_k; break; } }
+                  if(_di !== -1){ local.splice(_di, 1); changed = true; }
+                  continue;
+                }
                 var localItem = localById[item.id];
                 if(!localItem){
                   local.push(item);
@@ -5104,7 +5110,7 @@ function openMassDeleteConfirm(){
       var _rdm = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
       var _nowm = Date.now();
       productSelectionSet.forEach(function(pid){ _rdm[String(pid)] = _nowm; });
-      Object.keys(_rdm).forEach(function(k){ if(_nowm - Number(_rdm[k]) > 3600000) delete _rdm[k]; });
+      Object.keys(_rdm).forEach(function(k){ if(_nowm - Number(_rdm[k]) > 86400000) delete _rdm[k]; });
       localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rdm));
     }catch(e){}
     products=products.filter(p=>!productSelectionSet.has(p.id));
@@ -5877,7 +5883,7 @@ async function deleteProduct(id){
     var _rd = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
     _rd[String(id)] = Date.now();
     var _now = Date.now();
-    Object.keys(_rd).forEach(function(k){ if(_now - Number(_rd[k]) > 3600000) delete _rd[k]; });
+    Object.keys(_rd).forEach(function(k){ if(_now - Number(_rd[k]) > 86400000) delete _rd[k]; });
     localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rd));
     try{
       if(fbDb && fbAuth && fbAuth.currentUser){
@@ -6014,6 +6020,22 @@ async function deleteMovement(id){
     p.updatedAt=nowISO();
   }
   movements=movements.filter(x=>x.id!==id);
+  try{
+    var _rdM = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+    _rdM[String(id)] = Date.now();
+    var _nowM = Date.now();
+    Object.keys(_rdM).forEach(function(k){ if(_nowM - Number(_rdM[k]) > 86400000) delete _rdM[k]; });
+    localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rdM));
+    if(fbDb && fbAuth && fbAuth.currentUser){
+      var _safeMid = String(id).replace(/[\/\s]+/g, '_');
+      await fbDb.collection('shops').doc(FB_SHOP_ID).collection('movementTombstones').doc(_safeMid).set({
+        id: String(id),
+        deletedAt: Date.now(),
+        byUser: (activeUser && activeUser.id) || null
+      });
+      await fbDb.collection('shops').doc(FB_SHOP_ID).collection('movements').doc(_safeMid).delete();
+    }
+  }catch(e){}
   await Promise.all([persist('products'),persist('movements')]);
   safeRender();updateMessagesBadge();showToast('Движение удалено');
 }
