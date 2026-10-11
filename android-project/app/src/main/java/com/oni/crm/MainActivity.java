@@ -591,6 +591,73 @@ private String callGeminiWithSearch(String input) throws Exception {
     throw (_lastErr != null ? _lastErr : new IOException("Все модели Gemini недоступны"));
 }
 
+private String callGroq(String input) throws Exception {
+
+    SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
+
+    String key = sp.getString("groqApiKey", "").trim();
+
+    if (key.isEmpty()) throw new IOException("Добавьте Groq API-ключ");
+
+    String model = sp.getString("groqModel", "openai/gpt-oss-120b").trim();
+
+    if (model.isEmpty()) model = "openai/gpt-oss-120b";
+
+    URL url = new URL("https://api.groq.com/openai/v1/chat/completions");
+
+    javax.net.ssl.HttpsURLConnection c = (javax.net.ssl.HttpsURLConnection) url.openConnection();
+
+    c.setRequestMethod("POST");
+
+    c.setConnectTimeout(20000);
+
+    c.setReadTimeout(60000);
+
+    c.setDoOutput(true);
+
+    c.setRequestProperty("Authorization", "Bearer " + key);
+
+    c.setRequestProperty("Content-Type", "application/json");
+
+    JSONObject body = new JSONObject();
+
+    body.put("model", model);
+
+    body.put("stream", false);
+
+    JSONArray msgs = new JSONArray();
+
+    msgs.put(new JSONObject().put("role", "user").put("content", input));
+
+    body.put("messages", msgs);
+
+    try (OutputStream os = c.getOutputStream()) { os.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
+
+    int code = c.getResponseCode();
+
+    InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+
+    StringBuilder sb = new StringBuilder();
+
+    try (InputStream in = is) { byte[] buf = new byte[8192]; int n; while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, StandardCharsets.UTF_8)); }
+
+    String response = sb.toString();
+
+    if (code < 200 || code >= 300) throw new IOException("Ошибка Groq API " + code + ": " + response.substring(0, Math.min(200, response.length())));
+
+    JSONObject r = new JSONObject(response);
+
+    JSONArray choices = r.optJSONArray("choices");
+
+    if (choices == null || choices.length() == 0) return "";
+
+    JSONObject msg = choices.getJSONObject(0).optJSONObject("message");
+
+    return msg == null ? "" : msg.optString("content", "");
+
+}
+
+
 private String callDeepSeek(String input) throws Exception {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     String key = sp.getString("deepseekApiKey", "").trim();
@@ -774,6 +841,20 @@ private String callSelectedProvider(String input, boolean webSearch) throws Exce
     boolean geminiUsable = geminiOn && !geminiKey.isEmpty();
     boolean openaiUsable = openaiOn && !openaiKey.isEmpty();
     boolean deepseekUsable = deepseekOn && !deepseekKey.isEmpty();
+
+    // Groq первым — 1000 запросов/день бесплатно
+    try {
+        boolean groqOn = sp.getBoolean("groqEnabled", false);
+        String groqKey = sp.getString("groqApiKey", "").trim();
+        if (groqOn && !groqKey.isEmpty()) {
+            try {
+                String gr = callGroq(input);
+                if (gr != null && !gr.trim().isEmpty()) return gr;
+            } catch (Exception ge) {
+                try { sp.edit().putString("groqStatus", "error").apply(); } catch (Exception ignored) {}
+            }
+        }
+    } catch (Exception ignored) {}
 
     if (geminiUsable) {
         try {
@@ -1185,6 +1266,13 @@ public String getAIState() {
         out.put("gemini", g);
         out.put("openai", oa);
         out.put("deepseek", ds);
+
+        JSONObject gq = new JSONObject();
+        gq.put("enabled", sp.getBoolean("groqEnabled", false));
+        gq.put("keySet", !sp.getString("groqApiKey", "").trim().isEmpty());
+        gq.put("model", sp.getString("groqModel", "openai/gpt-oss-120b"));
+        gq.put("status", sp.getString("groqStatus", "unknown"));
+        out.put("groq", gq);
     } catch (Exception ignored) {}
     return out.toString();
 }
@@ -1258,6 +1346,25 @@ public void saveAIState(String json) {
             if (newEnabled) anyEnabled = true;
         }
 
+        if (o.has("groq")) {
+            JSONObject gq = o.getJSONObject("groq");
+            boolean newEnabled = gq.optBoolean("enabled", false);
+            String newKey = gq.optString("key", "").trim();
+            String oldKey = sp.getString("groqApiKey", "").trim();
+            boolean oldEnabled = sp.getBoolean("groqEnabled", false);
+            String newModel = gq.optString("model", "").trim();
+
+            e.putBoolean("groqEnabled", newEnabled);
+            if (!newKey.isEmpty()) e.putString("groqApiKey", newKey);
+            if (!newModel.isEmpty()) e.putString("groqModel", newModel);
+
+            if (!newEnabled) e.putString("groqStatus", "disabled");
+            else if (newKey.isEmpty() && oldKey.isEmpty()) e.putString("groqStatus", "no_key");
+            else if (!newKey.isEmpty() && !newKey.equals(oldKey)) e.putString("groqStatus", "unknown");
+            else if (newEnabled != oldEnabled) e.putString("groqStatus", "unknown");
+
+            if (newEnabled) anyEnabled = true;
+        }
         e.putBoolean("enabled", anyEnabled);
         e.apply();
     } catch (Exception e) {
@@ -2082,7 +2189,7 @@ private void injectProductHandlers() {
 
         "window.openAISettings=function(){" +
         "  var ex=document.getElementById('oni-ai-settings-ov');if(ex)ex.remove();" +
-        "  var state={gemini:{enabled:true,keySet:false,model:'gemini-2.5-flash',status:'unknown'},openai:{enabled:false,keySet:false,model:'gpt-4o-mini',status:'unknown'},deepseek:{enabled:false,keySet:false,model:'deepseek-chat',status:'unknown'}};" +
+        "  var state={gemini:{enabled:true,keySet:false,model:'gemini-flash-latest',status:'unknown'},openai:{enabled:false,keySet:false,model:'gpt-4o-mini',status:'unknown'},deepseek:{enabled:false,keySet:false,model:'deepseek-chat',status:'unknown'},groq:{enabled:false,keySet:false,model:'openai/gpt-oss-120b',status:'unknown'}};" +
         "  try{if(window.Android&&typeof window.Android.getAIState==='function'){var s=JSON.parse(window.Android.getAIState()||'{}');if(s&&typeof s==='object')state=Object.assign(state,s);}}catch(e){}" +
         "  window.__oniAIState = state;" +
         "  var ov=document.createElement('div');ov.className='sheet-overlay';ov.id='oni-ai-settings-ov';" +
@@ -2101,6 +2208,11 @@ private void injectProductHandlers() {
         "  html+='<div class=\"sheet-body\">';" +
 
         "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
+        "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
+        "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">Groq</div><div class=\"ai-provider-state\">'+statusBadge(state.groq.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-groq\" type=\"checkbox\" '+(state.groq.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
+        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-groq-model\" value=\"'+(state.groq.model||'openai/gpt-oss-120b')+'\"></div>';" +
+        "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-groq-key\" type=\"password\" placeholder=\"'+(state.groq.keySet?'уже сохранён':'gsk_...')+'\"></div>';" +
+        "  html+='</div></div>';" +
         "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">OpenAI</div><div class=\"ai-provider-state\">'+statusBadge(state.openai.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-openai\" type=\"checkbox\" '+(state.openai.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
         "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-openai-model\" value=\"'+(state.openai.model||'gpt-4o-mini')+'\"></div>';" +
         "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-openai-key\" type=\"password\" placeholder=\"'+(state.openai.keySet?'уже сохранён':'sk-...')+'\"></div>';" +
@@ -2114,7 +2226,7 @@ private void injectProductHandlers() {
 
         "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
         "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">Google Gemini</div><div class=\"ai-provider-state\">'+statusBadge(state.gemini.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-gemini\" type=\"checkbox\" '+(state.gemini.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
-        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-gemini-model\" value=\"'+(state.gemini.model||'gemini-2.5-flash')+'\"></div>';" +
+        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-gemini-model\" value=\"'+(state.gemini.model||'gemini-flash-latest')+'\"></div>';" +
         "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-gemini-key\" type=\"password\" placeholder=\"'+(state.gemini.keySet?'уже сохранён':'AIza...')+'\"></div>';" +
         "  html+='</div></div>';" +
 
@@ -2132,7 +2244,8 @@ private void injectProductHandlers() {
         "    return {" +
         "      gemini:{enabled:document.getElementById('oni-ai-gemini').checked,key:document.getElementById('oni-ai-gemini-key').value.trim(),model:document.getElementById('oni-ai-gemini-model').value.trim()||'gemini-2.5-flash'}," +
         "      openai:{enabled:document.getElementById('oni-ai-openai').checked,key:document.getElementById('oni-ai-openai-key').value.trim(),model:document.getElementById('oni-ai-openai-model').value.trim()||'gpt-4o-mini'}," +
-        "      deepseek:{enabled:document.getElementById('oni-ai-deepseek').checked,key:document.getElementById('oni-ai-deepseek-key').value.trim(),model:document.getElementById('oni-ai-deepseek-model').value.trim()||'deepseek-chat'}" +
+        "      deepseek:{enabled:document.getElementById('oni-ai-deepseek').checked,key:document.getElementById('oni-ai-deepseek-key').value.trim(),model:document.getElementById('oni-ai-deepseek-model').value.trim()||'deepseek-chat'}," +
+"      groq:{enabled:document.getElementById('oni-ai-groq').checked,key:document.getElementById('oni-ai-groq-key').value.trim(),model:document.getElementById('oni-ai-groq-model').value.trim()||'openai/gpt-oss-120b'}" +
         "    };" +
         "  }" +
 
