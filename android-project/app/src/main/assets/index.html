@@ -45,6 +45,7 @@
 <script crossorigin="anonymous" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script crossorigin="anonymous" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script crossorigin="anonymous" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script crossorigin="anonymous" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <!-- v15.1: WhatsApp-like chats + media + message delete for me/everyone -->
 <style>
 :root{
@@ -2289,7 +2290,6 @@ function todayISO(){ const d=new Date(); const pad=n=>String(n).padStart(2,'0');
 function escapeHtml(value){ return String(value??'').replace(/[&<>\"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch])); }
 function getProductPhotos(p){
   if(!p) return [];
-  if(_photoCache[p.id] && _photoCache[p.id].length) return _photoCache[p.id];
   if(Array.isArray(p.photos) && p.photos.length) return p.photos;
   if(p.photo) return [p.photo];
   return [];
@@ -2315,21 +2315,75 @@ async function loadProductPhotos(productId){
   return [];
 }
 
-async function saveProductPhotos(productId, photos){
-  const arr=Array.isArray(photos)?photos.filter(function(x){return typeof x==='string'&&x.length>0;}):[];
+/* ===== PHOTO STORAGE ===== */
+function _compressImage(dataUrl, maxSize, quality){
+  return new Promise(function(resolve){
+    try{
+      var img = new Image();
+      img.onload = function(){
+        try{
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if(!w || !h){ resolve(dataUrl); return; }
+          var scale = Math.min(1, (maxSize||1280) / Math.max(w, h));
+          var nw = Math.round(w * scale);
+          var nh = Math.round(h * scale);
+          var canvas = document.createElement('canvas');
+          canvas.width = nw;
+          canvas.height = nh;
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, nw, nh);
+          ctx.drawImage(img, 0, 0, nw, nh);
+          var out = canvas.toDataURL('image/jpeg', quality||0.8);
+          resolve(out && out.length < dataUrl.length ? out : dataUrl);
+        }catch(e){ resolve(dataUrl); }
+      };
+      img.onerror = function(){ resolve(dataUrl); };
+      img.src = dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+}
+async function _uploadProductPhoto(productId, dataUrl){
   try{
-    if(arr.length){
-      await idbSet('photo_'+productId, JSON.stringify(arr));
-      _photoCache[productId]=arr;
-    } else {
-      await idbDelete('photo_'+productId);
-      delete _photoCache[productId];
-    }
+    if(!window.firebase || typeof firebase.storage !== 'function') return null;
+    if(!fbAuth || !fbAuth.currentUser) return null;
+    if(!/^data:image\//i.test(dataUrl)) return null;
+    var compressed = await _compressImage(dataUrl, 1280, 0.8);
+    var path = 'shops/' + FB_SHOP_ID + '/products/' + productId + '/' + Date.now() + '_' + Math.floor(Math.random()*1e6) + '.jpg';
+    var ref = firebase.storage().ref(path);
+    await ref.putString(compressed, 'data_url');
+    var url = await ref.getDownloadURL();
+    return url || null;
+  }catch(e){ try{ console.warn('[photo upload]', e); }catch(_){} return null; }
+}
+async function _deleteStoragePhotoByUrl(url){
+  try{
+    if(!url || !/^https?:\/\//i.test(url)) return false;
+    if(!window.firebase || typeof firebase.storage !== 'function') return false;
+    var ref = firebase.storage().refFromURL(url);
+    await ref.delete();
     return true;
   }catch(e){ return false; }
 }
-
+async function saveProductPhotos(productId, photos){
+  var arr = Array.isArray(photos) ? photos.filter(function(x){ return typeof x === 'string' && x.length > 0; }) : [];
+  var urls = [];
+  for(var i=0; i<arr.length; i++){
+    var src = arr[i];
+    if(/^https?:\/\//i.test(src)){ urls.push(src); continue; }
+    var url = await _uploadProductPhoto(productId, src);
+    if(url) urls.push(url);
+  }
+  return urls;
+}
 async function deleteProductPhotos(productId){
+  try{
+    var p = products.find(function(x){ return x.id === productId; });
+    if(p && Array.isArray(p.photos)){
+      for(var i=0; i<p.photos.length; i++){ await _deleteStoragePhotoByUrl(p.photos[i]); }
+    }
+  }catch(e){}
   try{ await idbDelete('photo_'+productId); }catch(e){}
   delete _photoCache[productId];
 }
@@ -5955,15 +6009,20 @@ function openProductModal(id,options={}){
       editing.updatedAt=nowISO();
       editing.hasPhotos=hasPhotos;
       editing.mainPhotoIndex=mainPhotoIndex;
-      editing.photos=[];
-      editing.photo='';
-      editing.mainPhoto='';
-      await saveProductPhotos(editing.id, photos);
+      var _urlsEdit = await saveProductPhotos(editing.id, photos);
+      editing.photos = _urlsEdit;
+      editing.photo = _urlsEdit[0] || '';
+      editing.mainPhoto = _urlsEdit[mainPhotoIndex] || _urlsEdit[0] || '';
+      editing.hasPhotos = _urlsEdit.length > 0;
     }
     else {
-      const newProduct={id:uid(),...fields,stock:{'wh-default':Number(fields.qty)||0},hasPhotos:hasPhotos,mainPhotoIndex:mainPhotoIndex,photos:[],photo:'',mainPhoto:'',keywords:[],updatedAt:nowISO()};
+      const newProduct={id:uid(),...fields,stock:{'wh-default':Number(fields.qty)||0},hasPhotos:false,mainPhotoIndex:mainPhotoIndex,photos:[],photo:'',mainPhoto:'',keywords:[],updatedAt:nowISO()};
       products.push(newProduct);
-      await saveProductPhotos(newProduct.id, photos);
+      var _urlsNew = await saveProductPhotos(newProduct.id, photos);
+      newProduct.photos = _urlsNew;
+      newProduct.photo = _urlsNew[0] || '';
+      newProduct.mainPhoto = _urlsNew[mainPhotoIndex] || _urlsNew[0] || '';
+      newProduct.hasPhotos = _urlsNew.length > 0;
       if(quickMode){const line=cart.find(c=>c.productId===newProduct.id);if(line){line.qty+=quickQty;line.price=newProduct.price;line.emergencySale=true;}else cart.push({productId:newProduct.id,qty:quickQty,price:newProduct.price,emergencySale:true});}
     }
     await persist('products');close();safeRender();updateMessagesBadge();showToast(quickMode?'Быстрый товар добавлен в чек':(editing?'Товар сохранён':'Товар добавлен'));
