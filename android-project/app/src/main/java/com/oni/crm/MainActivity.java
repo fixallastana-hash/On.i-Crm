@@ -1073,6 +1073,34 @@ public void testAIConnection() {
             }
         }
 
+        boolean gqOn = sp.getBoolean("groqEnabled", false);
+        String gqKey = sp.getString("groqApiKey", "").trim();
+        if (!gqOn) {
+            editor.putString("groqStatus", "disabled");
+            report.append("Groq: выключен. ");
+        } else if (gqKey.isEmpty()) {
+            editor.putString("groqStatus", "no_key");
+            report.append("Groq: ключ не задан. ");
+        } else {
+            try {
+                String r = callGroq("OK");
+                if (r != null && !r.trim().isEmpty()) {
+                    editor.putString("groqStatus", "ready");
+                    report.append("Groq: подключён. ");
+                } else {
+                    editor.putString("groqStatus", "error");
+                    report.append("Groq: пустой ответ. ");
+                }
+            } catch (Exception e) {
+                String m = e.getMessage() == null ? "неизвестно" : e.getMessage();
+                String status = "error";
+                if (m.contains("429")) status = "rate_limited";
+                else if (m.contains("401") || m.contains("403")) status = "invalid_key";
+                editor.putString("groqStatus", status);
+                if (m.length() > 100) m = m.substring(0, 100) + "…";
+                report.append("Groq: ").append(m).append(". ");
+            }
+        }
         editor.apply();
 
         JSONObject out = new JSONObject();
@@ -1109,20 +1137,6 @@ public void askAIChat(final String message, final String historyJson, final Stri
             prompt.append("Если в вопросе НЕТ ни одного слова из списка: товар, товары, цена, стоимость, остаток, наличие, категория, купить, продать, заказать, какие есть, что от, что для, сколько стоит, посоветуй, рекомендация, подбор — то это ОБЩИЙ вопрос.\n");
             prompt.append("На ОБЩИЙ вопрос отвечай СВОБОДНО как ChatGPT. Шутка → шутка. Анекдот → анекдот. Борщ → рецепт. Код → код. Математика → число. История → объяснение. Перевод → перевод.\n");
             prompt.append("На общий вопрос НЕЛЬЗЯ писать: «нет товаров», «нет в наличии», «завезём под заказ», «в нашем магазине», «в каталоге нет». Совсем нельзя.\n\n");
-            prompt.append("ГЛАВНОЕ ПРАВИЛО (нарушать нельзя):\n");
-            prompt.append("Определи — вопрос про НАШ магазин или общий?\n");
-            prompt.append("— ОБЩИЙ вопрос (шутка, рецепт, код, математика, перевод, объяснение, совет, история, музыка, что угодно) → отвечай СВОБОДНО как обычный AI. НИКОГДА не упоминай магазин, каталог, товары, остатки, заказы, доставку. НИКОГДА.\n");
-            prompt.append("— ВОПРОС ПРО МАГАЗИН (товары, цены, остатки, категории, подбор, рекомендации) → используй ТОЛЬКО каталог ниже.\n\n");
-            prompt.append("ПРИМЕРЫ ПРАВИЛЬНОГО ПОВЕДЕНИЯ:\n");
-            prompt.append("Вопрос: «Придумай шутку про программиста» → ШУТКА. НЕ «нет товаров в категории Шутки».\n");
-            prompt.append("Вопрос: «Как сварить борщ?» → РЕЦЕПТ. НЕ «нет товаров для борща».\n");
-            prompt.append("Вопрос: «Напиши функцию Python» → КОД. НЕ «нет товаров Python».\n");
-            prompt.append("Вопрос: «Сколько 127 * 39?» → 4953. НЕ «нет товаров по математике».\n");
-            prompt.append("Вопрос: «Расскажи анекдот» → АНЕКДОТ. НЕ «завезём под заказ».\n");
-            prompt.append("Вопрос: «Какие напитки у вас есть?» → список из КАТАЛОГА.\n");
-            prompt.append("Вопрос: «Что от кашля?» → товары из КАТАЛОГА.\n\n");
-            prompt.append("ЕСЛИ СОМНЕВАЕШЬСЯ:\n");
-            prompt.append("Не про магазин явно не сказано → отвечай как обычный AI. Лучше ответить свободно, чем всунуть каталог.\n\n");
             prompt.append("ФОРМАТ:\n");
             prompt.append("— Язык — как в вопросе.\n");
             prompt.append("— Markdown: **жирный**, списки.\n");
