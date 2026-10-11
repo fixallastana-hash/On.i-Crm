@@ -229,8 +229,17 @@ body.theme-dark .topbar-menu-head{border-color:var(--border);}
 .product-info-modal .sheet{height:100vh;max-height:100vh;max-width:100%;border-radius:0;display:flex;flex-direction:column;}
 .product-info-scroll{flex:1;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:2px;touch-action:pan-y;}
 .product-info-photo{cursor:zoom-in;display:block;}
-.product-photo-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;}
-.product-photo-lightbox img{max-width:94vw;max-height:88vh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.45);}.product-photo-lightbox img.zoomed{max-width:none;max-height:none;width:auto;height:auto;min-width:94vw;min-height:88vh;object-fit:contain;cursor:zoom-out;}
+.product-photo-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:9999;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;touch-action:none;}
+.product-photo-lightbox img{max-width:100vw;max-height:100vh;width:auto;height:auto;object-fit:contain;border-radius:0;user-select:none;-webkit-user-drag:none;will-change:transform;cursor:grab;transform-origin:center center;}
+.product-photo-lightbox img.dragging{transition:none;cursor:grabbing;}
+.product-photo-lightbox-arrow{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:26px;line-height:1;cursor:pointer;z-index:10;display:none;align-items:center;justify-content:center;}
+.product-photo-lightbox.has-gallery .product-photo-lightbox-arrow{display:flex;}
+.product-photo-lightbox-arrow.prev{left:12px;}
+.product-photo-lightbox-arrow.next{right:12px;}
+.product-photo-lightbox-zoom{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;background:rgba(20,24,40,.68);border-radius:999px;padding:6px 8px;z-index:10;}
+.product-photo-lightbox-zoom button{width:38px;height:38px;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.product-photo-lightbox-zoom button:active{background:rgba(255,255,255,.28);}
+.product-photo-lightbox-zoom .zl-scale{color:#fff;font-family:var(--mono);font-size:12px;min-width:46px;text-align:center;}
 .product-photo-lightbox-close{position:absolute;top:14px;right:14px;width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:24px;}
 .product-photo-gallery{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
 .product-photo-thumb{position:relative;width:58px;height:58px;border-radius:10px;overflow:hidden;border:2px solid transparent;background:var(--surface);cursor:pointer;}
@@ -4874,26 +4883,151 @@ function openProductInfoModal(id){
   if(photoBtn && main) photoBtn.onclick=e=>{e.preventDefault();e.stopPropagation();const mi=Math.max(0,photos.indexOf(main));openProductPhotoLightbox(main,p.name||'Фото товара',photos,mi);};
   document.querySelectorAll('#pinfo-gallery .product-photo-thumb').forEach(btn=>btn.onclick=e=>{e.preventDefault();e.stopPropagation();const idx=Number(btn.dataset.pg),src=photos[idx];if(src)openProductPhotoLightbox(src,p.name||'Фото товара',photos,idx);});
 }
-function openProductPhotoLightbox(src,alt='Фото товара',gallery=null,index=0){
+function openProductPhotoLightbox(src,alt,gallery,index){
   if(!src)return;
-  const root=document.getElementById('modal-root');
+  alt=alt||'';
   const items=Array.isArray(gallery)&&gallery.length?gallery:[src];
   let current=Math.max(0,Math.min(Number(index)||0,items.length-1));
-  const box=document.createElement('div'); box.className='product-photo-lightbox'; box.id='product-photo-lightbox';
-  box.innerHTML=`<button type="button" class="product-photo-lightbox-close" aria-label="Закрыть">✕</button><img src="${escapeHtml(items[current])}" alt="${escapeHtml(alt)}" title="Свайпните влево или вправо">`;
+  const box=document.createElement('div');
+  box.className='product-photo-lightbox'+(items.length>1?' has-gallery':'');
+  box.id='product-photo-lightbox';
+  box.innerHTML='<button type="button" class="product-photo-lightbox-close" aria-label="Close">\u2715</button>'
+    + '<img src="'+escapeHtml(items[current])+'" alt="'+escapeHtml(alt)+'" draggable="false">'
+    + (items.length>1?'<button type="button" class="product-photo-lightbox-arrow prev" aria-label="Prev">\u2039</button><button type="button" class="product-photo-lightbox-arrow next" aria-label="Next">\u203a</button>':'')
+    + '<div class="product-photo-lightbox-zoom">'
+    + '<button type="button" data-zl="out" aria-label="Zoom out">\u2212</button>'
+    + '<span class="zl-scale" data-zl-scale>100%</span>'
+    + '<button type="button" data-zl="in" aria-label="Zoom in">+</button>'
+    + '<button type="button" data-zl="reset" aria-label="Reset">\u27f2</button>'
+    + '</div>';
   document.body.appendChild(box);
-  const image=box.querySelector('img'); let closing=false; const historyKey='oni-product-photo-lightbox'; let onBack=null;
-  const render=()=>{image.src=items[current];image.classList.remove('zoomed');};
-  const close=()=>{if(closing)return;closing=true;window.removeEventListener('popstate',onBack);box.remove();if(history.state?.oniLightbox===historyKey)history.back();};
-  history.pushState({...(history.state||{}),oniLightbox:historyKey},''); box.querySelector('.product-photo-lightbox-close').onclick=close; box.onclick=e=>{if(e.target===box)close();};
-  let sx=0,sy=0,drag=false;
-  image.addEventListener('touchstart',e=>{if(!e.touches[0])return;sx=e.touches[0].clientX;sy=e.touches[0].clientY;drag=true;},{passive:true});
-  const handleSwipe=e=>{if(!drag||!e.changedTouches[0])return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;drag=false;if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)&&items.length>1){current=(current+(dx<0?1:-1)+items.length)%items.length;render();}};
-  image.addEventListener('touchend',handleSwipe,{passive:true});
-  box.addEventListener('touchstart',e=>{if(e.target===image)return;if(!e.touches[0])return;sx=e.touches[0].clientX;sy=e.touches[0].clientY;drag=true;},{passive:true});
-  box.addEventListener('touchend',e=>{if(e.target===image)return;handleSwipe(e);},{passive:true});
-  if(image) image.onclick=e=>{e.stopPropagation();image.classList.toggle('zoomed');};
-  onBack=()=>{if(document.getElementById('product-photo-lightbox')===box){closing=true;box.remove();}window.removeEventListener('popstate',onBack);}; window.addEventListener('popstate',onBack);
+  const image=box.querySelector('img');
+  const scaleEl=box.querySelector('[data-zl-scale]');
+  let scale=1,tx=0,ty=0;
+  const MIN=1,MAX=5,SWIPE=55;
+  let closing=false;
+  const historyKey='oni-product-photo-lightbox';
+  let onBack=null;
+  function apply(anim){
+    image.style.transition=anim===false?'none':'transform .18s ease-out';
+    image.style.transform='translate3d('+tx+'px,'+ty+'px,0) scale('+scale+')';
+    scaleEl.textContent=Math.round(scale*100)+'%';
+  }
+  function clamp(){
+    if(scale<=1){tx=0;ty=0;return;}
+    const w=image.clientWidth||image.naturalWidth||1;
+    const h=image.clientHeight||image.naturalHeight||1;
+    const maxX=Math.max(0,(w*scale-window.innerWidth)/2);
+    const maxY=Math.max(0,(h*scale-window.innerHeight)/2);
+    tx=Math.max(-maxX,Math.min(maxX,tx));
+    ty=Math.max(-maxY,Math.min(maxY,ty));
+  }
+  function setScale(s){ scale=Math.max(MIN,Math.min(MAX,s)); clamp(); apply(true); }
+  function zoomIn(){ setScale(scale*1.5); }
+  function zoomOut(){ setScale(scale/1.5); }
+  function reset(){ scale=1; tx=0; ty=0; apply(true); }
+  function render(){ image.src=items[current]; reset(); }
+  function close(){
+    if(closing)return; closing=true;
+    window.removeEventListener('popstate',onBack);
+    document.removeEventListener('keydown',onKey);
+    box.remove();
+    if(history.state&&history.state.oniLightbox===historyKey)history.back();
+  }
+  history.pushState({...((history.state)||{}),oniLightbox:historyKey},'');
+  box.querySelector('.product-photo-lightbox-close').onclick=close;
+  box.querySelector('[data-zl="in"]').onclick=function(){ zoomIn(); };
+  box.querySelector('[data-zl="out"]').onclick=function(){ zoomOut(); };
+  box.querySelector('[data-zl="reset"]').onclick=function(){ reset(); };
+  const bPrev=box.querySelector('.product-photo-lightbox-arrow.prev');
+  const bNext=box.querySelector('.product-photo-lightbox-arrow.next');
+  if(bPrev)bPrev.onclick=function(e){ e.stopPropagation(); current=(current-1+items.length)%items.length; render(); };
+  if(bNext)bNext.onclick=function(e){ e.stopPropagation(); current=(current+1)%items.length; render(); };
+  box.onclick=function(e){ if(e.target===box) close(); };
+  const pointers=new Map();
+  let isDragging=false,wasSingle=false;
+  let pStartX=0,pStartY=0,pStartTx=0,pStartTy=0;
+  let pinchStart=0,pinchScale=1;
+  let lastTap=0,swipeStartX=0,swipeStartY=0;
+  image.addEventListener('pointerdown',function(e){
+    try{ image.setPointerCapture(e.pointerId); }catch(_){}
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size===1){
+      isDragging=false; wasSingle=true;
+      pStartX=e.clientX; pStartY=e.clientY;
+      pStartTx=tx; pStartTy=ty;
+      swipeStartX=e.clientX; swipeStartY=e.clientY;
+      if(scale>1){ isDragging=true; image.classList.add('dragging'); }
+    } else if(pointers.size===2){
+      wasSingle=false;
+      const pts=Array.from(pointers.values());
+      pinchStart=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)||1;
+      pinchScale=scale;
+      isDragging=false; image.classList.remove('dragging');
+    }
+  });
+  image.addEventListener('pointermove',function(e){
+    if(!pointers.has(e.pointerId))return;
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size===2 && pinchStart>0){
+      const pts=Array.from(pointers.values());
+      const d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+      const ns=Math.max(MIN,Math.min(MAX,pinchScale*(d/pinchStart)));
+      if(ns!==scale){ scale=ns; clamp(); apply(false); }
+      return;
+    }
+    if(pointers.size===1 && isDragging && scale>1){
+      tx=pStartTx+(e.clientX-pStartX);
+      ty=pStartTy+(e.clientY-pStartY);
+      clamp(); apply(false);
+    }
+  });
+  function endPointer(e){
+    const had=pointers.has(e.pointerId);
+    pointers.delete(e.pointerId);
+    if(!had)return;
+    if(pointers.size===0){
+      if(isDragging){ isDragging=false; image.classList.remove('dragging'); apply(true); }
+      if(wasSingle && scale<=1.05 && items.length>1){
+        const dx=e.clientX-swipeStartX, dy=e.clientY-swipeStartY;
+        if(Math.abs(dx)>SWIPE && Math.abs(dx)>Math.abs(dy)){
+          current=(current+(dx<0?1:-1)+items.length)%items.length;
+          render(); wasSingle=false; return;
+        }
+      }
+      if(wasSingle && scale<=1.05){
+        const now=Date.now();
+        if(now-lastTap<300){ setScale(2.5); lastTap=0; } else { lastTap=now; }
+      }
+      wasSingle=false;
+    }
+  }
+  image.addEventListener('pointerup',endPointer);
+  image.addEventListener('pointercancel',endPointer);
+  box.addEventListener('wheel',function(e){
+    e.preventDefault();
+    const f=e.deltaY<0?1.15:1/1.15;
+    setScale(scale*f);
+  },{passive:false});
+  function onKey(e){
+    if(e.key==='Escape') close();
+    else if(e.key==='+'||e.key==='=') zoomIn();
+    else if(e.key==='-') zoomOut();
+    else if(e.key==='0') reset();
+    else if(e.key==='ArrowLeft' && items.length>1){ current=(current-1+items.length)%items.length; render(); }
+    else if(e.key==='ArrowRight' && items.length>1){ current=(current+1)%items.length; render(); }
+  }
+  document.addEventListener('keydown',onKey);
+  onBack=function(){
+    if(document.getElementById('product-photo-lightbox')===box){
+      closing=true;
+      document.removeEventListener('keydown',onKey);
+      box.remove();
+    }
+    window.removeEventListener('popstate',onBack);
+  };
+  window.addEventListener('popstate',onBack);
+  apply(false);
 }
 
 function initProductInfoSwipeClose(sheet){/* отключено — закрытие только через ✕ */
