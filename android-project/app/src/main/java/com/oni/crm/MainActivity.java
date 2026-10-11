@@ -69,6 +69,8 @@ public class MainActivity extends Activity {
     private final java.util.concurrent.ExecutorService kaspiExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
     private final java.util.concurrent.ExecutorService ocrExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
     private volatile String aiIdToken = null;
+    private volatile String lastUsedProvider = "";
+    private volatile String lastUsedModel = "";
     private static final String AI_PROXY_URL = "https://us-central1-oni-crm-b4975.cloudfunctions.net/aiProxy";
 
     @Override protected void onCreate(Bundle state) {
@@ -811,6 +813,8 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     }
     String text = result.optString("text", "");
     String usedProvider = result.optString("provider", "");
+        lastUsedProvider = usedProvider;
+        lastUsedModel = result.optString("model", "");
     android.util.Log.i("On.i AI", "aiProxy OK via " + usedProvider);
     return text;
 }
@@ -1132,17 +1136,13 @@ public void askAIChat(final String message, final String historyJson, final Stri
     new Thread(new Runnable() { public void run() {
         try {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("Ты — On.i Assistant, универсальный ИИ-ассистент (как Gemini или ChatGPT). Отвечай на ЛЮБЫЕ вопросы.\n\n");
-            prompt.append("СТРОГОЕ ПРАВИЛО ПЕРВОЙ ОЧЕРЕДИ (действует всегда):\n");
-            prompt.append("Если в вопросе НЕТ ни одного слова из списка: товар, товары, цена, стоимость, остаток, наличие, категория, купить, продать, заказать, какие есть, что от, что для, сколько стоит, посоветуй, рекомендация, подбор — то это ОБЩИЙ вопрос.\n");
-            prompt.append("На ОБЩИЙ вопрос отвечай СВОБОДНО как ChatGPT. Шутка → шутка. Анекдот → анекдот. Борщ → рецепт. Код → код. Математика → число. История → объяснение. Перевод → перевод.\n");
-            prompt.append("На общий вопрос НЕЛЬЗЯ писать: «нет товаров», «нет в наличии», «завезём под заказ», «в нашем магазине», «в каталоге нет». Совсем нельзя.\n\n");
-            prompt.append("ФОРМАТ:\n");
-            prompt.append("— Язык — как в вопросе.\n");
-            prompt.append("— Markdown: **жирный**, списки.\n");
-            prompt.append("— Короткий вопрос → 1–3 предложения.\n");
-            prompt.append("— Сложный → списком или шагами.\n");
-            prompt.append("— Не выдумывай факты. Не знаешь — скажи «не знаю».\n\n");
+            prompt.append("Ты — универсальный ИИ-ассистент. Отвечай на ЛЮБОЙ вопрос, как ChatGPT.\n\n");
+            prompt.append("ПРАВИЛА:\n");
+            prompt.append("1. Вопрос про магазин (товары, цены, наличие, категории, подбор) → отвечай строго по КАТАЛОГУ ниже. Нет в каталоге → скажи честно, что нет.\n");
+            prompt.append("2. Любой другой вопрос (шутка, анекдот, рецепт, код, перевод, математика, история, болтовня) → отвечай свободно, БЕЗ упоминания магазина и каталога.\n");
+            prompt.append("3. Язык ответа = язык вопроса. Markdown ок (**жирный**, списки).\n");
+            prompt.append("4. Коротко: 1–3 предложения для простого вопроса, списком — для сложного.\n");
+            prompt.append("5. Не выдумывай факты. Не знаешь → скажи «не знаю».\n\n");
 
             boolean catalogOn = !"__OFF__".equals(catalog);
             if (catalogOn) {
@@ -1169,6 +1169,8 @@ public void askAIChat(final String message, final String historyJson, final Stri
             JSONObject out = new JSONObject();
             out.put("status", "success");
             out.put("answer", answer == null ? "" : answer);
+            out.put("provider", lastUsedProvider == null ? "" : lastUsedProvider);
+            out.put("model", lastUsedModel == null ? "" : lastUsedModel);
             postAIChatResult(out.toString());
         } catch (Exception e) {
             try {
@@ -2497,7 +2499,7 @@ private void injectAIChat() {
         "      removeLoading();" +
         "      var d={};try{d=typeof raw==='string'?JSON.parse(raw):(raw||{});}catch(e){}" +
         "      if(d.status!=='success'){addAI('Ошибка: '+(d.message||'не удалось получить ответ'));return;}" +
-        "      addAI(d.answer||'');" +
+        "      var _ans=d.answer||'';if(d.provider){_ans='['+d.provider+(d.model?(' · '+d.model):'')+'] '+_ans;}addAI(_ans);" +
         "      history.push({q:window.__oniLastQ||'',a:d.answer||''});" +
         "      if(history.length>5)history.shift();" +
         "      var act=d.action;" +
