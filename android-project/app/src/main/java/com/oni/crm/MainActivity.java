@@ -523,8 +523,9 @@ private String callGemini(String input) throws Exception {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     String key = sp.getString("geminiApiKey", "").trim();
     if (key.isEmpty()) throw new IOException("Добавьте Gemini API-ключ");
-    String model = sp.getString("geminiModel", "gemini-3.6-flash").trim();
-    if (model.isEmpty()) model = "gemini-3.6-flash";
+    String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
+            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
+    if (model.isEmpty()) model = "gemini-2.5-flash";
     return GeminiClient.generateText(key, model, input);
 }
 
@@ -532,8 +533,9 @@ private String callGeminiWithSearch(String input) throws Exception {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     String key = sp.getString("geminiApiKey", "").trim();
     if (key.isEmpty()) throw new IOException("Добавьте Gemini API-ключ");
-    String model = sp.getString("geminiModel", "gemini-3.6-flash").trim();
-    if (model.isEmpty()) model = "gemini-3.6-flash";
+    String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
+            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
+    if (model.isEmpty()) model = "gemini-2.5-flash";
     return GeminiClient.generateWithSearch(key, model, input);
 }
 
@@ -861,8 +863,9 @@ public void testAIConnection() {
             report.append("Gemini: ключ не задан. ");
         } else {
             try {
-                String model = sp.getString("geminiModel", "gemini-3.6-flash").trim();
-                if (model.isEmpty()) model = "gemini-3.6-flash";
+                String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
+            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
+                if (model.isEmpty()) model = "gemini-2.5-flash";
                 String r = GeminiClient.generateText(geminiKey, model, "OK");
                 if (r != null && !r.trim().isEmpty()) {
                     editor.putString("geminiStatus", "ready");
@@ -1051,12 +1054,12 @@ public String getGeminiSettings() {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     JSONObject o = new JSONObject();
     try {
-        String stored = sp.getString("geminiModel", "gemini-3.6-flash");
+        String stored = sp.getString("geminiModel", "gemini-2.5-flash");
         if (stored == null || stored.trim().isEmpty()
                 || stored.startsWith("gemini-2.")
                 || stored.contains("gemini-2.0")
                 || stored.contains("gemini-1.")) {
-            stored = "gemini-3.6-flash";
+            stored = "gemini-2.5-flash";
             SharedPreferences.Editor e = sp.edit();
             e.putString("geminiModel", stored);
             e.apply();
@@ -1100,9 +1103,9 @@ public String getAIState() {
     JSONObject out = new JSONObject();
     try {
         JSONObject g = new JSONObject();
-        String gModel = sp.getString("geminiModel", "gemini-3.6-flash");
+        String gModel = sp.getString("geminiModel", "gemini-2.5-flash");
         if (gModel.startsWith("gemini-2.") || gModel.contains("gemini-2.0") || gModel.contains("gemini-1.")) {
-            gModel = "gemini-3.6-flash";
+            gModel = "gemini-2.5-flash";
         }
         g.put("enabled", sp.getBoolean("geminiEnabled", true));
         g.put("keySet", !sp.getString("geminiApiKey", "").trim().isEmpty());
@@ -1398,12 +1401,13 @@ public void recognizeProductPhoto(final String dataUrl, final String langs) {
             SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
             String key = sp.getString("geminiApiKey", "").trim();
             if (key.isEmpty()) throw new IOException("Нет Gemini API-ключа");
-            String model = sp.getString("geminiModel", "gemini-3.6-flash").trim();
+            String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
+            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
             if (model.isEmpty()
                     || model.startsWith("gemini-2.")
                     || model.contains("gemini-2.0")
                     || model.contains("gemini-1.")) {
-                model = "gemini-3.6-flash";
+                model = "gemini-2.5-flash";
                 SharedPreferences.Editor e = sp.edit();
                 e.putString("geminiModel", model);
                 e.apply();
@@ -2022,7 +2026,7 @@ private void injectProductHandlers() {
 
         "window.openAISettings=function(){" +
         "  var ex=document.getElementById('oni-ai-settings-ov');if(ex)ex.remove();" +
-        "  var state={gemini:{enabled:true,keySet:false,model:'gemini-3.6-flash',status:'unknown'},openai:{enabled:false,keySet:false,model:'gpt-4o-mini',status:'unknown'},deepseek:{enabled:false,keySet:false,model:'deepseek-chat',status:'unknown'}};" +
+        "  var state={gemini:{enabled:true,keySet:false,model:'gemini-2.5-flash',status:'unknown'},openai:{enabled:false,keySet:false,model:'gpt-4o-mini',status:'unknown'},deepseek:{enabled:false,keySet:false,model:'deepseek-chat',status:'unknown'}};" +
         "  try{if(window.Android&&typeof window.Android.getAIState==='function'){var s=JSON.parse(window.Android.getAIState()||'{}');if(s&&typeof s==='object')state=Object.assign(state,s);}}catch(e){}" +
         "  window.__oniAIState = state;" +
         "  var ov=document.createElement('div');ov.className='sheet-overlay';ov.id='oni-ai-settings-ov';" +
@@ -2054,7 +2058,7 @@ private void injectProductHandlers() {
 
         "  html+='<div class=\"panel\" style=\"margin-bottom:10px;\"><div class=\"panel-body\" style=\"padding:10px 14px;\">';" +
         "  html+='<div class=\"ai-provider-row\"><div class=\"ai-provider-meta\"><div class=\"ai-provider-name\">Google Gemini</div><div class=\"ai-provider-state\">'+statusBadge(state.gemini.status)+'</div></div><label class=\"ai-switch\"><input id=\"oni-ai-gemini\" type=\"checkbox\" '+(state.gemini.enabled?'checked':'')+'><span class=\"ai-switch-track\"></span></label></div>';" +
-        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-gemini-model\" value=\"'+(state.gemini.model||'gemini-3.6-flash')+'\"></div>';" +
+        "  html+='<div class=\"form-field\" style=\"margin-top:10px;\"><label class=\"form-label\">Модель</label><input class=\"form-input\" id=\"oni-ai-gemini-model\" value=\"'+(state.gemini.model||'gemini-2.5-flash')+'\"></div>';" +
         "  html+='<div class=\"form-field\"><label class=\"form-label\">API-ключ</label><input class=\"form-input\" id=\"oni-ai-gemini-key\" type=\"password\" placeholder=\"'+(state.gemini.keySet?'уже сохранён':'AIza...')+'\"></div>';" +
         "  html+='</div></div>';" +
 
@@ -2070,7 +2074,7 @@ private void injectProductHandlers() {
 
         "  function collectState(){" +
         "    return {" +
-        "      gemini:{enabled:document.getElementById('oni-ai-gemini').checked,key:document.getElementById('oni-ai-gemini-key').value.trim(),model:document.getElementById('oni-ai-gemini-model').value.trim()||'gemini-3.6-flash'}," +
+        "      gemini:{enabled:document.getElementById('oni-ai-gemini').checked,key:document.getElementById('oni-ai-gemini-key').value.trim(),model:document.getElementById('oni-ai-gemini-model').value.trim()||'gemini-2.5-flash'}," +
         "      openai:{enabled:document.getElementById('oni-ai-openai').checked,key:document.getElementById('oni-ai-openai-key').value.trim(),model:document.getElementById('oni-ai-openai-model').value.trim()||'gpt-4o-mini'}," +
         "      deepseek:{enabled:document.getElementById('oni-ai-deepseek').checked,key:document.getElementById('oni-ai-deepseek-key').value.trim(),model:document.getElementById('oni-ai-deepseek-model').value.trim()||'deepseek-chat'}" +
         "    };" +
