@@ -4425,7 +4425,7 @@ async function init(){
   document.getElementById('menu-store-settings').onclick=()=>{ closeTopbarMenu(); openStoreSettings(); };
   document.getElementById('menu-kaspi-settings').onclick=()=>{ closeTopbarMenu(); if(!isModOn('kaspiSmartPOS')){showToast('Модуль «Smart POS» выключен');return;} openKaspiSettings(); };
   document.getElementById('menu-fiscal-settings').onclick=()=>{ closeTopbarMenu(); openFiscalSettings(); };
-  // menu-ai-settings скрыт (ключи на сервере)
+  document.getElementById('menu-ai-settings').onclick=()=>{ closeTopbarMenu(); if(typeof window.openAISettings==='function'){ window.openAISettings(); } else { showToast('Настройки ИИ доступны только в Android-приложении'); } };
   document.getElementById('menu-cash-settings').onclick=()=>{ closeTopbarMenu(); openCashSettings(); };
   document.getElementById('menu-barcodes').onclick=()=>{ closeTopbarMenu(); openBarcodesMenu(); };
   document.getElementById('menu-oni-chat').onclick=()=>{ closeTopbarMenu(); if(!isModOn('employeesChat')){showToast('Модуль «On.i чат» выключен');return;} if(typeof window.openAIChat==='function'){ window.openAIChat(); } else { showToast('On.i чат доступен только в Android-приложении'); } };
