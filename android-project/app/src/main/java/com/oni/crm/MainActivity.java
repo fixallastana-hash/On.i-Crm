@@ -523,20 +523,72 @@ private String callGemini(String input) throws Exception {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     String key = sp.getString("geminiApiKey", "").trim();
     if (key.isEmpty()) throw new IOException("Добавьте Gemini API-ключ");
-    String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
-            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
-    if (model.isEmpty()) model = "gemini-2.5-flash";
-    return GeminiClient.generateText(key, model, input);
+    String userModel = sp.getString("geminiModel", "gemini-flash-latest").trim();
+    if (userModel.isEmpty() || !userModel.startsWith("gemini-")) userModel = "gemini-flash-latest";
+    String[] _chain = {
+        userModel,
+        "gemini-2.5-pro",
+        "gemini-pro-latest",
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-2.0-flash"
+    };
+    Exception _lastErr = null;
+    for (int _i = 0; _i < _chain.length; _i++) {
+        String _m = _chain[_i];
+        boolean _dup = false;
+        for (int _j = 0; _j < _i; _j++) if (_chain[_j].equals(_m)) { _dup = true; break; }
+        if (_dup) continue;
+        try { return GeminiClient.generateText(key, _m, input); }
+        catch (Exception _e) {
+            String _msg = String.valueOf(_e.getMessage());
+            if (_msg.contains("429") || _msg.contains("404") || _msg.contains("500") || _msg.contains("503") || _msg.contains("quota") || _msg.contains("overloaded") || _msg.contains("RESOURCE_EXHAUSTED") || _msg.contains("NOT_FOUND")) { _lastErr = _e; continue; }
+            throw _e;
+        }
+    }
+    throw (_lastErr != null ? _lastErr : new IOException("Все модели Gemini недоступны"));
 }
 
 private String callGeminiWithSearch(String input) throws Exception {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     String key = sp.getString("geminiApiKey", "").trim();
     if (key.isEmpty()) throw new IOException("Добавьте Gemini API-ключ");
-    String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
-            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
-    if (model.isEmpty()) model = "gemini-2.5-flash";
-    return GeminiClient.generateWithSearch(key, model, input);
+    String userModel = sp.getString("geminiModel", "gemini-flash-latest").trim();
+    if (userModel.isEmpty() || !userModel.startsWith("gemini-")) userModel = "gemini-flash-latest";
+    String[] _chain = {
+        userModel,
+        "gemini-2.5-pro",
+        "gemini-pro-latest",
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-2.0-flash"
+    };
+    Exception _lastErr = null;
+    for (int _i = 0; _i < _chain.length; _i++) {
+        String _m = _chain[_i];
+        boolean _dup = false;
+        for (int _j = 0; _j < _i; _j++) if (_chain[_j].equals(_m)) { _dup = true; break; }
+        if (_dup) continue;
+        try { return GeminiClient.generateWithSearch(key, _m, input); }
+        catch (Exception _e) {
+            String _msg = String.valueOf(_e.getMessage());
+            if (_msg.contains("429") || _msg.contains("404") || _msg.contains("500") || _msg.contains("503") || _msg.contains("quota") || _msg.contains("overloaded") || _msg.contains("RESOURCE_EXHAUSTED") || _msg.contains("NOT_FOUND")) { _lastErr = _e; continue; }
+            throw _e;
+        }
+    }
+    throw (_lastErr != null ? _lastErr : new IOException("Все модели Gemini недоступны"));
 }
 
 private String callDeepSeek(String input) throws Exception {
@@ -863,9 +915,8 @@ public void testAIConnection() {
             report.append("Gemini: ключ не задан. ");
         } else {
             try {
-                String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
-            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
-                if (model.isEmpty()) model = "gemini-2.5-flash";
+                String model = sp.getString("geminiModel", "gemini-flash-latest").trim();
+            if (model.isEmpty() || !model.startsWith("gemini-")) model = "gemini-flash-latest";
                 String r = GeminiClient.generateText(geminiKey, model, "OK");
                 if (r != null && !r.trim().isEmpty()) {
                     editor.putString("geminiStatus", "ready");
@@ -975,6 +1026,10 @@ public void askAIChat(final String message, final String historyJson, final Stri
         try {
             StringBuilder prompt = new StringBuilder();
             prompt.append("Ты — On.i Assistant, универсальный ИИ-ассистент (как Gemini или ChatGPT). Отвечай на ЛЮБЫЕ вопросы.\n\n");
+            prompt.append("СТРОГОЕ ПРАВИЛО ПЕРВОЙ ОЧЕРЕДИ (действует всегда):\n");
+            prompt.append("Если в вопросе НЕТ ни одного слова из списка: товар, товары, цена, стоимость, остаток, наличие, категория, купить, продать, заказать, какие есть, что от, что для, сколько стоит, посоветуй, рекомендация, подбор — то это ОБЩИЙ вопрос.\n");
+            prompt.append("На ОБЩИЙ вопрос отвечай СВОБОДНО как ChatGPT. Шутка → шутка. Анекдот → анекдот. Борщ → рецепт. Код → код. Математика → число. История → объяснение. Перевод → перевод.\n");
+            prompt.append("На общий вопрос НЕЛЬЗЯ писать: «нет товаров», «нет в наличии», «завезём под заказ», «в нашем магазине», «в каталоге нет». Совсем нельзя.\n\n");
             prompt.append("ГЛАВНОЕ ПРАВИЛО (нарушать нельзя):\n");
             prompt.append("Определи — вопрос про НАШ магазин или общий?\n");
             prompt.append("— ОБЩИЙ вопрос (шутка, рецепт, код, математика, перевод, объяснение, совет, история, музыка, что угодно) → отвечай СВОБОДНО как обычный AI. НИКОГДА не упоминай магазин, каталог, товары, остатки, заказы, доставку. НИКОГДА.\n");
@@ -1407,12 +1462,10 @@ public void recognizeProductPhoto(final String dataUrl, final String langs) {
             String key = sp.getString("geminiApiKey", "").trim();
             if (key.isEmpty()) throw new IOException("Нет Gemini API-ключа");
             String model = sp.getString("geminiModel", "gemini-2.5-flash").trim();
-            if (model.isEmpty() || !model.startsWith("gemini-2.5")) { model = "gemini-2.5-flash"; try { sp.edit().putString("geminiModel", model).apply(); } catch (Exception ignored) {} }
-            if (model.isEmpty()
-                    || model.startsWith("gemini-2.")
-                    || model.contains("gemini-2.0")
-                    || model.contains("gemini-1.")) {
-                model = "gemini-2.5-flash";
+            if (model.isEmpty() || !model.startsWith("gemini-")) model = "gemini-flash-latest";
+            if (model.contains("gemini-1.")
+                    || model.equals("gemini-2.0-flash")) {
+                model = "gemini-flash-latest";
                 SharedPreferences.Editor e = sp.edit();
                 e.putString("geminiModel", model);
                 e.apply();
