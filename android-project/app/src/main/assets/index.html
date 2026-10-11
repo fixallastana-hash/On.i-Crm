@@ -5284,6 +5284,7 @@ function viewProducts(){
   <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
     <button class="chip" id="pf-sort-btn" type="button">${_pfSortLabel()}</button>
     <button class="chip ${_af?'active':''}" id="pf-filters-btn" type="button">⚙️ Фильтры${_af ? ' · ' + _af : ''}</button>
+    <button class="chip" id="pf-cats-btn" type="button">🏷️ Категории</button>
   </div>
   <div class="search"><span class="search-icon">⌕</span><input id="product-search" placeholder="Поиск по товару, описанию, назначению…" value="${escapeHtml(productSearch)}"></div>
   <div style="display:flex;gap:6px;margin-bottom:8px;"><button class="btn" id="pf-save-filter" type="button">💾 Сохранить</button><button class="btn" id="pf-open-filters" type="button">⭐ Мои фильтры</button></div>
@@ -5351,6 +5352,7 @@ function bindProducts(){
   var pfOpen=document.getElementById('pf-open-filters'); if(pfOpen)pfOpen.onclick=function(){openSavedFiltersDialog('products');};
   var pfSortBtn=document.getElementById('pf-sort-btn'); if(pfSortBtn)pfSortBtn.onclick=openProductSortSheet;
   var pfFiltersBtn=document.getElementById('pf-filters-btn'); if(pfFiltersBtn)pfFiltersBtn.onclick=openProductFiltersSheet;
+  var pfCatsBtn=document.getElementById('pf-cats-btn'); if(pfCatsBtn)pfCatsBtn.onclick=openCategoryManager;
   const productInput=document.getElementById('product-search');
   if(productInput){ productInput.oninput=()=>{ productSearch=productInput.value; let visible=0; document.querySelectorAll('.live-search-row[data-search-text]').forEach(row=>{ const show=smartProductSearch(row.dataset.searchText||'',productInput.value); row.style.display=show?'':'none'; if(show)visible++; }); const empty=document.querySelector('[data-live-empty="product-search"]'); if(empty)empty.style.display=visible?'none':''; }; productInput.oninput(); }
   document.querySelectorAll('[data-open]').forEach(b=>{
@@ -5810,7 +5812,7 @@ let _lookupCategoryAuto=false;
 let _lookupDescriptionAuto=false;
 let _lookupCandidateData=null;
 
-window.onProductOcrResult=function(json){try{const d=typeof json==='string'?JSON.parse(json):json||{};const v=d.vision||{};const name=document.getElementById('f-name');const cat=document.getElementById('f-category');const desc=document.getElementById('f-description');const st=document.getElementById('name-lookup-status');if(v.productName&&name&&!name.value.trim())name.value=v.productName;if(v.category&&cat&&!cat.value.trim())cat.value=v.category;if(v.description&&desc&&!desc.value.trim())desc.value=v.description;window._lastProductOcrResult=d;if(st)st.textContent=d.visionUsed?'✓ Фото распознано ИИ + OCR':'✓ Текст с фото распознан';}catch(e){console.error(e);}};
+window.onProductOcrResult=function(json){try{const d=typeof json==='string'?JSON.parse(json):json||{};const v=d.vision||{};const name=document.getElementById('f-name');const cat=document.getElementById('f-category');const desc=document.getElementById('f-description');const st=document.getElementById('name-lookup-status');if(v.productName&&name&&!name.value.trim())name.value=v.productName;/* ИИ-OCR больше не пишет категорию */if(v.description&&desc&&!desc.value.trim())desc.value=v.description;window._lastProductOcrResult=d;if(st)st.textContent=d.visionUsed?'✓ Фото распознано ИИ + OCR':'✓ Текст с фото распознан';}catch(e){console.error(e);}};
 
 window.onProductLookupResult=function(json){
   try{
@@ -5821,7 +5823,7 @@ window.onProductLookupResult=function(json){
     const category=data.category||'Товар';
     const desc=buildProductDescriptionFromLookup(data);
     const cat=document.getElementById('f-category');
-    if(cat){ cat.value=category; _lookupCategoryAuto=true; }
+    /* ИИ-lookup больше не пишет категорию */
     const description=document.getElementById('f-description');
     if(description && desc){ description.value=desc; window._lookupDescriptionAuto=true; }
     const purpose=document.getElementById('f-purpose');
@@ -6018,7 +6020,7 @@ function openCategoryManager(){
     const cat=b.dataset.catDel;
     const affected=products.filter(p=>p.category===cat);
     if(affected.length && !confirm(`В категории ${affected.length} товар(ов). Удалить категорию и перенести товары в «Без категории»?`))return;
-    products.forEach(p=>{if(p.category===cat)p.category='Без категории';});
+    products=products.filter(p=>!(p.isCategoryPlaceholder&&p.category===cat)); products.forEach(p=>{if(p.category===cat)p.category='Без категории';});
     await persist('products'); openCategoryManager(); safeRender(); showToast('Категория удалена');
   });
 }
@@ -7756,13 +7758,13 @@ window.onAIProductLookup=function(raw){
   if(!confirmed){
     const rows=variants.map((v,i)=>`<button type=\"button\" class=\"btn\" data-variant=\"${i}\" style=\"text-align:left;width:100%;margin-top:7px;\"><b>${escapeHtml(v.name||d.productName||'Вариант '+(i+1))}</b><div class=\"row-sub\">${escapeHtml(v.form||'')}${v.quantity?' · '+escapeHtml(v.quantity):''}${v.dosage?' · '+escapeHtml(v.dosage):''}</div></button>`).join('');
     if(st)st.innerHTML=`<div style=\"font-weight:800;margin-bottom:5px;\">Нужно подтвердить вариант товара</div><div class=\"form-hint\">Не выбираю похожую версию автоматически.</div>${rows}<button type=\"button\" class=\"btn\" id=\"variant-more\" style=\"width:100%;margin-top:8px;\">Другие варианты</button><button type=\"button\" class=\"btn btn-primary\" id=\"variant-refine\" style=\"width:100%;margin-top:7px;\">Найти точнее</button>`;
-    st.querySelectorAll('[data-variant]').forEach(b=>b.onclick=()=>{const v=variants[Number(b.dataset.variant)]||{};if(v.name)document.getElementById('f-name').value=v.name; if(v.category)document.getElementById('f-category').value=v.category; _lookupCandidateData.selectedVariant=v; _lookupCandidateData.variantConfirmed=true; if(st)st.textContent='✓ Вариант выбран. Теперь можно проверить описание.';});
+    st.querySelectorAll('[data-variant]').forEach(b=>b.onclick=()=>{const v=variants[Number(b.dataset.variant)]||{};if(v.name)document.getElementById('f-name').value=v.name; _lookupCandidateData.selectedVariant=v; _lookupCandidateData.variantConfirmed=true; if(st)st.textContent='✓ Вариант выбран. Теперь можно проверить описание.';});
     const more=document.getElementById('variant-more');if(more)more.onclick=()=>{if(st)st.textContent='Укажите точнее форму, количество, дозировку, артикул или штрихкод — затем нажмите «Найти точнее».';};
     const refine=document.getElementById('variant-refine');if(refine)refine.onclick=()=>document.getElementById('name-lookup').click();
     return;
   }
   const c=document.getElementById('f-category'),desc=document.getElementById('f-description'),purpose=document.getElementById('f-purpose');
-  if(c)c.value=d.category||'';
+  /* ИИ больше не пишет категорию */
   let cat=String(d.category||'').toLowerCase();
   let text='';
   if(cat.includes('парф')){
