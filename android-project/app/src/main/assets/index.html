@@ -611,6 +611,7 @@ html, body { touch-action: pan-x pan-y; -ms-touch-action: pan-x pan-y; }
       <button class="topbar-action" id="topbar-action" style="display:none;" aria-label="Действие раздела">+</button>
       <button class="topbar-action" id="topbar-alerts" aria-label="Уведомления" title="Уведомления" style="position:relative;">🔔<span id="topbar-alerts-badge" class="topbar-menu-unread" style="display:none;right:-4px;top:-4px;"></span></button>
     <button class="topbar-action" id="topbar-sync-btn" aria-label="Обновить" title="Обновить данные" style="display:none;">🔄</button>
+      <button class="topbar-action" id="topbar-point-btn" aria-label="Точка продаж" title="Выбрать точку" style="display:none;">📍</button>
       <div class="topbar-menu-wrap">
         <button class="topbar-action" id="topbar-menu-btn" aria-label="Меню" title="Меню">⋮</button><span id="topbar-menu-unread" class="topbar-menu-unread" aria-label="Непрочитанные сообщения"></span>
         <div class="topbar-menu" id="topbar-menu">
@@ -966,6 +967,34 @@ let currentView='orders';
 function saveUiState(){
   try{ localStorage.setItem('sklad_crm_ui_state', JSON.stringify({currentView,ordersSubView})); }catch(e){}
 }
+function openPointSelector(){
+  if(!points || points.length <= 1) return;
+  var root = document.getElementById('modal-root');
+  if(!root) return;
+  var list = points.map(function(p){
+    var active = p.id === currentPointId;
+    return '<button type="button" class="list-row" data-point-pick="' + escapeHtml(p.id) + '" style="width:100%;text-align:left;border:none;background:' + (active ? 'var(--primary-soft,#eef5ff)' : '#fff') + ';cursor:pointer;">'
+      + '<div class="row-main"><div class="row-title">' + escapeHtml(p.name || p.id) + (p.isDefault ? ' <span style="color:var(--dim);font-size:11px;">(по умолчанию)</span>' : '') + '</div>'
+      + (active ? '<div class="row-sub" style="color:var(--primary);">Текущая</div>' : '')
+      + '</div>'
+      + (active ? '<div class="row-right" style="color:var(--primary);font-weight:700;">✓</div>' : '')
+      + '</button>';
+  }).join('');
+  root.innerHTML = '<div class="sheet-overlay" id="point-sel-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Точка продаж</div><button class="sheet-close" id="point-sel-close">✕</button></div><div class="sheet-body"><div class="panel"><div class="panel-body" style="padding:0;">' + list + '</div></div></div></div></div>';
+  var close = function(){ root.innerHTML = ''; };
+  document.getElementById('point-sel-close').onclick = close;
+  document.getElementById('point-sel-ov').onclick = function(e){ if(e.target.id === 'point-sel-ov') close(); };
+  document.querySelectorAll('[data-point-pick]').forEach(function(b){
+    b.onclick = function(){
+      currentPointId = b.dataset.pointPick;
+      close();
+      try{ if(typeof saveUiState === 'function') saveUiState(); }catch(e){}
+      safeRender();
+      var _p = points.find(function(x){return x.id === currentPointId;});
+      showToast('Точка: ' + (_p ? (_p.name || '') : ''));
+    };
+  });
+}
 function safeRender(){
   try{ render(); return true; }catch(e){
     console.error('CRM render error',e);
@@ -988,7 +1017,14 @@ function _newCartObject(){
   _cartSeq++;
   return { id:'cart-'+Date.now()+'-'+_cartSeq, name:'Чек '+_cartSeq, items:[], createdAt:(typeof nowISO==='function'?nowISO():new Date().toISOString()) };
 }
+function _renumberCarts(){
+  var _n=1;
+  for(var _i=0;_i<_carts.length;_i++){
+    if(/^Чек \d+$/.test(_carts[_i].name)) _carts[_i].name='Чек '+(_n++);
+  }
+}
 function _saveCarts(){
+  _renumberCarts();
   try{ localStorage.setItem('oni_carts', JSON.stringify({carts:_carts,active:_activeCartId,seq:_cartSeq})); }catch(e){}
 }
 function _loadCarts(){
@@ -4525,6 +4561,18 @@ function render(){
   if(!VIEW_META[currentView]){ currentView='orders'; ordersSubView='pos'; saveUiState(); }
   document.getElementById('topbar-title').textContent = currentView==='orders' ? ({pos:'Касса',history:'История чеков',debts:'Долги',consignment:'Под реализацию'}[ordersSubView]||'Касса') : vm.title;
   document.getElementById('topbar-sub').textContent = currentView==='dashboard' && activeUser?.role==='cashier' ? 'Ваши показатели' : vm.sub;
+  var _pb = document.getElementById('topbar-point-btn');
+  if(_pb){
+    if(points && points.length > 1){
+      _pb.style.display = 'flex';
+      var _cp = points.find(function(x){return x.id === currentPointId;});
+      _pb.title = 'Точка: ' + (_cp ? (_cp.name || '') : 'не выбрана');
+      _pb.onclick = openPointSelector;
+    } else {
+      _pb.style.display = 'none';
+      _pb.onclick = null;
+    }
+  }
   const action=document.getElementById('topbar-action');
   if(currentView==='products'){ action.style.display='flex'; action.onclick=()=>openProductModal(null); action.textContent='+'; action.setAttribute('aria-label','Новый товар'); }
   else if(currentView==='movements'){ action.style.display='flex'; action.onclick=openMovementModal; action.textContent='+'; }
@@ -6106,10 +6154,11 @@ function viewPOS(){
   const categories=['Частые','Все',...categorySet];
   if(!categories.includes(posCategory)) posCategory='Частые';
   const frequentIds=new Set(getFrequentProducts(realProducts).map(p=>p.id));
+  const _showCartTabs=_carts.some(function(c){return c.items && c.items.length>0;});
   return `
   <!-- shift-badge removed -->
   <div id="pos-notice" class="pos-notice"><span class="pos-notice-dot"></span><span id="pos-notice-text"></span></div>
-${_carts.length>0 ? `
+${_showCartTabs ? `
   <div class="cart-tabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:2px;">
     ${_carts.map(function(c){
       var _act=c.id===_activeCartId;
@@ -6123,7 +6172,7 @@ ${_carts.length>0 ? `
     }).join('')}
     <button type="button" data-cart-new style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:9px;border:1px dashed var(--border);background:#fff;font-size:12px;color:var(--dim);white-space:nowrap;flex-shrink:0;">+ Чек</button>
   </div>`:''}
-  <div class="form-field" style="margin-bottom:10px;"><label class="form-label">Точка</label><select class="form-select" id="pos-point">${points.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===currentPointId?'selected':''}>${escapeHtml(p.name||p.id)}</option>`).join('')}</select></div>
+  
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
   <div class="search" style="flex:1;margin:0;"><span class="search-icon">⌕</span><input id="pos-search" placeholder="Поиск товара…" value="${escapeHtml(posSearch)}"></div>
   <button class="btn" id="pos-scan-btn" type="button" title="Сканер штрихкода" style="min-width:44px;min-height:44px;padding:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</button>
