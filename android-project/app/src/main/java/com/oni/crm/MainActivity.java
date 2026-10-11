@@ -915,9 +915,7 @@ public void testAIConnection() {
             report.append("Gemini: ключ не задан. ");
         } else {
             try {
-                String model = sp.getString("geminiModel", "gemini-flash-latest").trim();
-            if (model.isEmpty() || !model.startsWith("gemini-")) model = "gemini-flash-latest";
-                String r = GeminiClient.generateText(geminiKey, model, "OK");
+                String r = callGemini("OK");
                 if (r != null && !r.trim().isEmpty()) {
                     editor.putString("geminiStatus", "ready");
                     report.append("Gemini: подключён. ");
