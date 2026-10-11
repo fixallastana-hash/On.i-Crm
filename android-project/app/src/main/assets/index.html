@@ -225,8 +225,8 @@ body.theme-dark .topbar-menu-head{border-color:var(--border);}
 .pos-tile-main{width:100%;background:none;border:0;border-radius:13px;padding:11px;text-align:left;display:flex;flex-direction:column;gap:12px;min-height:88px;color:inherit;}
 .pos-tile-main:disabled{opacity:.4;}
 .product-info-confirm .sheet{max-width:360px;border-radius:18px;margin:0 12px;align-self:center;}
-.product-info-modal .sheet{max-height:82vh;border-radius:18px;}
-.product-info-scroll{max-height:62vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:2px;}
+.product-info-modal .sheet{height:100vh;max-height:100vh;max-width:100%;border-radius:0;display:flex;flex-direction:column;}
+.product-info-scroll{flex:1;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:2px;touch-action:pan-y;}
 .product-info-photo{cursor:zoom-in;display:block;}
 .product-photo-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;}
 .product-photo-lightbox img{max-width:94vw;max-height:88vh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.45);}.product-photo-lightbox img.zoomed{max-width:none;max-height:none;width:auto;height:auto;min-width:94vw;min-height:88vh;object-fit:contain;cursor:zoom-out;}
@@ -967,6 +967,23 @@ let currentView='orders';
 function saveUiState(){
   try{ localStorage.setItem('sklad_crm_ui_state', JSON.stringify({currentView,ordersSubView})); }catch(e){}
 }
+function _pointKeyForUser(){
+  try{ return (activeUser && activeUser.id) ? ('oni_point_' + activeUser.id) : null; }catch(e){ return null; }
+}
+function _loadSavedPoint(){
+  try{
+    var _k = _pointKeyForUser();
+    if(!_k) return null;
+    return localStorage.getItem(_k) || null;
+  }catch(e){ return null; }
+}
+function _saveSavedPoint(pid){
+  try{
+    var _k = _pointKeyForUser();
+    if(!_k) return;
+    if(pid) localStorage.setItem(_k, String(pid));
+  }catch(e){}
+}
 function openPointSelector(){
   if(!points || points.length <= 1) return;
   var root = document.getElementById('modal-root');
@@ -987,6 +1004,7 @@ function openPointSelector(){
   document.querySelectorAll('[data-point-pick]').forEach(function(b){
     b.onclick = function(){
       currentPointId = b.dataset.pointPick;
+      _saveSavedPoint(currentPointId);
       close();
       try{ if(typeof saveUiState === 'function') saveUiState(); }catch(e){}
       safeRender();
@@ -3490,7 +3508,7 @@ async function logoutAccount(silent){
   if(adminReturnUser){
     if(!silent && !confirm('Выйти из режима кассира?'))return;
     logSessionEvent('admin_return');
-    activeUser=Object.assign({},adminReturnUser); adminReturnUser=null; currentShiftId=null; currentView='orders'; ordersSubView='pos';
+    activeUser=Object.assign({},adminReturnUser); adminReturnUser=null; currentShiftId=null; currentView='orders'; ordersSubView='pos'; currentPointId=null;
     if(document.getElementById('topbar-menu'))document.getElementById('topbar-menu').classList.remove('open');
     document.getElementById('modal-root').innerHTML='';
     safeRender(); saveUiState(); showToast('Возврат в аккаунт администратора'); return;
@@ -3503,6 +3521,7 @@ async function logoutAccount(silent){
   logSessionEvent(sh?'logout_with_shift':'logout',{shiftId:sh?sh.id:null});
   stopSessionTimer();
   try{ stopProductsWatcher(); }catch(e){}
+  currentPointId=null;
   _resetCarts(); posSearch=''; posCategory='Частые'; posCategoryOpen=false; pendingKaspiSale=null;
   activeUser=null; currentShiftId=null; clearAuthSession(); currentView='orders'; ordersSubView='pos';
   if(document.getElementById('topbar-menu'))document.getElementById('topbar-menu').classList.remove('open');
@@ -3740,7 +3759,7 @@ function loginAsUser(id){
   if(u.role==='cashier') openCashierShift(activeUser);
   currentView = defaultViewFor(u.role);
   if(currentView==='orders') ordersSubView='pos';
-  posCategoryOpen = false; _resetCarts();
+  posCategoryOpen = false; _resetCarts(); currentPointId = null;
   closeTopbarMenu();
   document.getElementById('modal-root').innerHTML='';
   safeRender(); saveUiState();
@@ -4585,6 +4604,7 @@ function render(){
   if(currentView==='movements'){ main.innerHTML=viewMovements(); bindMovements(); }
   if(currentView==='suppliers'){ main.innerHTML=viewSuppliers(); bindSuppliers(); }
   if(currentView==='orders'){ main.innerHTML=viewOrders(); bindOrders(); }
+  if(typeof renderCartTabs === 'function'){ try{ renderCartTabs(); }catch(e){} }
   if(currentView==='clients'){ main.innerHTML=viewClients(); bindClients(); }
   renderCartBar();
   updateRemindersBadge();
@@ -4772,7 +4792,7 @@ function openProductInfoModal(id){
   if(Number(p.weight)>0) infoRows.push(['Вес',`${p.weight} ${p.isWeighted?'г':'г'}`]);
   if(Number(p.volume)>0) infoRows.push(['Объём',String(p.volume)]);
   if(p.supplierSku) infoRows.push(['Артикул поставщика',p.supplierSku]);
-  root.innerHTML=`<div class="sheet-overlay product-info-modal" id="pinfo-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Информация о товаре</div><button class="sheet-close" id="pinfo-close">✕</button></div><div class="sheet-body product-info-scroll">
+  root.innerHTML=`<div class="sheet-overlay product-info-modal" id="pinfo-ov"><div class="sheet"><div class="sheet-head"><div class="sheet-title">Информация о товаре</div><button class="sheet-close" id="pinfo-close">✕</button></div><div class="sheet-body product-info-scroll">
     <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;"><div class="product-card-photo product-info-photo" id="pinfo-photo" style="width:82px;height:82px;border-radius:14px;" title="Увеличить фото">${productIcon({...p,photo:main},82)}</div><div style="min-width:0;"><div style="font-size:16px;font-weight:800;line-height:1.25;">${escapeHtml(p.name)}</div><div class="row-sub">${escapeHtml(p.sku||'—')}${p.supplierSku?` · ${escapeHtml(p.supplierSku)}`:''}</div>${p.archived?'<span class="badge badge-low" style="display:inline-block;margin-top:5px;">Архив</span>':''}</div></div>
     ${photos.length>1?`<div class="contact-box"><div class="contact-title">Фото товара</div><div class="product-photo-swipe" id="pinfo-gallery">${photos.map((src,i)=>`<button type="button" class="product-photo-thumb ${src===main?'main':''}" data-pg="${i}" title="${src===main?'Главное фото':'Открыть фото'}"><img src="${escapeHtml(src)}" alt=""><span class="product-photo-main-label">${src===main?'Главное':''}</span></button>`).join('')}</div></div>`:''}
     <div class="contact-box"><div class="contact-title">Остатки</div><div class="info-grid"><div class="info-card"><div class="info-label">На складе</div><div class="info-value">${Number(p.qty)||0} ${escapeHtml(p.unit||'')}</div></div><div class="info-card"><div class="info-label">Зарезервировано</div><div class="info-value">${Number(p.reserved)||0}</div></div><div class="info-card"><div class="info-label">Ожидается</div><div class="info-value">${Number(p.expected)||0}</div></div><div class="info-card"><div class="info-label">Доступно</div><div class="info-value">${available}</div></div></div></div>
@@ -4816,7 +4836,8 @@ function openProductPhotoLightbox(src,alt='Фото товара',gallery=null,i
   onBack=()=>{if(document.getElementById('product-photo-lightbox')===box){closing=true;box.remove();}window.removeEventListener('popstate',onBack);}; window.addEventListener('popstate',onBack);
 }
 
-function initProductInfoSwipeClose(sheet){
+function initProductInfoSwipeClose(sheet){/* отключено — закрытие только через ✕ */
+  return;
   if(!sheet||sheet.dataset.productSwipeClose==='1')return;
   sheet.dataset.productSwipeClose='1';
   let active=false,locked=false,startX=0,startY=0,dx=0,dy=0,startTime=0;
@@ -6145,7 +6166,13 @@ function openProblematicScreen(){
 }
 
 function viewPOS(){
-  if(!currentPointId) currentPointId=(points.find(x=>x.isDefault)||points[0])?.id||null;
+  if(points && points.length>0){
+    if(!currentPointId || !points.some(function(x){return x.id===currentPointId;})){
+      var _savedPt = _loadSavedPoint();
+      if(_savedPt && points.some(function(x){return x.id===_savedPt;})) currentPointId = _savedPt;
+      else currentPointId = (points.find(function(x){return x.isDefault;})||points[0])?.id||null;
+    }
+  }
   const realProducts=products.filter(p=>!p.isCategoryPlaceholder);
   if(realProducts.length===0){
     return `<button class="btn btn-primary btn-block quick-product-btn" data-quick-product-btn="1" type="button">＋ Быстрый товар</button><div class="panel" style="margin-top:10px;"><div class="panel-body"><div class="empty">Сначала добавьте товары в разделе «Товары»</div></div></div>`;
@@ -6158,20 +6185,7 @@ function viewPOS(){
   return `
   <!-- shift-badge removed -->
   <div id="pos-notice" class="pos-notice"><span class="pos-notice-dot"></span><span id="pos-notice-text"></span></div>
-${_showCartTabs ? `
-  <div class="cart-tabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:2px;">
-    ${_carts.map(function(c){
-      var _act=c.id===_activeCartId;
-      var _cnt=c.items.length?' · '+c.items.length:'';
-      var _x=(_carts.length>1)?'<span data-cart-close="'+c.id+'" style="opacity:.65;font-size:14px;line-height:1;">×</span>':'';
-      var _b='position:relative;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;';
-      _b+='border:1px solid '+(_act?'var(--primary)':'var(--border)')+';';
-      _b+='background:'+(_act?'var(--primary)':'#fff')+';';
-      _b+='color:'+(_act?'#fff':'var(--text)')+';';
-      return '<button type="button" class="cart-tab" data-cart-switch="'+c.id+'" style="'+_b+'">'+escapeHtml(c.name)+_cnt+_x+'</button>';
-    }).join('')}
-    <button type="button" data-cart-new style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:9px;border:1px dashed var(--border);background:#fff;font-size:12px;color:var(--dim);white-space:nowrap;flex-shrink:0;">+ Чек</button>
-  </div>`:''}
+  <div id="cart-tabs-root"></div>
   
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
   <div class="search" style="flex:1;margin:0;"><span class="search-icon">⌕</span><input id="pos-search" placeholder="Поиск товара…" value="${escapeHtml(posSearch)}"></div>
@@ -6297,7 +6311,7 @@ function bindOrders(){
   const posScanBtn=document.getElementById('pos-scan-btn');
   if(posScanBtn) posScanBtn.onclick=()=>{ if(window.Android&&typeof Android.scanBarcode==='function') Android.scanBarcode(); else showToast('Сканер штрихкода недоступен'); };
   const posPointSel=document.getElementById('pos-point');
-  if(posPointSel) posPointSel.onchange=()=>{currentPointId=posPointSel.value||null;saveUiState();safeRender();};
+  // pos-point удалён из viewPOS, onchange не нужен
   const problematicBtn=document.getElementById('pos-problematic-btn');
   if(problematicBtn) problematicBtn.onclick=()=>openProblematicScreen();
 
@@ -6375,7 +6389,32 @@ function openFavContextMenu(id){
 }
 
 /* ---- floating cart bar (mobile) ---- */
+function renderCartTabs(){
+  var root = document.getElementById('cart-tabs-root');
+  if(!root) return;
+  if(currentView!=='orders' || ordersSubView!=='pos'){ root.innerHTML=''; root.style.display='none'; return; }
+  var _show = _carts.some(function(c){ return c.items && c.items.length > 0; });
+  if(!_show){ root.innerHTML=''; root.style.display='none'; return; }
+  root.style.display = 'flex';
+  root.style.gap = '6px';
+  root.style.overflowX = 'auto';
+  root.style.marginBottom = '8px';
+  root.style.paddingBottom = '2px';
+  var html = _carts.map(function(c){
+    var _act = c.id === _activeCartId;
+    var _cnt = c.items.length ? ' · ' + c.items.length : '';
+    var _x = (_carts.length > 1) ? '<span data-cart-close="' + c.id + '" style="opacity:.65;font-size:14px;line-height:1;">×</span>' : '';
+    var _b = 'position:relative;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;';
+    _b += 'border:1px solid ' + (_act ? 'var(--primary)' : 'var(--border)') + ';';
+    _b += 'background:' + (_act ? 'var(--primary)' : '#fff') + ';';
+    _b += 'color:' + (_act ? '#fff' : 'var(--text)') + ';';
+    return '<button type="button" class="cart-tab" data-cart-switch="' + c.id + '" style="' + _b + '">' + escapeHtml(c.name) + _cnt + _x + '</button>';
+  }).join('');
+  html += '<button type="button" data-cart-new style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:9px;border:1px dashed var(--border);background:#fff;font-size:12px;color:var(--dim);white-space:nowrap;flex-shrink:0;">+ Чек</button>';
+  root.innerHTML = html;
+}
 function renderCartBar(){
+  renderCartTabs();
   const root=document.getElementById('cart-bar-root');
   if(currentView!=='orders' || ordersSubView!=='pos' || cart.length===0){ root.innerHTML=''; return; }
   const cartLines=cart.map(c=>{ const p=products.find(x=>x.id===c.productId); return p?{...c,product:p}:null; }).filter(Boolean);
