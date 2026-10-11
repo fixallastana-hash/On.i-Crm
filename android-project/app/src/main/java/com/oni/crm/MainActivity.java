@@ -545,7 +545,7 @@ private String callGemini(String input) throws Exception {
         boolean _dup = false;
         for (int _j = 0; _j < _i; _j++) if (_chain[_j].equals(_m)) { _dup = true; break; }
         if (_dup) continue;
-        try { return GeminiClient.generateText(key, _m, input); }
+        try { String _r = GeminiClient.generateText(key, _m, input); if (_r != null && !_r.trim().isEmpty()) return _r; _lastErr = new IOException("пустой ответ от " + _m); continue; }
         catch (Exception _e) {
             String _msg = String.valueOf(_e.getMessage());
             if (_msg.contains("429") || _msg.contains("404") || _msg.contains("500") || _msg.contains("503") || _msg.contains("quota") || _msg.contains("overloaded") || _msg.contains("RESOURCE_EXHAUSTED") || _msg.contains("NOT_FOUND")) { _lastErr = _e; continue; }
@@ -581,7 +581,7 @@ private String callGeminiWithSearch(String input) throws Exception {
         boolean _dup = false;
         for (int _j = 0; _j < _i; _j++) if (_chain[_j].equals(_m)) { _dup = true; break; }
         if (_dup) continue;
-        try { return GeminiClient.generateWithSearch(key, _m, input); }
+        try { String _r = GeminiClient.generateWithSearch(key, _m, input); if (_r != null && !_r.trim().isEmpty()) return _r; _lastErr = new IOException("пустой ответ от " + _m); continue; }
         catch (Exception _e) {
             String _msg = String.valueOf(_e.getMessage());
             if (_msg.contains("429") || _msg.contains("404") || _msg.contains("500") || _msg.contains("503") || _msg.contains("quota") || _msg.contains("overloaded") || _msg.contains("RESOURCE_EXHAUSTED") || _msg.contains("NOT_FOUND")) { _lastErr = _e; continue; }
