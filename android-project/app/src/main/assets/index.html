@@ -978,7 +978,85 @@ window.addEventListener('error',e=>{ try{ localStorage.setItem('sklad_crm_last_e
 window.addEventListener('unhandledrejection',e=>{ try{ localStorage.setItem('sklad_crm_last_error',JSON.stringify({message:String(e?.reason?.message||e?.reason||'Ошибка'),view:currentView,time:new Date().toISOString()})); }catch(_){} });
 let productSelectionMode = false;
 let productSelectionSet = new Set();
-let cart=[]; let posSearch=''; let posCategory='Частые'; let posCategoryOpen=false; let payMethod='cash'; let giftRestMethod='cash'; let ordersSubView='pos'; let saleComment=''; let currentPointId=null;;
+let posSearch=''; let posCategory='Частые'; let posCategoryOpen=false; let payMethod='cash'; let giftRestMethod='cash'; let ordersSubView='pos'; let saleComment=''; let currentPointId=null;
+
+/* ===================== MULTI-CART ===================== */
+var _carts=[];
+var _activeCartId=null;
+var _cartSeq=0;
+function _newCartObject(){
+  _cartSeq++;
+  return { id:'cart-'+Date.now()+'-'+_cartSeq, name:'Чек '+_cartSeq, items:[], createdAt:(typeof nowISO==='function'?nowISO():new Date().toISOString()) };
+}
+function _saveCarts(){
+  try{ localStorage.setItem('oni_carts', JSON.stringify({carts:_carts,active:_activeCartId,seq:_cartSeq})); }catch(e){}
+}
+function _loadCarts(){
+  try{
+    var raw=localStorage.getItem('oni_carts');
+    if(raw){
+      var o=JSON.parse(raw);
+      if(o && Array.isArray(o.carts) && o.carts.length){
+        _carts=o.carts; _activeCartId=o.active; _cartSeq=o.seq||o.carts.length;
+        if(!_carts.some(function(c){return c.id===_activeCartId;})) _activeCartId=_carts[0].id;
+        return true;
+      }
+    }
+  }catch(e){}
+  return false;
+}
+function _resetCarts(){
+  _carts=[]; _cartSeq=0;
+  var c=_newCartObject();
+  _carts.push(c);
+  _activeCartId=c.id;
+  _saveCarts();
+}
+if(!_loadCarts()){ _resetCarts(); }
+Object.defineProperty(window,'cart',{
+  get:function(){
+    var c=_carts.find(function(x){return x.id===_activeCartId;});
+    return c ? c.items : [];
+  },
+  set:function(v){
+    var c=_carts.find(function(x){return x.id===_activeCartId;});
+    if(c) c.items=v;
+  },
+  configurable:true
+});
+function newCart(){
+  var c=_newCartObject();
+  _carts.push(c);
+  _activeCartId=c.id;
+  _saveCarts();
+  if(typeof safeRender==='function') safeRender();
+}
+function switchCart(id){
+  if(!_carts.some(function(c){return c.id===id;})) return;
+  _activeCartId=id;
+  _saveCarts();
+  if(typeof renderCartBar==='function') renderCartBar();
+  if(typeof safeRender==='function') safeRender();
+}
+function closeCart(id){
+  if(_carts.length<=1) return;
+  var c=_carts.find(function(x){return x.id===id;});
+  if(!c) return;
+  if(c.items.length>0 && !confirm('В чеке есть товары. Закрыть без продажи?')) return;
+  _carts=_carts.filter(function(x){return x.id!==id;});
+  if(_activeCartId===id) _activeCartId=_carts[0].id;
+  _saveCarts();
+  if(typeof renderCartBar==='function') renderCartBar();
+  if(typeof safeRender==='function') safeRender();
+}
+document.addEventListener('click', function(e){
+  var closeEl = e.target.closest('[data-cart-close]');
+  if(closeEl){ e.preventDefault(); e.stopPropagation(); closeCart(closeEl.dataset.cartClose); return; }
+  var switchEl = e.target.closest('[data-cart-switch]');
+  if(switchEl){ e.preventDefault(); switchCart(switchEl.dataset.cartSwitch); return; }
+  var newEl = e.target.closest('[data-cart-new]');
+  if(newEl){ e.preventDefault(); newCart(); return; }
+});
 let productSearch=''; let debtSearch=''; let consignmentSearch=''; let receiptSearch=''; let clientSearch=''; let supplierSearch='';
 let saleDiscountType='percent'; let saleDiscountValue=0;
 let cashSettings={taxRate:4,kaspiPayRate:13,kaspiRedRate:0,cashDifferenceLimit:0,sessionLockEnabled:false,sessionLockMinutes:15,sessionLogoutMinutes:120,shiftAutoCloseHours:24,bonusEnabled:false,bonusPercent:1,bonusMaxPayPercent:50};
@@ -3389,7 +3467,7 @@ async function logoutAccount(silent){
   logSessionEvent(sh?'logout_with_shift':'logout',{shiftId:sh?sh.id:null});
   stopSessionTimer();
   try{ stopProductsWatcher(); }catch(e){}
-  cart=[]; posSearch=''; posCategory='Частые'; posCategoryOpen=false; pendingKaspiSale=null;
+  _resetCarts(); posSearch=''; posCategory='Частые'; posCategoryOpen=false; pendingKaspiSale=null;
   activeUser=null; currentShiftId=null; clearAuthSession(); currentView='orders'; ordersSubView='pos';
   if(document.getElementById('topbar-menu'))document.getElementById('topbar-menu').classList.remove('open');
   const app=document.getElementById('app'); if(app)app.style.display='none';
@@ -3626,7 +3704,7 @@ function loginAsUser(id){
   if(u.role==='cashier') openCashierShift(activeUser);
   currentView = defaultViewFor(u.role);
   if(currentView==='orders') ordersSubView='pos';
-  posCategoryOpen = false; cart = [];
+  posCategoryOpen = false; _resetCarts();
   closeTopbarMenu();
   document.getElementById('modal-root').innerHTML='';
   safeRender(); saveUiState();
@@ -6031,6 +6109,20 @@ function viewPOS(){
   return `
   <!-- shift-badge removed -->
   <div id="pos-notice" class="pos-notice"><span class="pos-notice-dot"></span><span id="pos-notice-text"></span></div>
+${_carts.length>0 ? `
+  <div class="cart-tabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:2px;">
+    ${_carts.map(function(c){
+      var _act=c.id===_activeCartId;
+      var _cnt=c.items.length?' · '+c.items.length:'';
+      var _x=(_carts.length>1)?'<span data-cart-close="'+c.id+'" style="opacity:.65;font-size:14px;line-height:1;">×</span>':'';
+      var _b='position:relative;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;';
+      _b+='border:1px solid '+(_act?'var(--primary)':'var(--border)')+';';
+      _b+='background:'+(_act?'var(--primary)':'#fff')+';';
+      _b+='color:'+(_act?'#fff':'var(--text)')+';';
+      return '<button type="button" class="cart-tab" data-cart-switch="'+c.id+'" style="'+_b+'">'+escapeHtml(c.name)+_cnt+_x+'</button>';
+    }).join('')}
+    <button type="button" data-cart-new style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:9px;border:1px dashed var(--border);background:#fff;font-size:12px;color:var(--dim);white-space:nowrap;flex-shrink:0;">+ Чек</button>
+  </div>`:''}
   <div class="form-field" style="margin-bottom:10px;"><label class="form-label">Точка</label><select class="form-select" id="pos-point">${points.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===currentPointId?'selected':''}>${escapeHtml(p.name||p.id)}</option>`).join('')}</select></div>
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
   <div class="search" style="flex:1;margin:0;"><span class="search-icon">⌕</span><input id="pos-search" placeholder="Поиск товара…" value="${escapeHtml(posSearch)}"></div>
@@ -6603,7 +6695,7 @@ async function finalizePreparedSale(order){
     return false;
   }
 
-  cart=[];saleDiscountValue=0;saleComment='';payMethod='cash';pendingKaspiSale=null;saveUiState();safeRender();updateMessagesBadge();playCashVibration();openReceiptModal(order);return true;
+  _carts=_carts.filter(function(x){return x.id!==_activeCartId;});if(_carts.length===0){_resetCarts();}else{_activeCartId=_carts[0].id;_saveCarts();}saleDiscountValue=0;saleComment='';payMethod='cash';pendingKaspiSale=null;saveUiState();safeRender();updateMessagesBadge();playCashVibration();openReceiptModal(order);return true;
 }
 function showKaspiPaymentWaiting(total,method){const root=document.getElementById('modal-root');root.innerHTML=`<div class="sheet-overlay" id="kaspi-wait-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Smart POS</div></div><div class="sheet-body" style="text-align:center;"><div style="font-size:34px;margin:8px 0;">🟢</div><div style="font-size:16px;font-weight:700;margin-bottom:8px;">Ожидание оплаты</div><div id="kaspi-wait-text" class="form-hint" style="font-size:13px;">${method==='red'?'Покупатель может выбрать Kaspi Red+ после сканирования QR.':'Попросите покупателя отсканировать QR-код на Smart POS.'}</div><div style="font-family:var(--mono);font-size:22px;font-weight:800;margin:16px 0;">${fmtMoney(total)}</div><div id="kaspi-wait-status" class="badge badge-card">Подключение…</div></div><div class="sheet-foot"><button class="btn btn-block" id="kaspi-wait-close">Закрыть</button></div></div></div>`;document.getElementById('kaspi-wait-close').onclick=()=>{root.innerHTML='';pendingKaspiSale=null;};}
 window.onKaspiPaymentProgress=function(status,subStatus){const el=document.getElementById('kaspi-wait-status');if(el)el.textContent=subStatus||status||'Ожидание оплаты…';};
