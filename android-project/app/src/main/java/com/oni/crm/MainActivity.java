@@ -71,6 +71,7 @@ public class MainActivity extends Activity {
     private volatile String aiIdToken = null;
     private volatile String lastUsedProvider = "";
     private volatile String lastUsedModel = "";
+    private volatile String lastUsedReasoning = "";
     private static final String AI_PROXY_URL = "https://us-central1-oni-crm-b4975.cloudfunctions.net/aiProxy";
 
     @Override protected void onCreate(Bundle state) {
@@ -762,7 +763,7 @@ private String callDeepSeekReasoner(String input) throws Exception {
     return msg == null ? "" : msg.optString("content", "");
 }
 
-private String callAiProxy(String prompt, String provider, String imageBase64, String imageMime) throws Exception {
+private String callAiProxy(String prompt, String provider, String imageBase64, String imageMime, String mode) throws Exception {
     if (aiIdToken == null || aiIdToken.isEmpty()) {
         throw new IOException("Нет авторизации для AI");
     }
@@ -778,6 +779,7 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     JSONObject data = new JSONObject();
     data.put("provider", provider == null ? "auto" : provider);
     data.put("prompt", prompt == null ? "" : prompt);
+    if (mode != null && !mode.isEmpty()) data.put("mode", mode);
     if (imageBase64 != null && !imageBase64.isEmpty()) {
         data.put("imageBase64", imageBase64);
         data.put("imageMime", imageMime == null ? "image/jpeg" : imageMime);
@@ -815,6 +817,7 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     String usedProvider = result.optString("provider", "");
         lastUsedProvider = usedProvider;
         lastUsedModel = result.optString("model", "");
+        lastUsedReasoning = result.optString("reasoning", "");
     android.util.Log.i("On.i AI", "aiProxy OK via " + usedProvider);
     return text;
 }

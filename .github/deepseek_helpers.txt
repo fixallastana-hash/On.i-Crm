@@ -127,11 +127,11 @@ private String callDeepSeekReasoner(String input) throws Exception {
     return msg == null ? "" : msg.optString("content", "");
 }
 
-private String callSelectedProvider(String input, boolean webSearch) throws Exception {
+private String callSelectedProvider(String input, boolean webSearch, String mode) throws Exception {
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
         try {
             android.util.Log.i("On.i AI", "Using aiProxy (server)");
-            String r = callAiProxy(input, "auto", null, null);
+            String r = callAiProxy(input, "auto", null, null, mode);
             if (r != null && !r.trim().isEmpty()) {
                 return r;
             }
@@ -389,7 +389,7 @@ public void testAIConnection() {
 }
 
 @JavascriptInterface
-public void askAIChat(final String message, final String historyJson, final String webSearchFlag, final String catalogJson) {
+public void askAIChat(final String message, final String historyJson, final String webSearchFlag, final String catalogJson, final String modeArg) {
     final String msg = message == null ? "" : message.trim();
     final boolean useSearch = "1".equals(webSearchFlag) || "true".equalsIgnoreCase(webSearchFlag);
     final String catalog = catalogJson == null ? "" : catalogJson.trim();
@@ -425,7 +425,7 @@ public void askAIChat(final String message, final String historyJson, final Stri
 
             prompt.append("ВОПРОС ПОКУПАТЕЛЯ: ").append(msg);
 
-            String raw = callSelectedProvider(prompt.toString(), useSearch);
+            String raw = callSelectedProvider(prompt.toString(), useSearch, modeArg);
             String answer = extractAnswerText(raw);
 
             JSONObject out = new JSONObject();
@@ -433,6 +433,7 @@ public void askAIChat(final String message, final String historyJson, final Stri
             out.put("answer", answer == null ? "" : answer);
             out.put("provider", lastUsedProvider == null ? "" : lastUsedProvider);
             out.put("model", lastUsedModel == null ? "" : lastUsedModel);
+            out.put("reasoning", lastUsedReasoning == null ? "" : lastUsedReasoning);
             postAIChatResult(out.toString());
         } catch (Exception e) {
             try {

@@ -8,6 +8,7 @@ private void injectAIChat() {
         "var history=[];" +
         "var webSearchOn=(localStorage.getItem('oni_websearch')==='1');" +
         "var catalogOn=(localStorage.getItem('oni_catalog')==='1');" +
+"var reasoningOn=(localStorage.getItem('oni_reasoning')==='1');" +
 
         "function checkAIStatus(){" +
         "  try{" +
@@ -121,7 +122,8 @@ private void injectAIChat() {
         "    html+='<div style=\"padding:10px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid #ECECEC;background:#FFFFFF;\">';" +
         "    html+='<div style=\"display:flex;gap:8px;align-items:flex-end;background:#F4F4F4;border-radius:26px;padding:5px 5px 5px 16px;\">';" +
         "    html+='<textarea id=\"oni-chat-input\" rows=\"1\" placeholder=\"Спросите что угодно…\" style=\"flex:1;resize:none;min-height:36px;max-height:120px;border:0;outline:none;background:transparent;font:inherit;font-size:15px;color:#0D0D0D;padding:8px 0;line-height:1.5;letter-spacing:-0.005em;\"></textarea>';" +
-        "    html+='<button id=\"oni-chat-send\" style=\"width:34px;height:34px;border-radius:50%;background:#0A84FF;border:0;color:#fff;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19 V5\"/><path d=\"M5 12 L12 5 L19 12\"/></svg></button>';" +
+        "    html+='<button id=\"oni-chat-reasoning\" style=\"width:34px;height:34px;border-radius:50%;background:#F4F4F4;border:0;color:#666;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;margin-right:6px;\">🧠</button>';" +
+"    html+='<button id=\"oni-chat-send\" style=\"width:34px;height:34px;border-radius:50%;background:#0A84FF;border:0;color:#fff;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19 V5\"/><path d=\"M5 12 L12 5 L19 12\"/></svg></button>';" +
         "    html+='</div>';" +
         "    html+='</div>';" +
         "    html+='</div>';" +
@@ -175,6 +177,12 @@ private void injectAIChat() {
         "        addAI('Ошибка: '+(d.message||'не удалось получить ответ'));return;" +
         "      }" +
         "      try{if(d.provider){var _lbl=d.provider+(d.model?(' · '+d.model):'');localStorage.setItem('oni_ai_last_provider',_lbl);if(_sd)_sd.style.background='#34c759';if(_st)_st.textContent=_lbl;}}catch(_e){}" +
+        "      if(d.reasoning && d.reasoning.length>10){" +
+        "        var _r=document.createElement('details');" +
+        "        _r.style.cssText='margin:8px 0;padding:8px 12px;background:#F9F9FB;border-radius:12px;font-size:13px;color:#666;';" +
+        "        _r.innerHTML='<summary style=\\'cursor:pointer;font-weight:600;\\'>🤔 Размышления AI</summary><div style=\\'margin-top:6px;white-space:pre-wrap;line-height:1.5;\\'>'+String(d.reasoning).replace(/</g,'&lt;').slice(0,4000)+'</div>';" +
+        "        body.appendChild(_r);" +
+        "      }" +
         "      addAI(d.answer||'');" +
         "      history.push({q:window.__oniLastQ||'',a:d.answer||''});" +
         "      if(history.length>5)history.shift();" +
@@ -201,12 +209,16 @@ private void injectAIChat() {
         "      var catalog='';" +
         "      if(catalogOn){ catalog=buildCatalog(); }" +
         "      if(window.Android&&typeof window.Android.askAIChat==='function'){" +
-        "        window.Android.askAIChat(q,hist,'0',catalog);" +
+        "        window.Android.askAIChat(q,hist,'0',catalog,reasoningOn?'reasoning':'auto');" +
         "      }else{" +
         "        removeLoading();addAI('AI доступен только в Android-приложении.');" +
         "      }" +
         "    }" +
 
+        "    var reasoningBtn=document.getElementById('oni-chat-reasoning');" +
+        "    function paintReasoning(){if(!reasoningBtn)return;if(reasoningOn){reasoningBtn.style.background='#0A84FF';reasoningBtn.style.color='#FFFFFF';}else{reasoningBtn.style.background='#F4F4F4';reasoningBtn.style.color='#666';}}" +
+        "    paintReasoning();" +
+        "    if(reasoningBtn){reasoningBtn.onclick=function(){reasoningOn=!reasoningOn;try{localStorage.setItem('oni_reasoning',reasoningOn?'1':'0');}catch(e){}paintReasoning();};}" +
         "    sendBtn.onclick=send;" +
         "    input.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};" +
         "    input.oninput=function(){input.style.height='auto';input.style.height=Math.min(120,input.scrollHeight)+'px';};" +
