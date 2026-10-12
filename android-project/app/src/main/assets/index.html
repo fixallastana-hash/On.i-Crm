@@ -4597,6 +4597,30 @@ function _oniPushIdToken(_tries){
 window._oniPushIdToken = _oniPushIdToken;
 setInterval(_oniPushIdToken, 25 * 60 * 1000);
 
+// Подписка на авто-обновление Firebase ID-токена.
+// Срабатывает при логине, логауте и когда Firebase сам обновляет токен (~раз в час).
+try {
+  if (window.fbAuth && typeof fbAuth.onIdTokenChanged === 'function') {
+    fbAuth.onIdTokenChanged(function(user){
+      if (user) {
+        user.getIdToken().then(function(t){
+          if (window.Android && typeof window.Android.setIdToken === 'function') {
+            window.Android.setIdToken(t);
+            console.log('[ai] onIdTokenChanged pushed fresh token');
+          }
+        }).catch(function(e){ console.warn('[ai] token refresh failed', e && e.message); });
+      } else {
+        if (window.Android && typeof window.Android.setIdToken === 'function') {
+          window.Android.setIdToken('');
+        }
+      }
+    });
+    console.log('[ai] onIdTokenChanged subscribed');
+  } else {
+    console.warn('[ai] fbAuth.onIdTokenChanged not available');
+  }
+} catch(e){ console.warn('[ai] onIdTokenChanged sub error', e && e.message); }
+
 function navigateTo(view){
   if(!VIEW_META[view]) return;
   if(!activeUser){ showToast('Требуется вход'); return; }
