@@ -127,6 +127,10 @@ private String callDeepSeekReasoner(String input) throws Exception {
     return msg == null ? "" : msg.optString("content", "");
 }
 
+private String callSelectedProvider(String input, boolean webSearch) throws Exception {
+    return callSelectedProvider(input, webSearch, "auto");
+}
+
 private String callSelectedProvider(String input, boolean webSearch, String mode) throws Exception {
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
         try {
