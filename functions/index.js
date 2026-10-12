@@ -11,6 +11,8 @@ const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 const CEREBRAS_API_KEY = defineSecret("CEREBRAS_API_KEY");
 const OPENROUTER_API_KEY = defineSecret("OPENROUTER_API_KEY");
 const MISTRAL_API_KEY = defineSecret("MISTRAL_API_KEY");
+const CLOUDFLARE_ACCOUNT_ID = defineSecret("CLOUDFLARE_ACCOUNT_ID");
+const CLOUDFLARE_API_TOKEN = defineSecret("CLOUDFLARE_API_TOKEN");
 
 const USER_DAILY_LIMIT = 500;
 const MAX_PROMPT_CHARS = 12000;
@@ -219,6 +221,36 @@ async function callMistral(prompt) {
   return { text, model };
 }
 
+// ============ CLOUDFLARE WORKERS AI ============
+async function callCloudflare(prompt) {
+  const account = CLOUDFLARE_ACCOUNT_ID.value();
+  const token = CLOUDFLARE_API_TOKEN.value();
+  if (!account) throw new Error("CLOUDFLARE_ACCOUNT_ID не задан");
+  if (!token) throw new Error("CLOUDFLARE_API_TOKEN не задан");
+  const model = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const url = "https://api.cloudflare.com/client/v4/accounts/" + account.trim() + "/ai/run/" + model;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token.trim()
+    },
+    body: JSON.stringify({
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error("Cloudflare HTTP " + r.status + ": " + t.slice(0, 200));
+  }
+  const j = await r.json();
+  if (!j || !j.success) {
+    throw new Error("Cloudflare error: " + JSON.stringify(j && j.errors).slice(0, 200));
+  }
+  const text = (j.result && (j.result.response || j.result.text)) || "";
+  return { text, model };
+}
+
 // ============ DEEPSEEK ============
 async function callDeepSeek(prompt) {
   const key = DEEPSEEK_API_KEY.value();
@@ -250,7 +282,7 @@ async function callDeepSeek(prompt) {
 // ============ MAIN ============
 exports.aiProxy = onCall(
   {
-    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, MISTRAL_API_KEY],
+    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, MISTRAL_API_KEY, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN],
     memory: "512MiB",
     timeoutSeconds: 120,
     region: "us-central1"
@@ -406,6 +438,20 @@ exports.aiProxy = onCall(
         }
       } catch (e) {
         errors.push("deepseek: " + (e.message || e));
+      }
+    }
+
+    // 4. Cloudflare Workers AI (только текст) — последний резерв
+    if (!text && !hasImage) {
+      try {
+        const g = await callCloudflare(prompt);
+        if (g.text && g.text.trim()) {
+          text = g.text;
+          usedProvider = "cloudflare";
+          usedModel = g.model;
+        }
+      } catch (e) {
+        errors.push("cloudflare: " + (e.message || e));
       }
     }
 
