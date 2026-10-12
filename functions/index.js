@@ -10,6 +10,7 @@ const DEEPSEEK_API_KEY = defineSecret("DEEPSEEK_API_KEY");
 const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 const CEREBRAS_API_KEY = defineSecret("CEREBRAS_API_KEY");
 const OPENROUTER_API_KEY = defineSecret("OPENROUTER_API_KEY");
+const MISTRAL_API_KEY = defineSecret("MISTRAL_API_KEY");
 
 const USER_DAILY_LIMIT = 500;
 const MAX_PROMPT_CHARS = 12000;
@@ -190,6 +191,34 @@ async function callOpenRouter(prompt, model) {
   return { text, model: usedModel, reasoning };
 }
 
+// ============ MISTRAL ============
+async function callMistral(prompt) {
+  const key = MISTRAL_API_KEY.value();
+  if (!key) throw new Error("MISTRAL_API_KEY не задан");
+  const model = process.env.MISTRAL_MODEL || "mistral-small-latest";
+  const r = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key.trim()
+    },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error("Mistral HTTP " + r.status + ": " + t.slice(0, 200));
+  }
+  const j = await r.json();
+  const text = j && j.choices && j.choices[0] && j.choices[0].message
+    ? (j.choices[0].message.content || "")
+    : "";
+  return { text, model };
+}
+
 // ============ DEEPSEEK ============
 async function callDeepSeek(prompt) {
   const key = DEEPSEEK_API_KEY.value();
@@ -221,7 +250,7 @@ async function callDeepSeek(prompt) {
 // ============ MAIN ============
 exports.aiProxy = onCall(
   {
-    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY],
+    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, MISTRAL_API_KEY],
     memory: "512MiB",
     timeoutSeconds: 120,
     region: "us-central1"
@@ -335,6 +364,20 @@ exports.aiProxy = onCall(
         }
       } catch (e) {
         errors.push("openrouter: " + (e.message || e));
+      }
+    }
+
+    // 1.9. Mistral (только текст)
+    if (!text && !hasImage) {
+      try {
+        const g = await callMistral(prompt);
+        if (g.text && g.text.trim()) {
+          text = g.text;
+          usedProvider = "mistral";
+          usedModel = g.model;
+        }
+      } catch (e) {
+        errors.push("mistral: " + (e.message || e));
       }
     }
 
