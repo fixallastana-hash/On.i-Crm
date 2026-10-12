@@ -136,7 +136,7 @@ private void injectAIChat() {
         "    var input=document.getElementById('oni-chat-input');" +
         "    var sendBtn=document.getElementById('oni-chat-send');" +
         "    var catalogBtn=document.getElementById(''oni-chat-catalog'');" +
-        "    var providerBtn=document.getElementById(''oni-chat-provider'');" + +
+        "    var providerBtn=document.getElementById(''oni-chat-provider'');" +
         "    var catalogLabel=document.getElementById('oni-chat-catalog-label');" +
 
         "    function paintStatus(){" +
