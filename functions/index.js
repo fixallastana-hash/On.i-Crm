@@ -9,6 +9,7 @@ const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const DEEPSEEK_API_KEY = defineSecret("DEEPSEEK_API_KEY");
 const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 const CEREBRAS_API_KEY = defineSecret("CEREBRAS_API_KEY");
+const OPENROUTER_API_KEY = defineSecret("OPENROUTER_API_KEY");
 
 const USER_DAILY_LIMIT = 500;
 const MAX_PROMPT_CHARS = 12000;
@@ -159,6 +160,36 @@ async function callCerebras(prompt) {
   return { text, model };
 }
 
+// ============ OPENROUTER ============
+async function callOpenRouter(prompt, model) {
+  const key = OPENROUTER_API_KEY.value();
+  if (!key) throw new Error("OPENROUTER_API_KEY не задан");
+  const usedModel = model || process.env.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
+  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key.trim(),
+      "HTTP-Referer": "https://oni-crm.web.app",
+      "X-Title": "On.i CRM"
+    },
+    body: JSON.stringify({
+      model: usedModel,
+      stream: false,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error("OpenRouter HTTP " + r.status + ": " + t.slice(0, 200));
+  }
+  const j = await r.json();
+  const text = j && j.choices && j.choices[0] && j.choices[0].message
+    ? (j.choices[0].message.content || "")
+    : "";
+  return { text, model: usedModel };
+}
+
 // ============ DEEPSEEK ============
 async function callDeepSeek(prompt) {
   const key = DEEPSEEK_API_KEY.value();
@@ -190,7 +221,7 @@ async function callDeepSeek(prompt) {
 // ============ MAIN ============
 exports.aiProxy = onCall(
   {
-    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY],
+    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY],
     memory: "512MiB",
     timeoutSeconds: 120,
     region: "us-central1"
@@ -250,6 +281,20 @@ exports.aiProxy = onCall(
         }
       } catch (e) {
         errors.push("cerebras: " + (e.message || e));
+      }
+    }
+
+    // 1.7. OpenRouter — Nemotron 120B (только текст)
+    if (!text && !hasImage) {
+      try {
+        const g = await callOpenRouter(prompt);
+        if (g.text && g.text.trim()) {
+          text = g.text;
+          usedProvider = "openrouter";
+          usedModel = g.model;
+        }
+      } catch (e) {
+        errors.push("openrouter: " + (e.message || e));
       }
     }
 
