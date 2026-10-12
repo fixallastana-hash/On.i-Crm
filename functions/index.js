@@ -315,6 +315,8 @@ exports.aiProxy = onCall(
     const errors = [];
     const mode = (req.data && req.data.mode) || "auto";
     const isReasoning = mode === "reasoning";
+    const FORCED_LIST = ["groq","cerebras","openrouter","mistral","gemini","deepseek","cloudflare"];
+    const isForced = FORCED_LIST.indexOf(mode) >= 0;
     let reasoning = null;
 
     // === REASONING РЕЖИМ ===
@@ -356,6 +358,32 @@ exports.aiProxy = onCall(
 
     // Цепочка: Groq → Gemini → DeepSeek
     // Если картинка — пропускаем Groq (не принимает изображения) и DeepSeek
+
+    // === FORCED PROVIDER (ручной выбор) ===
+    if (isForced) {
+      let g = null;
+      try {
+        if (mode === "groq")           g = await callGroq(prompt);
+        else if (mode === "cerebras")  g = await callCerebras(prompt);
+        else if (mode === "openrouter") g = await callOpenRouter(prompt);
+        else if (mode === "mistral")   g = await callMistral(prompt);
+        else if (mode === "gemini")    g = await callGemini(prompt, imageBase64, imageMime);
+        else if (mode === "deepseek")  g = await callDeepSeek(prompt);
+        else if (mode === "cloudflare") g = await callCloudflare(prompt);
+        if (g && g.text && g.text.trim()) {
+          return {
+            ok: true,
+            text: g.text,
+            provider: mode,
+            model: g.model,
+            remaining: userRemaining
+          };
+        }
+        throw new HttpsError("unavailable", mode + " не ответил");
+      } catch (e) {
+        throw new HttpsError("unavailable", mode + ": " + ((e && e.message) || e));
+      }
+    }
 
     // 1. Groq (только текст)
     if (!hasImage) {

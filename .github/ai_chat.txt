@@ -9,6 +9,7 @@ private void injectAIChat() {
         "var webSearchOn=(localStorage.getItem('oni_websearch')==='1');" +
         "var catalogOn=(localStorage.getItem('oni_catalog')==='1');" +
 "var reasoningOn=(localStorage.getItem('oni_reasoning')==='1');" +
+"var aiMode=(localStorage.getItem('oni_ai_mode')||'auto');" +
 
         "function checkAIStatus(){" +
         "  try{" +
@@ -112,7 +113,8 @@ private void injectAIChat() {
         "    html+='<span id=\"oni-ai-status-text\" style=\"font-size:11px;color:#888;\">отключено</span>';" +
         "    html+='</div>';" +
         "    html+='<div style=\"display:flex;gap:8px;align-items:center;\">';" +
-        "    html+='<button id=\"oni-chat-catalog\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;\"><span style=\"font-size:14px;\">📋</span><span id=\"oni-chat-catalog-label\" style=\"font-weight:600;\">Каталог</span></button>';" +
+        "    html+='<button id=\"oni-chat-provider\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600;\">⚙ Авто</button>';" +
+"    html+='<button id=\"oni-chat-catalog\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;\"><span style=\"font-size:14px;\">📋</span><span id=\"oni-chat-catalog-label\" style=\"font-weight:600;\">Каталог</span></button>';" +
         "    html+='<button id=\"oni-chat-close\" style=\"width:34px;height:34px;border:0;background:#F4F4F4;border-radius:50%;color:#666;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;\">✕</button>';" +
         "    html+='</div>';" +
         "    html+='</div>';" +
@@ -133,7 +135,8 @@ private void injectAIChat() {
         "    var body=document.getElementById('oni-chat-body');" +
         "    var input=document.getElementById('oni-chat-input');" +
         "    var sendBtn=document.getElementById('oni-chat-send');" +
-        "    var catalogBtn=document.getElementById('oni-chat-catalog');" +
+        "    var catalogBtn=document.getElementById(''oni-chat-catalog'');" +
+        "    var providerBtn=document.getElementById(''oni-chat-provider'');" + +
         "    var catalogLabel=document.getElementById('oni-chat-catalog-label');" +
 
         "    function paintStatus(){" +
@@ -159,6 +162,10 @@ private void injectAIChat() {
         "      }" +
         "    }" +
         "    paintCatalog();" +
+        "    var _PROV_LABELS={auto:'⚙ Авто',groq:'⚡ Groq',cerebras:'🚀 Cerebras',openrouter:'🌐 OpenRouter',mistral:'🇫🇷 Mistral',gemini:'💎 Gemini',deepseek:'🐋 DeepSeek',cloudflare:'☁️ Cloudflare'};" +
+        "    function paintProvider(){if(!providerBtn)return;providerBtn.textContent=_PROV_LABELS[aiMode]||'⚙ Авто';if(aiMode===''auto''){providerBtn.style.background=''#FFFFFF'';providerBtn.style.color=''#666'';}else{providerBtn.style.background=''#0A84FF'';providerBtn.style.color=''#FFFFFF'';}}" +
+        "    paintProvider();" +
+        "    if(providerBtn){providerBtn.onclick=function(ev){ev.stopPropagation();var _m=document.getElementById(''oni-provider-menu'');if(_m){_m.remove();return;}_m=document.createElement(''div'');_m.id=''oni-provider-menu'';_m.style.cssText=''position:absolute;top:52px;right:100px;background:#fff;border:1px solid #E5E5E5;border-radius:12px;padding:6px;z-index:100000;box-shadow:0 8px 20px rgba(0,0,0,0.12);min-width:170px;'';var _keys=[''auto'',''groq'',''cerebras'',''openrouter'',''mistral'',''gemini'',''deepseek'',''cloudflare''];for(var _i=0;_i<_keys.length;_i++){(function(_k){var _b=document.createElement(''div'');_b.style.cssText=''padding:8px 12px;border-radius:8px;cursor:pointer;font-size:14px;''+(_k===aiMode?''background:#E8F0FE;color:#0A84FF;font-weight:600;'':''color:#333;'');_b.textContent=_PROV_LABELS[_k];_b.onclick=function(){aiMode=_k;try{localStorage.setItem(''oni_ai_mode'',aiMode);}catch(e){}paintProvider();_m.remove();};_m.appendChild(_b);})(_keys[_i]);}document.body.appendChild(_m);setTimeout(function(){var _cl=function(){_m.remove();document.removeEventListener(''click'',_cl);};document.addEventListener(''click'',_cl);},0);};}" +
         "    catalogBtn.onclick=function(){ catalogOn=!catalogOn; try{localStorage.setItem('oni_catalog',catalogOn?'1':'0');}catch(e){} paintCatalog(); };" +
 
         "    function esc(s){return String(s||'').replace(/[&<>\"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'})[c];});}" +
@@ -209,7 +216,7 @@ private void injectAIChat() {
         "      var catalog='';" +
         "      if(catalogOn){ catalog=buildCatalog(); }" +
         "      if(window.Android&&typeof window.Android.askAIChat==='function'){" +
-        "        window.Android.askAIChat(q,hist,'0',catalog,reasoningOn?'reasoning':'auto');" +
+        "        window.Android.askAIChat(q,hist,'0',catalog,reasoningOn?'reasoning':aiMode);" +
         "      }else{" +
         "        removeLoading();addAI('AI доступен только в Android-приложении.');" +
         "      }" +
