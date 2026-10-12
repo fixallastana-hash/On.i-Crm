@@ -8,6 +8,7 @@ const db = admin.firestore();
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const DEEPSEEK_API_KEY = defineSecret("DEEPSEEK_API_KEY");
 const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
+const CEREBRAS_API_KEY = defineSecret("CEREBRAS_API_KEY");
 
 const USER_DAILY_LIMIT = 500;
 const MAX_PROMPT_CHARS = 12000;
@@ -130,6 +131,34 @@ async function callGroq(prompt) {
   return { text, model };
 }
 
+// ============ CEREBRAS ============
+async function callCerebras(prompt) {
+  const key = CEREBRAS_API_KEY.value();
+  if (!key) throw new Error("CEREBRAS_API_KEY не задан");
+  const model = process.env.CEREBRAS_MODEL || "gpt-oss-120b";
+  const r = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key.trim()
+    },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error("Cerebras HTTP " + r.status + ": " + t.slice(0, 200));
+  }
+  const j = await r.json();
+  const text = j && j.choices && j.choices[0] && j.choices[0].message
+    ? (j.choices[0].message.content || "")
+    : "";
+  return { text, model };
+}
+
 // ============ DEEPSEEK ============
 async function callDeepSeek(prompt) {
   const key = DEEPSEEK_API_KEY.value();
@@ -161,7 +190,7 @@ async function callDeepSeek(prompt) {
 // ============ MAIN ============
 exports.aiProxy = onCall(
   {
-    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY],
+    secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY],
     memory: "512MiB",
     timeoutSeconds: 120,
     region: "us-central1"
@@ -207,6 +236,20 @@ exports.aiProxy = onCall(
         }
       } catch (e) {
         errors.push("groq: " + (e.message || e));
+      }
+    }
+
+    // 1.5. Cerebras (только текст)
+    if (!text && !hasImage) {
+      try {
+        const g = await callCerebras(prompt);
+        if (g.text && g.text.trim()) {
+          text = g.text;
+          usedProvider = "cerebras";
+          usedModel = g.model;
+        }
+      } catch (e) {
+        errors.push("cerebras: " + (e.message || e));
       }
     }
 
