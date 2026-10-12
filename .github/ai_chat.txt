@@ -111,7 +111,6 @@ private void injectAIChat() {
         "    html+='<span id=\"oni-ai-status-text\" style=\"font-size:11px;color:#888;\">отключено</span>';" +
         "    html+='</div>';" +
         "    html+='<div style=\"display:flex;gap:8px;align-items:center;\">';" +
-        "    html+='<button id=\"oni-chat-search\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;\"><span style=\"font-size:14px;\">🌐</span><span id=\"oni-chat-search-label\" style=\"font-weight:600;\">Поиск</span></button>';" +
         "    html+='<button id=\"oni-chat-catalog\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;\"><span style=\"font-size:14px;\">📋</span><span id=\"oni-chat-catalog-label\" style=\"font-weight:600;\">Каталог</span></button>';" +
         "    html+='<button id=\"oni-chat-close\" style=\"width:34px;height:34px;border:0;background:#F4F4F4;border-radius:50%;color:#666;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;\">✕</button>';" +
         "    html+='</div>';" +
@@ -132,32 +131,21 @@ private void injectAIChat() {
         "    var body=document.getElementById('oni-chat-body');" +
         "    var input=document.getElementById('oni-chat-input');" +
         "    var sendBtn=document.getElementById('oni-chat-send');" +
-        "    var searchBtn=document.getElementById('oni-chat-search');" +
-        "    var searchLabel=document.getElementById('oni-chat-search-label');" +
         "    var catalogBtn=document.getElementById('oni-chat-catalog');" +
         "    var catalogLabel=document.getElementById('oni-chat-catalog-label');" +
 
         "    function paintStatus(){" +
-        "      var active=checkAIStatus();" +
         "      var dot=document.getElementById('oni-ai-status-dot');" +
         "      var txt=document.getElementById('oni-ai-status-text');" +
-        "      if(dot)dot.style.background=active?'#4CAF50':'#BDBDBD';" +
+        "      var last='';try{last=localStorage.getItem('oni_ai_last_provider')||'';}catch(e){}" +
+        "      if(last){if(dot)dot.style.background='#34c759';if(txt)txt.textContent=last;return;}" +
+        "      var active=checkAIStatus();" +
+        "      if(dot)dot.style.background=active?'#34c759':'#BDBDBD';" +
         "      if(txt)txt.textContent=active?'подключено':'отключено';" +
         "    }" +
         "    paintStatus();" +
-        "    var statusTimer=setInterval(paintStatus,3000);" +
+        "    var statusTimer=setInterval(paintStatus,5000);" +
 
-        "    function paintSearch(){" +
-        "      if(webSearchOn){" +
-        "        searchBtn.style.background='#0A84FF';searchBtn.style.borderColor='#0A84FF';searchBtn.style.color='#FFFFFF';" +
-        "        searchLabel.textContent='Поиск вкл';" +
-        "      }else{" +
-        "        searchBtn.style.background='#FFFFFF';searchBtn.style.borderColor='#E5E5E5';searchBtn.style.color='#666';" +
-        "        searchLabel.textContent='Поиск';" +
-        "      }" +
-        "    }" +
-        "    paintSearch();" +
-        "    searchBtn.onclick=function(){ webSearchOn=!webSearchOn; try{localStorage.setItem('oni_websearch',webSearchOn?'1':'0');}catch(e){} paintSearch(); };" +
 
         "    function paintCatalog(){" +
         "      if(catalogOn){" +
@@ -181,7 +169,12 @@ private void injectAIChat() {
         "    window.onAIChatResult=function(raw){" +
         "      removeLoading();" +
         "      var d={};try{d=typeof raw==='string'?JSON.parse(raw):(raw||{});}catch(e){}" +
-        "      if(d.status!=='success'){addAI('Ошибка: '+(d.message||'не удалось получить ответ'));return;}" +
+        "      var _sd=document.getElementById('oni-ai-status-dot');var _st=document.getElementById('oni-ai-status-text');" +
+        "      if(d.status!=='success'){" +
+        "        if(_sd)_sd.style.background='#ff3b30';if(_st)_st.textContent='ошибка';" +
+        "        addAI('Ошибка: '+(d.message||'не удалось получить ответ'));return;" +
+        "      }" +
+        "      try{if(d.provider){var _lbl=d.provider+(d.model?(' · '+d.model):'');localStorage.setItem('oni_ai_last_provider',_lbl);if(_sd)_sd.style.background='#34c759';if(_st)_st.textContent=_lbl;}}catch(_e){}" +
         "      addAI(d.answer||'');" +
         "      history.push({q:window.__oniLastQ||'',a:d.answer||''});" +
         "      if(history.length>5)history.shift();" +
@@ -208,7 +201,7 @@ private void injectAIChat() {
         "      var catalog='';" +
         "      if(catalogOn){ catalog=buildCatalog(); }" +
         "      if(window.Android&&typeof window.Android.askAIChat==='function'){" +
-        "        window.Android.askAIChat(q,hist,webSearchOn?'1':'0',catalog);" +
+        "        window.Android.askAIChat(q,hist,'0',catalog);" +
         "      }else{" +
         "        removeLoading();addAI('AI доступен только в Android-приложении.');" +
         "      }" +

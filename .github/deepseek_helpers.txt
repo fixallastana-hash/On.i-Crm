@@ -401,23 +401,13 @@ public void askAIChat(final String message, final String historyJson, final Stri
     new Thread(new Runnable() { public void run() {
         try {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("Ты — продавец-консультант магазина On.i. Покупатель спрашивает про товары, которые есть в НАШЕМ магазине.\n\n");
-            prompt.append("ГЛАВНАЯ ЗАДАЧА:\n");
-            prompt.append("Покупатель может задать вопрос двумя способами:\n");
-            prompt.append("А) По категории — «Какие БАДы у вас есть?», «Какой парфюм?», «Какие книги?»\n");
-            prompt.append("Б) По симптому / проблеме — «Что от головной боли?», «Что от кашля?», «Что для иммунитета?»\n\n");
-            prompt.append("КАК ОТВЕЧАТЬ:\n");
-            prompt.append("1. По КАТЕГОРИИ — перечисли товары этой категории из каталога (название, цена, остаток).\n");
-            prompt.append("2. По СИМПТОМУ — найди товары, которые помогают от этого симптома.\n");
-            prompt.append("3. Покажи покупателю с ценой и остатком.\n");
-            prompt.append("4. Если товаров нет — честно скажи: «В нашем магазине сейчас нет товаров от [симптом]. Можем завезти под заказ».\n");
-            prompt.append("5. НЕ придумывай товары, которых нет в каталоге.\n");
-            prompt.append("6. Не задавай встречных вопросов, не извиняйся.\n\n");
-            prompt.append("ФОРМАТ ОТВЕТА:\n");
-            prompt.append("— Только обычный текст. Никакого JSON.\n");
-            prompt.append("— На русском (или казахском, если вопрос на казахском).\n");
-            prompt.append("— Без markdown.\n");
-            prompt.append("— Короткий список через тире.\n\n");
+            prompt.append("Ты — универсальный ИИ-ассистент. Отвечай на ЛЮБОЙ вопрос, как ChatGPT.\n\n");
+            prompt.append("ПРАВИЛА:\n");
+            prompt.append("1. Вопрос про магазин (товары, цены, наличие, категории, подбор) → отвечай строго по КАТАЛОГУ ниже. Нет в каталоге → скажи честно, что нет.\n");
+            prompt.append("2. Любой другой вопрос (шутка, анекдот, рецепт, код, перевод, математика, история, болтовня) → отвечай свободно, БЕЗ упоминания магазина и каталога.\n");
+            prompt.append("3. Язык ответа = язык вопроса. Markdown ок (**жирный**, списки).\n");
+            prompt.append("4. Коротко: 1–3 предложения для простого вопроса, списком — для сложного.\n");
+            prompt.append("5. Не выдумывай факты. Не знаешь → скажи «не знаю».\n\n");
 
             if (!catalog.isEmpty()) {
                 prompt.append("КАТАЛОГ МАГАЗИНА (по категориям, только товары в наличии):\n");
@@ -441,6 +431,8 @@ public void askAIChat(final String message, final String historyJson, final Stri
             JSONObject out = new JSONObject();
             out.put("status", "success");
             out.put("answer", answer == null ? "" : answer);
+            out.put("provider", lastUsedProvider == null ? "" : lastUsedProvider);
+            out.put("model", lastUsedModel == null ? "" : lastUsedModel);
             postAIChatResult(out.toString());
         } catch (Exception e) {
             try {
