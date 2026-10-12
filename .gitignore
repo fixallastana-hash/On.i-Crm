@@ -15,3 +15,5 @@ Thumbs.db
 # Firebase Agent Skills (�� ����� � ����)
 .agents/
 skills-lock.json
+
+*.bak*
