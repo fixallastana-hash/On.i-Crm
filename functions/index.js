@@ -133,10 +133,10 @@ async function callGroq(prompt) {
 }
 
 // ============ CEREBRAS ============
-async function callCerebras(prompt) {
+async function callCerebras(prompt, model) {
   const key = CEREBRAS_API_KEY.value();
   if (!key) throw new Error("CEREBRAS_API_KEY не задан");
-  const model = process.env.CEREBRAS_MODEL || "gpt-oss-120b";
+  const usedModel = model || process.env.CEREBRAS_MODEL || "gpt-oss-120b";
   const r = await fetch("https://api.cerebras.ai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -144,7 +144,7 @@ async function callCerebras(prompt) {
       "Authorization": "Bearer " + key.trim()
     },
     body: JSON.stringify({
-      model,
+      model: usedModel,
       stream: false,
       messages: [{ role: "user", content: prompt }]
     })
@@ -157,7 +157,7 @@ async function callCerebras(prompt) {
   const text = j && j.choices && j.choices[0] && j.choices[0].message
     ? (j.choices[0].message.content || "")
     : "";
-  return { text, model };
+  return { text, model: usedModel };
 }
 
 // ============ OPENROUTER ============
@@ -184,10 +184,10 @@ async function callOpenRouter(prompt, model) {
     throw new Error("OpenRouter HTTP " + r.status + ": " + t.slice(0, 200));
   }
   const j = await r.json();
-  const text = j && j.choices && j.choices[0] && j.choices[0].message
-    ? (j.choices[0].message.content || "")
-    : "";
-  return { text, model: usedModel };
+  const msg = (j && j.choices && j.choices[0] && j.choices[0].message) || {};
+  const text = msg.content || "";
+  const reasoning = msg.reasoning_content || msg.reasoning || "";
+  return { text, model: usedModel, reasoning };
 }
 
 // ============ DEEPSEEK ============
@@ -252,6 +252,46 @@ exports.aiProxy = onCall(
     let usedModel = null;
     let text = null;
     const errors = [];
+    const mode = (req.data && req.data.mode) || "auto";
+    const isReasoning = mode === "reasoning";
+    let reasoning = null;
+
+    // === REASONING РЕЖИМ ===
+    if (isReasoning && !hasImage) {
+      try {
+        const g = await callOpenRouter(prompt, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free");
+        if (g.text && g.text.trim()) {
+          text = g.text;
+          usedProvider = "openrouter";
+          usedModel = g.model;
+          reasoning = g.reasoning || null;
+        }
+      } catch (e) { errors.push("openrouter-reasoning: " + (e.message || e)); }
+
+      if (!text) {
+        try {
+          const g = await callCerebras(prompt, "qwen-3.8-27b");
+          if (g.text && g.text.trim()) {
+            text = g.text;
+            usedProvider = "cerebras";
+            usedModel = g.model;
+          }
+        } catch (e) { errors.push("cerebras-reasoning: " + (e.message || e)); }
+      }
+
+      if (!text) {
+        throw new HttpsError("unavailable", "Reasoning-провайдеры недоступны: " + errors.join("; ").slice(0, 500));
+      }
+
+      return {
+        ok: true,
+        text,
+        provider: usedProvider,
+        model: usedModel,
+        remaining: userRemaining,
+        reasoning
+      };
+    }
 
     // Цепочка: Groq → Gemini → DeepSeek
     // Если картинка — пропускаем Groq (не принимает изображения) и DeepSeek
