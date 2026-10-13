@@ -2024,11 +2024,21 @@ private void postGuideResult(final String json) {
             addrBar.setLayoutParams(addrLp);
             topBar.addView(addrBar);
 
+            android.widget.Button macroListBtn = new android.widget.Button(this);
+            macroListBtn.setText("📚");
+            macroListBtn.setTextSize(16);
+            macroListBtn.setBackgroundColor(0x00000000);
+            macroListBtn.setTextColor(0xFF666666);
+            macroListBtn.setPadding(pad, 0, pad, 0);
+            macroListBtn.setMinWidth(0);
+            macroListBtn.setMinimumWidth(0);
+            topBar.addView(macroListBtn);
+
             macroBtn = new android.widget.Button(this);
-            macroBtn.setText("🎬 Записать макрос");
-            macroBtn.setTextSize(12);
-            macroBtn.setBackgroundColor(0xFFF0F0F0);
-            macroBtn.setTextColor(0xFF333333);
+            macroBtn.setText("🔴");
+            macroBtn.setTextSize(16);
+            macroBtn.setBackgroundColor(0x00000000);
+            macroBtn.setTextColor(0xFF666666);
             macroBtn.setPadding(pad, 0, pad, 0);
             macroBtn.setMinWidth(0);
             macroBtn.setMinimumWidth(0);
@@ -2101,13 +2111,15 @@ private void postGuideResult(final String json) {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             ));
 
+            int btnH = (int)(44 * getResources().getDisplayMetrics().density);
             android.widget.Button btnExtract = new android.widget.Button(this);
             btnExtract.setText("📋 Описание");
             btnExtract.setTextSize(13);
             btnExtract.setBackgroundColor(0xFF0A84FF);
             btnExtract.setTextColor(0xFFFFFFFF);
+            btnExtract.setPadding(pad, 0, pad, 0);
             android.widget.LinearLayout.LayoutParams bLp = new android.widget.LinearLayout.LayoutParams(
-                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f
+                0, btnH, 1.0f
             );
             btnExtract.setLayoutParams(bLp);
             bottomBar.addView(btnExtract);
@@ -2117,8 +2129,9 @@ private void postGuideResult(final String json) {
             btnPhoto.setTextSize(13);
             btnPhoto.setBackgroundColor(0xFF34C759);
             btnPhoto.setTextColor(0xFFFFFFFF);
+            btnPhoto.setPadding(pad, 0, pad, 0);
             android.widget.LinearLayout.LayoutParams bLpP = new android.widget.LinearLayout.LayoutParams(
-                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 0.6f
+                0, btnH, 0.55f
             );
             btnPhoto.setLayoutParams(bLpP);
             bottomBar.addView(btnPhoto);
@@ -2175,26 +2188,10 @@ private void postGuideResult(final String json) {
                 }
             });
 
-            // Долгий тап на macroBtn → удалить макрос
-            macroBtn.setOnLongClickListener(new android.view.View.OnLongClickListener() {
-                @Override public boolean onLongClick(android.view.View v) {
-                    try {
-                        String domain = getCurrentDomain();
-                        if (domain.isEmpty()) return true;
-                        String saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
-                        if (saved == null || saved.isEmpty()) return true;
-                        new android.app.AlertDialog.Builder(MainActivity.this)
-                            .setTitle("Удалить макрос?")
-                            .setMessage("Макрос для " + domain + " будет удалён.")
-                            .setPositiveButton("Удалить", new android.content.DialogInterface.OnClickListener() {
-                                @Override public void onClick(android.content.DialogInterface d, int w) {
-                                    deleteMacroForDomainImpl(getCurrentDomain());
-                                }
-                            })
-                            .setNegativeButton("Отмена", null)
-                            .show();
-                    } catch (Exception ignored) {}
-                    return true;
+            // Кнопка списка макросов 📚
+            macroListBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) {
+                    showMacroListDialog();
                 }
             });
 
@@ -2285,6 +2282,108 @@ private void postGuideResult(final String json) {
         if (domain == null || domain.isEmpty()) return;
         try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).apply(); } catch (Exception ignored) {}
         runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
+    }
+
+    private void showMacroListDialog() {
+        try {
+            android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+            b.setTitle("Макросы");
+            android.widget.LinearLayout ll = new android.widget.LinearLayout(this);
+            ll.setOrientation(android.widget.LinearLayout.VERTICAL);
+            int pad = (int)(12 * getResources().getDisplayMetrics().density);
+            ll.setPadding(pad, pad, pad, pad);
+            android.widget.ScrollView sv = new android.widget.ScrollView(this);
+            sv.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                (int)(400 * getResources().getDisplayMetrics().density)
+            ));
+
+            java.util.Map<String,?> all = getSharedPreferences("oni_macros", MODE_PRIVATE).getAll();
+            String currentDomain = getCurrentDomain();
+            if(all.isEmpty()){
+                android.widget.TextView tv = new android.widget.TextView(this);
+                tv.setText("Нет записанных макросов.\nОткрой сайт → 🔴 → кликни нужные места.");
+                tv.setTextSize(14);
+                ll.addView(tv);
+            } else {
+                for(final java.util.Map.Entry<String,?> e : all.entrySet()){
+                    final String key = e.getKey();
+                    if(!key.startsWith("macro_")) continue;
+                    final String domain = key.substring(6);
+                    int cnt = 0;
+                    try { cnt = new org.json.JSONArray(String.valueOf(e.getValue())).length(); } catch (Exception ignored) {}
+                    final int _cnt = cnt;
+
+                    android.widget.LinearLayout row = new android.widget.LinearLayout(this);
+                    row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+                    row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                    android.widget.LinearLayout.LayoutParams rlp = new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    );
+                    rlp.bottomMargin = pad;
+                    row.setLayoutParams(rlp);
+
+                    android.widget.TextView tv = new android.widget.TextView(this);
+                    tv.setText(domain + " · " + _cnt + " шаг.");
+                    tv.setTextSize(15);
+                    android.widget.LinearLayout.LayoutParams tlp = new android.widget.LinearLayout.LayoutParams(
+                        0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f
+                    );
+                    tv.setLayoutParams(tlp);
+                    row.addView(tv);
+
+                    android.widget.Button playBtn = new android.widget.Button(this);
+                    playBtn.setText("▶");
+                    playBtn.setTextSize(16);
+                    playBtn.setBackgroundColor(0xFF34C759);
+                    playBtn.setTextColor(0xFFFFFFFF);
+                    playBtn.setMinWidth(0);
+                    playBtn.setMinimumWidth(0);
+                    playBtn.setPadding(pad, 0, pad, 0);
+                    playBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                        @Override public void onClick(android.view.View v) {
+                            try {
+                                if(productWebView == null) return;
+                                String saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
+                                if(saved == null || saved.isEmpty()) return;
+                                productWebView.evaluateJavascript("window.__oniMacroPlay&&window.__oniMacroPlay(" + org.json.JSONObject.quote(saved) + ");", null);
+                            } catch (Exception ignored) {}
+                        }
+                    });
+                    row.addView(playBtn);
+
+                    android.widget.Button delBtn = new android.widget.Button(this);
+                    delBtn.setText("🗑");
+                    delBtn.setTextSize(16);
+                    delBtn.setBackgroundColor(0xFFFF3B30);
+                    delBtn.setTextColor(0xFFFFFFFF);
+                    delBtn.setMinWidth(0);
+                    delBtn.setMinimumWidth(0);
+                    delBtn.setPadding(pad, 0, pad, 0);
+                    android.widget.LinearLayout.LayoutParams dlp = new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    );
+                    dlp.leftMargin = pad / 2;
+                    delBtn.setLayoutParams(dlp);
+                    delBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                        @Override public void onClick(android.view.View v) {
+                            try {
+                                getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).apply();
+                                ((android.view.ViewGroup)v.getParent().getParent()).removeView((android.view.View)v.getParent());
+                            } catch (Exception ignored) {}
+                        }
+                    });
+                    row.addView(delBtn);
+                    ll.addView(row);
+                }
+            }
+            sv.addView(ll);
+            b.setView(sv);
+            b.setPositiveButton("Закрыть", null);
+            b.show();
+        } catch (Exception ignored) {}
     }
 
     private String getCurrentDomain() {
