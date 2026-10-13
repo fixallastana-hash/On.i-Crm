@@ -64,6 +64,9 @@ public class MainActivity extends Activity {
     private Uri chatCameraUri;
     private int pendingChatCameraMode = 0;
     private WebView printWebView;
+    private WebView productWebView = null;
+    private android.widget.FrameLayout productOverlay = null;
+    private final java.util.Stack<String> productUrlHistory = new java.util.Stack<>();
     private String pendingSaveBase64;
     private String pendingSaveName;
     private final java.util.concurrent.ExecutorService kaspiExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -1890,7 +1893,269 @@ private void postGuideResult(final String json) {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void openProductWebView(final String url) {
+            if (url == null || url.trim().isEmpty()) return;
+            runOnUiThread(new Runnable() { public void run() {
+                try { showProductWebView(url.trim()); } catch (Exception e) {
+                    try { android.util.Log.e("On.i CRM", "openProductWebView failed", e); } catch (Exception ignored) {}
+                }
+            }});
+        }
     }
+
+    // ============ PRODUCT WEBVIEW OVERLAY ============
+    private void showProductWebView(final String startUrl) {
+        if (productOverlay != null) return;
+        try {
+            android.view.ViewGroup root = (android.view.ViewGroup) webView.getParent();
+            if (root == null) return;
+
+            productOverlay = new android.widget.FrameLayout(this);
+            productOverlay.setBackgroundColor(0xFFF5F5F5);
+            productOverlay.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+
+            android.widget.LinearLayout container = new android.widget.LinearLayout(this);
+            container.setOrientation(android.widget.LinearLayout.VERTICAL);
+            container.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+
+            // Верхняя панель: ← [адресная строка] ✕
+            android.widget.LinearLayout topBar = new android.widget.LinearLayout(this);
+            topBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            topBar.setBackgroundColor(0xFFFFFFFF);
+            topBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            int pad = (int)(6 * getResources().getDisplayMetrics().density);
+            topBar.setPadding(pad, pad, pad, pad);
+            topBar.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+
+            android.widget.Button btnBack = new android.widget.Button(this);
+            btnBack.setText("←");
+            btnBack.setTextSize(20);
+            btnBack.setBackgroundColor(0x00000000);
+            btnBack.setTextColor(0xFF0A84FF);
+            btnBack.setPadding(pad, 0, pad, 0);
+            btnBack.setMinWidth(0);
+            btnBack.setMinimumWidth(0);
+            topBar.addView(btnBack);
+
+            final android.widget.EditText addrBar = new android.widget.EditText(this);
+            addrBar.setSingleLine(true);
+            addrBar.setHint("URL или поисковый запрос");
+            addrBar.setTextSize(13);
+            addrBar.setTextColor(0xFF333333);
+            addrBar.setBackgroundColor(0xFFF4F4F4);
+            addrBar.setPadding(pad * 3, pad * 2, pad * 3, pad * 2);
+            addrBar.setInputType(android.text.InputType.TYPE_TEXT_VARIATION_URI);
+            addrBar.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_GO);
+            android.widget.LinearLayout.LayoutParams addrLp = new android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f
+            );
+            addrBar.setLayoutParams(addrLp);
+            topBar.addView(addrBar);
+
+            android.widget.Button btnClose = new android.widget.Button(this);
+            btnClose.setText("✕");
+            btnClose.setTextSize(18);
+            btnClose.setBackgroundColor(0x00000000);
+            btnClose.setTextColor(0xFF666666);
+            btnClose.setPadding(pad, 0, pad, 0);
+            btnClose.setMinWidth(0);
+            btnClose.setMinimumWidth(0);
+            topBar.addView(btnClose);
+
+            // WebView
+            productWebView = new WebView(this);
+            android.widget.LinearLayout.LayoutParams wvLp = new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                0, 1.0f
+            );
+            productWebView.setLayoutParams(wvLp);
+
+            WebSettings ws = productWebView.getSettings();
+            ws.setJavaScriptEnabled(true);
+            ws.setDomStorageEnabled(true);
+            ws.setLoadWithOverviewMode(true);
+            ws.setUseWideViewPort(true);
+            ws.setBuiltInZoomControls(true);
+            ws.setDisplayZoomControls(false);
+            String ua = ws.getUserAgentString();
+            if (ua != null) {
+                ws.setUserAgentString(ua.replace("; wv", "").replaceAll("Version/\\d+\\.\\d+\\s*", ""));
+            }
+            CookieManager cm = CookieManager.getInstance();
+            cm.setAcceptCookie(true);
+            cm.setAcceptThirdPartyCookies(productWebView, true);
+
+            productWebView.setWebViewClient(new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    return false;
+                }
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    try {
+                        if (url != null && !url.isEmpty()) {
+                            if (productUrlHistory.isEmpty() || !productUrlHistory.peek().equals(url)) {
+                                productUrlHistory.push(url);
+                            }
+                            if (!addrBar.hasFocus()) {
+                                addrBar.setText(url);
+                            }
+                        }
+                        productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
+                    } catch (Exception ignored) {}
+                }
+            });
+            productWebView.setWebChromeClient(new WebChromeClient());
+            productWebView.addJavascriptInterface(new ProductWV(), "AndroidWV");
+
+            // Нижняя панель: 📋 Взять описание
+            android.widget.LinearLayout bottomBar = new android.widget.LinearLayout(this);
+            bottomBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            bottomBar.setBackgroundColor(0xFFFFFFFF);
+            bottomBar.setPadding(pad, pad, pad, pad);
+            bottomBar.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+
+            android.widget.Button btnExtract = new android.widget.Button(this);
+            btnExtract.setText("📋 Взять описание со страницы");
+            btnExtract.setTextSize(13);
+            btnExtract.setBackgroundColor(0xFF0A84FF);
+            btnExtract.setTextColor(0xFFFFFFFF);
+            android.widget.LinearLayout.LayoutParams bLp = new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            btnExtract.setLayoutParams(bLp);
+            bottomBar.addView(btnExtract);
+
+            container.addView(topBar);
+            container.addView(productWebView);
+            container.addView(bottomBar);
+            productOverlay.addView(container);
+            root.addView(productOverlay);
+
+            // Обработчики
+            btnClose.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) { closeProductWebView(); }
+            });
+            btnBack.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) {
+                    if (productWebView != null && productWebView.canGoBack()) {
+                        productWebView.goBack();
+                    } else {
+                        closeProductWebView();
+                    }
+                }
+            });
+            btnExtract.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) {
+                    if (productWebView != null) {
+                        productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS_MANUAL, null);
+                    }
+                }
+            });
+
+            // Адресная строка: Enter → load
+            addrBar.setOnEditorActionListener(new android.widget.TextView.OnEditorActionListener() {
+                @Override
+                public boolean onEditorAction(android.widget.TextView v, int actionId, android.view.KeyEvent e) {
+                    String raw = addrBar.getText().toString().trim();
+                    if (raw.isEmpty()) return true;
+                    String target;
+                    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+                        target = raw;
+                    } else if (raw.contains(" ") || !raw.contains(".")) {
+                        try { target = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(raw, "UTF-8"); }
+                        catch (Exception ex) { target = "https://www.google.com/search?q=" + raw; }
+                    } else {
+                        target = "https://" + raw;
+                    }
+                    try { productWebView.loadUrl(target); } catch (Exception ignored) {}
+                    return true;
+                }
+            });
+
+            productWebView.loadUrl(startUrl);
+        } catch (Exception e) {
+            try { android.util.Log.e("On.i CRM", "showProductWebView failed", e); } catch (Exception ignored) {}
+            closeProductWebView();
+        }
+    }
+
+    private void closeProductWebView() {
+        try {
+            if (productOverlay != null) {
+                android.view.ViewGroup parent = (android.view.ViewGroup) productOverlay.getParent();
+                if (parent != null) parent.removeView(productOverlay);
+                productOverlay = null;
+            }
+            if (productWebView != null) {
+                productWebView.stopLoading();
+                productWebView.loadUrl("about:blank");
+                productWebView.destroy();
+                productWebView = null;
+            }
+            productUrlHistory.clear();
+        } catch (Exception ignored) {}
+    }
+
+    private void sendExtractedToMain(final String text, final String url) {
+        runOnUiThread(new Runnable() { public void run() {
+            try {
+                if (webView == null) return;
+                String js = "(function(){try{"
+                    + "var t=" + org.json.JSONObject.quote(text == null ? "" : text) + ";"
+                    + "var u=" + org.json.JSONObject.quote(url == null ? "" : url) + ";"
+                    + "if(window.onProductWebViewExtracted){window.onProductWebViewExtracted(t,u);}"
+                    + "}catch(e){}})();";
+                webView.evaluateJavascript(js, null);
+            } catch (Exception ignored) {}
+        }});
+    }
+
+    private final class ProductWV {
+        @JavascriptInterface
+        public void onExtracted(String text, String url) {
+            if (text == null) text = "";
+            text = text.trim();
+            if (text.isEmpty() && (url == null || url.isEmpty())) return;
+            sendExtractedToMain(text, url);
+        }
+        @JavascriptInterface
+        public void close() {
+            runOnUiThread(new Runnable() { public void run() { closeProductWebView(); }});
+        }
+    }
+
+    private static final String PRODUCT_EXTRACT_JS =
+        "(function(){try{" +
+        "var pick=function(){var sels=['meta[name=\"description\"]','meta[property=\"og:description\"]','meta[property=\"twitter:description\"]','[itemprop=\"description\"]','.product-description','.product__description','.description','#description','.a5a5','.product-detail__description','article','main'];" +
+        "for(var i=0;i<sels.length;i++){var e=document.querySelector(sels[i]);if(!e)continue;var t=e.getAttribute&&e.getAttribute('content');if(!t)t=e.innerText||e.textContent;if(t){t=t.replace(/\\s+/g,' ').trim();if(t.length>=40)return t;}}" +
+        "var b=document.body?document.body.innerText:'';return b?b.replace(/\\s+/g,' ').trim().slice(0,5000):'';};" +
+        "var t=pick();if(window.AndroidWV&&window.AndroidWV.onExtracted){window.AndroidWV.onExtracted(t,location.href);}" +
+        "}catch(e){}})();";
+
+    private static final String PRODUCT_EXTRACT_JS_MANUAL =
+        "(function(){try{" +
+        "var pick=function(){var sels=['meta[name=\"description\"]','meta[property=\"og:description\"]','meta[property=\"twitter:description\"]','[itemprop=\"description\"]','.product-description','.product__description','.description','#description','.a5a5','.product-detail__description','article','main'];" +
+        "for(var i=0;i<sels.length;i++){var e=document.querySelector(sels[i]);if(!e)continue;var t=e.getAttribute&&e.getAttribute('content');if(!t)t=e.innerText||e.textContent;if(t){t=t.replace(/\\s+/g,' ').trim();if(t.length>=20)return t;}}" +
+        "var b=document.body?document.body.innerText:'';return b?b.replace(/\\s+/g,' ').trim().slice(0,5000):'';};" +
+        "var t=pick();if(window.AndroidWV&&window.AndroidWV.onExtracted){window.AndroidWV.onExtracted(t,location.href);}" +
+        "}catch(e){}})();";
 
     private void launchFileChooser(WebChromeClient.FileChooserParams params) {
         boolean wantsImage = false;
@@ -2843,6 +3108,7 @@ private void injectGuideChat() {
     }
 
     @Override public void onBackPressed() {
+        if (productOverlay != null) { closeProductWebView(); return; }
         if (webView == null) { super.onBackPressed(); return; }
         webView.evaluateJavascript("(function(){try{return !!(window.onAndroidBack && window.onAndroidBack());}catch(e){return false;}})();", value -> {
             if ("false".equals(value) || "null".equals(value)) MainActivity.super.onBackPressed();
@@ -2850,6 +3116,7 @@ private void injectGuideChat() {
     }
 
     @Override protected void onDestroy() {
+        try { closeProductWebView(); } catch (Exception ignored) {}
         if (printWebView != null) { printWebView.stopLoading(); printWebView.destroy(); printWebView = null; }
         if (webView != null) { webView.stopLoading(); webView.destroy(); }
         kaspiExecutor.shutdownNow();
