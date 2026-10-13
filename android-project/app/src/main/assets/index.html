@@ -6115,36 +6115,23 @@ window.onProductWebViewExtracted = function(descText, specsText, sourceUrl){
   }catch(e){ console.warn('[wv] extract failed', e); }
 };
 
-window.onProductPhotosExtracted = function(photosJson){
+window.onProductPhotosDownloaded = function(photosJson){
   try{
     var arr = [];
     try{ arr = JSON.parse(photosJson||'[]'); }catch(e){ arr = []; }
-    if(!Array.isArray(arr) || !arr.length) return;
-    var photos = (window._oniPhotoQueue = window._oniPhotoQueue || []);
-    var added = 0;
-    for(var i=0;i<arr.length;i++){
-      var u = String(arr[i]||'');
-      if(!u || u.indexOf('data:') === 0) continue;
-      if(photos.indexOf(u) >= 0) continue;
-      photos.push(u);
-      added++;
-      if(added >= 20) break;
-    }
-    if(!added){
-      var st = document.getElementById('name-lookup-status');
-      if(st) st.textContent = 'Нет новых фото на странице';
+    if(!Array.isArray(arr) || !arr.length){
+      var st0 = document.getElementById('name-lookup-status');
+      if(st0) st0.textContent = 'Фото не загрузились';
       return;
     }
-    // Пытаемся найти функцию добавления в галерею карточки
     if(typeof window.__oniAddExternalPhotos === 'function'){
-      window.__oniAddExternalPhotos(photos);
+      window.__oniAddExternalPhotos(arr);
     } else {
-      // Fallback: показать сколько найдено
-      var st = document.getElementById('name-lookup-status');
-      if(st) st.textContent = '✓ Найдено фото: ' + added + ' (нужно подтверждение в карточке)';
+      var st1 = document.getElementById('name-lookup-status');
+      if(st1) st1.textContent = 'Карточка товара не активна';
     }
-  }catch(e){ console.warn('[wv] photos failed', e); }
-};
+  }catch(e){ console.warn('[wv] photos apply failed', e); }
+};;
 
 function renderSearchLinks(name){
   var box=document.getElementById('f-search-links');
@@ -6229,6 +6216,25 @@ function openProductModal(id,options={}){
   document.getElementById('f-name').addEventListener('input',()=>{ renderSearchLinks(document.getElementById('f-name').value); if(window._lookupCategoryAuto){const c=document.getElementById('f-category');if(c)c.value='';window._lookupCategoryAuto=false;} if(window._lookupDescriptionAuto){const d=document.getElementById('f-description');if(d)d.value='';window._lookupDescriptionAuto=false;} });
   document.getElementById('f-category-add').onclick=async()=>{ const input=document.getElementById('f-category'); const name=input.value.trim(); if(!name){showToast('Введите название категории');return;} const exists=products.some(p=>p.category&&String(p.category).trim().toLowerCase()===name.toLowerCase()); if(exists){input.value=products.find(p=>p.category&&String(p.category).trim().toLowerCase()===name.toLowerCase()).category; showToast('Категория уже есть'); return;} products.push({id:uid(),sku:'__CAT__'+uid().slice(0,8),name:'',category:name,unit:'шт',qty:0,minStock:0,price:0,cost:0,isCategoryPlaceholder:true}); await persist('products'); input.value=name; const dl=document.getElementById('f-category-list'); if(dl){const o=document.createElement('option');o.value=name;dl.appendChild(o);} showToast('Категория добавлена'); };
   const preview=document.getElementById('f-photo-preview'), list=document.getElementById('f-photo-gallery-list');
+window.__oniAddExternalPhotos = function(list0){
+  try{
+    if(!Array.isArray(list0)) return;
+    var added = 0;
+    for(var i=0;i<list0.length;i++){
+      var u = String(list0[i]||'');
+      if(!u) continue;
+      if(photos.indexOf(u) >= 0) continue;
+      photos.push(u);
+      if(!mainPhoto) mainPhoto = u;
+      added++;
+    }
+    if(added > 0){
+      drawPhotos();
+      var st = document.getElementById('name-lookup-status');
+      if(st) st.textContent = '✓ Добавлено фото: ' + added;
+    }
+  }catch(e){ console.warn('[wv] addPhotos', e); }
+};
   const drawPhotos=()=>{preview.innerHTML=mainPhoto?`<img src="${escapeHtml(mainPhoto)}" alt="">`:'Фото';preview.onclick=mainPhoto?()=>openProductPhotoLightbox(mainPhoto,editing?.name||'Фото товара',photos,Math.max(0,photos.indexOf(mainPhoto))):null;list.innerHTML=photos.map((src,i)=>`<button type="button" class="product-photo-thumb ${src===mainPhoto?'main':''}" data-i="${i}" title="${src===mainPhoto?'Главное фото — нажмите для увеличения':'Сделать главным'}"><img src="${escapeHtml(src)}" alt=""><span class="photo-delete" data-del-photo="${i}" aria-label="Удалить фото">×</span></button>`).join('');list.querySelectorAll('.product-photo-thumb').forEach(b=>b.onclick=e=>{if(e.target.closest('[data-del-photo]'))return;const i=Number(b.dataset.i),src=photos[i];if(e.target.closest('img')){e.preventDefault();e.stopPropagation();openProductPhotoLightbox(src,editing?.name||'Фото товара',photos,i);return;}mainPhoto=src;drawPhotos();});list.querySelectorAll('[data-del-photo]').forEach(b=>b.onclick=e=>{e.stopPropagation();const i=Number(b.dataset.delPhoto);if(!confirm('Удалить это фото?'))return;const was=photos[i]===mainPhoto;photos.splice(i,1);if(was)mainPhoto=photos[0]||'';drawPhotos();});};
   drawPhotos();
   let visionTriggered=false;const addFiles=async files=>{for(const file of [...(files||[])]){if(!file.type.startsWith('image/'))continue;const src=await readOriginalProductImage(file);if(!src)continue;photos.push(src);if(!mainPhoto)mainPhoto=src;drawPhotos();const st=document.getElementById('name-lookup-status');let visionStarted=false;try{if(!visionTriggered&&window.Android&&typeof window.Android.recognizeProductPhoto==='function'){visionStarted=true;visionTriggered=true;if(st)st.textContent='Читаю текст с фото…';window.Android.recognizeProductPhoto(src,'eng+rus');}}catch(e){console.error('product photo recognition failed',e);}if(!visionStarted&&!visionTriggered&&st)st.textContent='Фото добавлено. Распознавание ИИ недоступно в этой сборке.';}};

@@ -2441,6 +2441,70 @@ private void postGuideResult(final String json) {
         } catch (Exception ignored) {}
     }
 
+    private void downloadAndSendPhotos(final String photosJson) {
+        new Thread(new Runnable() { public void run() {
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(photosJson == null ? "[]" : photosJson);
+                final org.json.JSONArray out = new org.json.JSONArray();
+                int maxCount = Math.min(arr.length(), 15);
+                for (int i = 0; i < maxCount; i++) {
+                    String url = arr.optString(i, "");
+                    if (url.isEmpty()) continue;
+                    try {
+                        String dataUrl = downloadAndCompressPhoto(url);
+                        if (dataUrl != null && !dataUrl.isEmpty()) out.put(dataUrl);
+                    } catch (Exception ignored) {}
+                }
+                if (out.length() == 0) return;
+                final String json = out.toString();
+                runOnUiThread(new Runnable() { public void run() {
+                    try {
+                        if (webView == null) return;
+                        String js = "(function(){try{var a=" + org.json.JSONObject.quote(json)
+                            + ";if(window.onProductPhotosDownloaded){window.onProductPhotosDownloaded(a);}}catch(e){}})();";
+                        webView.evaluateJavascript(js, null);
+                    } catch (Exception ignored) {}
+                }});
+            } catch (Exception ignored) {}
+        }}).start();
+    }
+
+    private String downloadAndCompressPhoto(String url) {
+        try {
+            java.net.URL u = new java.net.URL(url);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) u.openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(15000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) { conn.disconnect(); return null; }
+            java.io.InputStream in = conn.getInputStream();
+            android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeStream(in);
+            in.close();
+            conn.disconnect();
+            if (bmp == null) return null;
+            int maxSide = 800;
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            if (w > maxSide || h > maxSide) {
+                float scale = (float) maxSide / Math.max(w, h);
+                w = Math.round(w * scale);
+                h = Math.round(h * scale);
+                android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true);
+                if (scaled != bmp) bmp.recycle();
+                bmp = scaled;
+            }
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos);
+            bmp.recycle();
+            byte[] bytes = bos.toByteArray();
+            String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+            return "data:image/jpeg;base64," + b64;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private void sendPhotosToMain(final String photosJson) {
         runOnUiThread(new Runnable() { public void run() {
             try {
@@ -2500,12 +2564,13 @@ private void postGuideResult(final String json) {
 
         @JavascriptInterface
         public void onPhotosExtracted(String photosJson) {
-            sendPhotosToMain(photosJson);
+            downloadAndSendPhotos(photosJson);
         }
     }
 
     private static final String PRODUCT_EXTRACT_JS =
         "(function(){try{" +
+        "var __st=document.createElement('style');__st.textContent='[class*=\"smart-banner\"],[class*=\"app-banner\"],[class*=\"appBanner\"],[class*=\"open-in-app\"],[class*=\"openInApp\"],[class*=\"deep-link\"],[class*=\"deeplink\"],[class*=\"install-banner\"],[class*=\"installApp\"],[class*=\"mobile-app\"],[id*=\"smartBanner\"],[id*=\"appBanner\"],a[href^=\"kaspi://\"],[data-test=\"smart-banner\"],[data-test=\"app-banner\"]{display:none !important;height:0 !important;max-height:0 !important;}';document.head&&document.head.appendChild(__st);" +
         "if(window.__oniExtractRunning)return;window.__oniExtractRunning=true;" +
         "var result={desc:'',specs:''};" +
         "function cleanText(t){if(!t)return '';return String(t).replace(/\\s+/g,' ').trim();}" +
