@@ -315,7 +315,7 @@ exports.aiProxy = onCall(
     const errors = [];
     const mode = (req.data && req.data.mode) || "auto";
     const isReasoning = mode === "reasoning";
-    const FORCED_LIST = ["groq","cerebras","openrouter","mistral","gemini","deepseek","cloudflare","nemotron-ultra","qwen-coder","magistral"];
+    const FORCED_LIST = ["groq","cerebras","openrouter","mistral","gemini","deepseek","cloudflare","nemotron-ultra","qwen-coder"];
     const isForced = FORCED_LIST.indexOf(mode) >= 0;
     let reasoning = null;
 
@@ -344,13 +344,13 @@ exports.aiProxy = onCall(
 
       if (!text) {
         try {
-          const g = await callMistral(prompt, "magistral-small-latest");
+          const g = await callCloudflare(prompt, "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b");
           if (g.text && g.text.trim()) {
             text = g.text;
-            usedProvider = "mistral";
+            usedProvider = "cloudflare";
             usedModel = g.model;
           }
-        } catch (e) { errors.push("magistral-reasoning: " + (e.message || e)); }
+        } catch (e) { errors.push("cf-reasoning: " + (e.message || e)); }
       }
 
       if (!text) {
@@ -383,7 +383,6 @@ exports.aiProxy = onCall(
         else if (mode === "cloudflare") g = await callCloudflare(prompt);
         else if (mode === "nemotron-ultra") g = await callOpenRouter(prompt, "nvidia/nemotron-3-ultra-550b-a55b:free");
         else if (mode === "qwen-coder")     g = await callCloudflare(prompt, "@cf/qwen/qwen2.5-coder-32b-instruct");
-        else if (mode === "magistral")      g = await callMistral(prompt, "magistral-small-latest");
         if (g && g.text && g.text.trim()) {
           return {
             ok: true,
