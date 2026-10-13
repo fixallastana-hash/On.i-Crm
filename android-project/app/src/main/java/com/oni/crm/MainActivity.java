@@ -1908,63 +1908,6 @@ private void postGuideResult(final String json) {
             }});
         }
 
-        @JavascriptInterface
-        public void startMacroRecording() {
-            macroRecording = true;
-            macroSteps.clear();
-            runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
-        }
-
-        @JavascriptInterface
-        public void recordMacroStep(String stepJson) {
-            if (!macroRecording) return;
-            if (stepJson == null || stepJson.isEmpty()) return;
-            macroSteps.add(stepJson);
-            runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
-        }
-
-        @JavascriptInterface
-        public void stopMacroRecording() {
-            if (!macroRecording) return;
-            macroRecording = false;
-            try {
-                String domain = getCurrentDomain();
-                if (domain != null && !domain.isEmpty() && !macroSteps.isEmpty()) {
-                    org.json.JSONArray arr = new org.json.JSONArray();
-                    for (String s : macroSteps) arr.put(new org.json.JSONObject(s));
-                    getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("macro_" + domain, arr.toString()).apply();
-                }
-            } catch (Exception ignored) {}
-            macroSteps.clear();
-            runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
-        }
-
-        @JavascriptInterface
-        public void cancelMacroRecording() {
-            macroRecording = false;
-            macroSteps.clear();
-            runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
-        }
-
-        @JavascriptInterface
-        public String getMacroForDomain(String domain) {
-            if (domain == null || domain.isEmpty()) return "";
-            try { return getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, ""); }
-            catch (Exception e) { return ""; }
-        }
-
-        @JavascriptInterface
-        public void deleteMacroForDomain(String domain) {
-            if (domain == null || domain.isEmpty()) return;
-            try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).apply(); } catch (Exception ignored) {}
-            runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
-        }
-
-        @JavascriptInterface
-        public boolean isMacroRecording() { return macroRecording; }
-
-        @JavascriptInterface
-        public int getMacroStepCount() { return macroSteps.size(); }
     }
 
     // ============ PRODUCT WEBVIEW OVERLAY ============
