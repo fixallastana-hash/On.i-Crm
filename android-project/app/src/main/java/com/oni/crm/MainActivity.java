@@ -2760,26 +2760,35 @@ private void postGuideResult(final String json) {
 
     private static final String PRODUCT_EXTRACT_JS_MANUAL =
         "(function(){try{" +
-        // 1. Если юзер что-то выделил — берём выделенное
+        // 1. Выделение юзера — берём его
         "var sel=window.getSelection?String(window.getSelection()).trim():'';" +
         "if(sel.length>=30){" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(sel.replace(/\\s+/g,' '),'',location.href);" +
         "return;}" +
-        // 2. Проверяем не Gemini/Perplexity/чат ли это
+        // 2. AI-чаты (Gemini / ChatGPT / Perplexity / Claude / DeepSeek)
         "var host=(location.hostname||'').toLowerCase();" +
         "var isChat=host.indexOf('gemini.google.com')>=0||host.indexOf('chatgpt.com')>=0||host.indexOf('perplexity.ai')>=0||host.indexOf('claude.ai')>=0||host.indexOf('chat.deepseek.com')>=0;" +
         "if(isChat){" +
-        "var msgs=document.querySelectorAll('.markdown,.message-content,[class*=\"prose\"],[class*=\"response\"],[class*=\"answer\"]');" +
+        // Ищем ТОЛЬКО контейнер ответа (не запрос)
+        "var respSel='model-response,message-content,.markdown,.model-response-text,[class*=\"response-content\"],[class*=\"prose\"],[class*=\"answer\"]';" +
+        "var msgs=document.querySelectorAll(respSel);" +
         "if(msgs.length){" +
-        "var txt=String(msgs[msgs.length-1].innerText||msgs[msgs.length-1].textContent||'').trim();" +
+        "var last=msgs[msgs.length-1];" +
+        "var clone=last.cloneNode(true);" +
+        // Вырезаем кнопки/футеры/источники внутри ответа
+        "clone.querySelectorAll('button,[role=\"button\"],.response-footer,.sources-list,.citation,.response-container-footer').forEach(function(e){e.remove();});" +
+        "var txt=String(clone.innerText||clone.textContent||'').trim();" +
         "if(txt.length>=30){txt=txt.replace(/\\s+/g,' ');" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(txt,'',location.href);" +
         "return;}}" +
-        "var whole=(document.body&&document.body.innerText?document.body.innerText:'').trim();" +
-        "if(whole.length>=50){whole=whole.replace(/\\s+/g,' ').slice(0,8000);" +
+        // Fallback: клон body, из которого выкинуты запросы и UI
+        "var body=document.body.cloneNode(true);" +
+        "body.querySelectorAll('user-query,[class*=\"user-query\"],[class*=\"user-message\"],[class*=\"query-text\"],textarea,input,button,nav,header,footer,[role=\"navigation\"],[role=\"banner\"]').forEach(function(e){e.remove();});" +
+        "var whole=String(body.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "if(whole.length>=50){whole=whole.slice(0,8000);" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(whole,'',location.href);" +
         "return;}}" +
-        // 3. Kaspi и подобные — ищем табы
+        // 3. Kaspi и подобные — табы
         "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
         "if(!tabs||!tabs.length){var c=[];" +
         "document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"],[class*=\"harakteristik\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\s+/g,' ').trim();if(t&&t.length>=60)c.push(t);});" +
