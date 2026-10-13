@@ -2357,6 +2357,8 @@ private void postGuideResult(final String json) {
     }
 
     private volatile boolean statusDesc = false;
+    private volatile boolean statusDescTried = false;
+    private volatile boolean statusSpecsTried = false;
     private volatile boolean statusSpecs = false;
     private volatile int statusPhotosCur = 0;
     private volatile int statusPhotosTotal = 0;
@@ -2364,6 +2366,8 @@ private void postGuideResult(final String json) {
 
     private void resetStatusBar() {
         statusDesc = false;
+        statusDescTried = false;
+        statusSpecsTried = false;
         statusSpecs = false;
         statusPhotosCur = 0;
         statusPhotosTotal = 0;
@@ -2375,9 +2379,9 @@ private void postGuideResult(final String json) {
         try {
             if (macroStatusBar == null) return;
             StringBuilder sb = new StringBuilder();
-            sb.append(statusDesc ? "✓ Описание" : "○ Описание");
+            sb.append(statusDesc ? "✓ Описание" : (statusDescTried ? "⚠ Описание" : "○ Описание"));
             sb.append("   ");
-            sb.append(statusSpecs ? "✓ Характеристики" : "○ Характеристики");
+            sb.append(statusSpecs ? "✓ Характеристики" : (statusSpecsTried ? "⚠ Характеристики" : "○ Характеристики"));
             sb.append("   ");
             if (statusPhotosDone) sb.append("✓ Фото");
             else if (statusPhotosTotal > 0) sb.append("⏳ Фото (" + statusPhotosCur + "/" + statusPhotosTotal + ")");
@@ -2573,8 +2577,10 @@ private void postGuideResult(final String json) {
         @JavascriptInterface
         public void setStatus(final String step, final String state, final int count) {
             if ("desc".equals(step)) {
+                statusDescTried = true;
                 statusDesc = "ok".equals(state);
             } else if ("specs".equals(step)) {
+                statusSpecsTried = true;
                 statusSpecs = "ok".equals(state);
             } else if ("photos".equals(step)) {
                 if ("start".equals(state)) {
@@ -2688,7 +2694,7 @@ private void postGuideResult(final String json) {
         "for(var i=0;i<btns.length;i++){" +
         "var t=cleanText(btns[i].innerText).toLowerCase();" +
         "if(!t)continue;" +
-        "if(t==='смотреть все'||t==='показать все'||t==='показать всё'||t==='показать полностью'||t==='все характеристики'||t==='показать ещё'||t==='ещё'){" +
+        "var __exp=['показать','развернуть','раскрыть','ещё','еще','подробнее','полностью','читать','далее','смотреть','все характеристики','все отзывы','показать все','показать больше','показать полностью','показать ещё','развернуть описание','узнать больше','подробная информация','полная информация','детальная информация','продолжить чтение','смотреть фото','все фото','ещё фото','открыть полностью','көрсету','толық','толығырақ','ашу','барлығын көрсету','толық ақпарат','жалғасы','оқу','show','more','expand','read','view','see more','see all','full','all','details','load more','continue','learn more'];var __ok=false;for(var __k=0;__k<__exp.length;__k++){if(t.indexOf(__exp[__k])>=0){__ok=true;break;}}if(__ok){" +
         "try{btns[i].click();expanded=true;}catch(e){}" +
         "}" +
         "}" +
@@ -2730,7 +2736,7 @@ private void postGuideResult(final String json) {
         "result.desc=collectDescription();" +
         "result.specs=collectSpecs();" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted){" +
-        "if(window.AndroidWV&&window.AndroidWV.setStatus){window.AndroidWV.setStatus('desc','ok',(result.desc||'').length);window.AndroidWV.setStatus('specs','ok',(result.specs||'').length);}window.AndroidWV.onExtracted(result.desc||'',result.specs||'',location.href);" +
+        "if(window.AndroidWV&&window.AndroidWV.setStatus){var _d=(result.desc||'').length;var _s=(result.specs||'').length;if(_d>50)window.AndroidWV.setStatus('desc','ok',_d);else window.AndroidWV.setStatus('desc','empty',0);if(_s>20)window.AndroidWV.setStatus('specs','ok',_s);else window.AndroidWV.setStatus('specs','empty',0);}window.AndroidWV.onExtracted(result.desc||'',result.specs||'',location.href);" +
         "}" +
         "window.__oniExtractRunning=false;" +
         "}" +
