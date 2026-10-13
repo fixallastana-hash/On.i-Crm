@@ -2112,7 +2112,10 @@ private void postGuideResult(final String json) {
                             }
                         }
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
+                        productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
+                        if (macroRecording) { productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null); }
+                        updateMacroUI();
                         if (macroRecording) {
                             productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
                         }
