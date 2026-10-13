@@ -6085,19 +6085,65 @@ window.openInWV = function(url){
   }catch(e){ console.warn('[wv] openInWV failed', e); }
 };
 
-window.onProductWebViewExtracted = function(text, sourceUrl){
+window.onProductWebViewExtracted = function(descText, specsText, sourceUrl){
   try{
     var desc = document.getElementById('f-description');
-    if(!desc) return;
-    var clean = String(text||'').replace(/\s+/g,' ').trim();
-    if(!clean || clean.length < 10) return;
-    var cur = String(desc.value||'').trim();
-    if(cur && cur.indexOf(clean) >= 0) return;
-    desc.value = cur ? (cur + '\n\n' + clean) : clean;
-    window._lookupDescriptionAuto = true;
+    var purpose = document.getElementById('f-purpose');
+    var cleanDesc = String(descText||'').replace(/\s+/g,' ').trim();
+    var cleanSpecs = String(specsText||'').replace(/\s+/g,' ').trim();
+    if(cleanDesc && cleanDesc.length >= 10 && desc){
+      var cur = String(desc.value||'').trim();
+      if(!cur || cur.indexOf(cleanDesc) < 0){
+        desc.value = cur ? (cur + '\n\n' + cleanDesc) : cleanDesc;
+        window._lookupDescriptionAuto = true;
+      }
+    }
+    if(cleanSpecs && cleanSpecs.length >= 10 && purpose){
+      var curP = String(purpose.value||'').trim();
+      if(!curP || curP.indexOf(cleanSpecs) < 0){
+        purpose.value = curP ? (curP + '\n\n' + cleanSpecs) : cleanSpecs;
+      }
+    }
     var st = document.getElementById('name-lookup-status');
-    if(st){ st.textContent = '✓ Описание добавлено со страницы' + (sourceUrl ? (' (' + sourceUrl.split('/')[2] + ')') : ''); }
+    if(st){
+      var parts = [];
+      if(cleanDesc) parts.push('описание ' + cleanDesc.length + ' симв.');
+      if(cleanSpecs) parts.push('характеристики ' + cleanSpecs.length + ' симв.');
+      var host = sourceUrl ? sourceUrl.split('/')[2] : '';
+      st.textContent = parts.length ? ('✓ Загружено со страницы: ' + parts.join(', ') + (host ? ' (' + host + ')' : '')) : 'Страница пуста';
+    }
   }catch(e){ console.warn('[wv] extract failed', e); }
+};
+
+window.onProductPhotosExtracted = function(photosJson){
+  try{
+    var arr = [];
+    try{ arr = JSON.parse(photosJson||'[]'); }catch(e){ arr = []; }
+    if(!Array.isArray(arr) || !arr.length) return;
+    var photos = (window._oniPhotoQueue = window._oniPhotoQueue || []);
+    var added = 0;
+    for(var i=0;i<arr.length;i++){
+      var u = String(arr[i]||'');
+      if(!u || u.indexOf('data:') === 0) continue;
+      if(photos.indexOf(u) >= 0) continue;
+      photos.push(u);
+      added++;
+      if(added >= 20) break;
+    }
+    if(!added){
+      var st = document.getElementById('name-lookup-status');
+      if(st) st.textContent = 'Нет новых фото на странице';
+      return;
+    }
+    // Пытаемся найти функцию добавления в галерею карточки
+    if(typeof window.__oniAddExternalPhotos === 'function'){
+      window.__oniAddExternalPhotos(photos);
+    } else {
+      // Fallback: показать сколько найдено
+      var st = document.getElementById('name-lookup-status');
+      if(st) st.textContent = '✓ Найдено фото: ' + added + ' (нужно подтверждение в карточке)';
+    }
+  }catch(e){ console.warn('[wv] photos failed', e); }
 };
 
 function renderSearchLinks(name){
