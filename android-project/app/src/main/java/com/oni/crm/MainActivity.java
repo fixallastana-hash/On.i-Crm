@@ -2067,16 +2067,20 @@ private void postGuideResult(final String json) {
                             productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
                         }
                         updateMacroUI();
-                        // G4: авто-инжект textarea для Gemini
+                        // G4c: авто-инжект промпта в Gemini с ретраями
                         if (url != null && url.contains("gemini.google.com") && pendingGeminiQuery != null) {
                             final String q = pendingGeminiQuery;
                             pendingGeminiQuery = null;
-                            productWebView.postDelayed(new Runnable() { public void run() {
-                                try {
-                                    String js = "(function(){var ta=document.querySelector('textarea');if(!ta)return;ta.focus();ta.value=" + JSONObject.quote(q) + ";ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));})();";
-                                productWebView.evaluateJavascript(js, null);
-                                } catch (Exception ignored) {}
-                            }}, 2500);
+                            int[] delays = {3000, 5000, 7000, 9000, 11000, 13000};
+                            for (int _i = 0; _i < delays.length; _i++) {
+                                final int _d = delays[_i];
+                                productWebView.postDelayed(new Runnable() { public void run() {
+                                    try {
+                                        String js = "(function(){try{var qs=['rich-textarea .ql-editor','rich-textarea [contenteditable=\"true\"]','[contenteditable=\"true\"]','textarea'];var el=null;for(var i=0;i<qs.length;i++){el=document.querySelector(qs[i]);if(el)break;}if(!el){console.log(\"[On.i] Gemini: input not found yet\");return;}el.focus();var v=" + JSONObject.quote(q) + ";if(el.tagName===\"TEXTAREA\"){  var d=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,\"value\");  if(d&&d.set){d.set.call(el,v);}else{el.value=v;}}else{  try{el.innerHTML=\"\";document.execCommand(\"insertText\",false,v);}catch(e1){try{el.innerText=v;}catch(e2){el.textContent=v;}}}el.dispatchEvent(new Event(\"input\",{bubbles:true}));el.dispatchEvent(new Event(\"change\",{bubbles:true}));el.dispatchEvent(new KeyboardEvent(\"keyup\",{bubbles:true,key:\"a\"}));console.log(\"[On.i] Gemini: prompt injected len=\"+v.length);}catch(e){console.log(\"[On.i] Gemini inject error: \"+e.message);}})();";
+                                        productWebView.evaluateJavascript(js, null);
+                                    } catch (Exception ignored) {}
+                                }}, _d);
+                            }
                         }
                     } catch (Exception ignored) {}
                 }
