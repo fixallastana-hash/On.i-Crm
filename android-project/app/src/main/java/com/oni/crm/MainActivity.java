@@ -2024,6 +2024,16 @@ private void postGuideResult(final String json) {
             addrBar.setLayoutParams(addrLp);
             topBar.addView(addrBar);
 
+            macroBtn = new android.widget.Button(this);
+            macroBtn.setText("🎬 Записать макрос");
+            macroBtn.setTextSize(12);
+            macroBtn.setBackgroundColor(0xFFF0F0F0);
+            macroBtn.setTextColor(0xFF333333);
+            macroBtn.setPadding(pad, 0, pad, 0);
+            macroBtn.setMinWidth(0);
+            macroBtn.setMinimumWidth(0);
+            topBar.addView(macroBtn);
+
             android.widget.Button btnClose = new android.widget.Button(this);
             btnClose.setText("✕");
             btnClose.setTextSize(18);
@@ -2092,16 +2102,26 @@ private void postGuideResult(final String json) {
             ));
 
             android.widget.Button btnExtract = new android.widget.Button(this);
-            btnExtract.setText("📋 Взять описание со страницы");
+            btnExtract.setText("📋 Описание");
             btnExtract.setTextSize(13);
             btnExtract.setBackgroundColor(0xFF0A84FF);
             btnExtract.setTextColor(0xFFFFFFFF);
             android.widget.LinearLayout.LayoutParams bLp = new android.widget.LinearLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f
             );
             btnExtract.setLayoutParams(bLp);
             bottomBar.addView(btnExtract);
+
+            android.widget.Button btnPhoto = new android.widget.Button(this);
+            btnPhoto.setText("📷 Фото");
+            btnPhoto.setTextSize(13);
+            btnPhoto.setBackgroundColor(0xFF34C759);
+            btnPhoto.setTextColor(0xFFFFFFFF);
+            android.widget.LinearLayout.LayoutParams bLpP = new android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 0.6f
+            );
+            btnPhoto.setLayoutParams(bLpP);
+            bottomBar.addView(btnPhoto);
 
             container.addView(topBar);
             container.addView(productWebView);
@@ -2126,6 +2146,70 @@ private void postGuideResult(final String json) {
                 @Override public void onClick(android.view.View v) {
                     if (productWebView != null) {
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS_MANUAL, null);
+                    }
+                }
+            });
+
+            // Кнопка макроса
+            macroBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) {
+                    try {
+                        String domain = getCurrentDomain();
+                        if (macroRecording) {
+                            if (productWebView != null) productWebView.evaluateJavascript("window.__oniMacroStop&&window.__oniMacroStop();", null);
+                            stopMacroRecording();
+                        } else {
+                            String saved = "";
+                            if (!domain.isEmpty()) saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
+                            if (saved != null && !saved.isEmpty()) {
+                                // Запустить воспроизведение
+                                String js = "window.__oniMacroPlay&&window.__oniMacroPlay(" + org.json.JSONObject.quote(saved) + ");";
+                                if (productWebView != null) productWebView.evaluateJavascript(js, null);
+                            } else {
+                                // Начать запись
+                                startMacroRecording();
+                                if (productWebView != null) productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            });
+
+            // Долгий тап на macroBtn → удалить макрос
+            macroBtn.setOnLongClickListener(new android.view.View.OnLongClickListener() {
+                @Override public boolean onLongClick(android.view.View v) {
+                    try {
+                        String domain = getCurrentDomain();
+                        if (domain.isEmpty()) return true;
+                        String saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
+                        if (saved == null || saved.isEmpty()) return true;
+                        new android.app.AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Удалить макрос?")
+                            .setMessage("Макрос для " + domain + " будет удалён.")
+                            .setPositiveButton("Удалить", new android.content.DialogInterface.OnClickListener() {
+                                @Override public void onClick(android.content.DialogInterface d, int w) {
+                                    deleteMacroForDomain(getCurrentDomain());
+                                }
+                            })
+                            .setNegativeButton("Отмена", null)
+                            .show();
+                    } catch (Exception ignored) {}
+                    return true;
+                }
+            });
+
+            // Кнопка фото
+            btnPhoto.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) {
+                    if (productWebView != null) {
+                        productWebView.evaluateJavascript(
+                            "(function(){try{var imgs=[];var seen={};" +
+                            "document.querySelectorAll('img').forEach(function(i){" +
+                            "if(i.naturalWidth>=300&&i.naturalHeight>=300&&i.src&&i.src.indexOf('data:')!==0){" +
+                            "if(!seen[i.src]){seen[i.src]=1;imgs.push(i.src);}};" +
+                            "});" +
+                            "if(imgs.length){if(window.AndroidWV&&window.AndroidWV.onPhotosExtracted)window.AndroidWV.onPhotosExtracted(JSON.stringify(imgs));}" +
+                            "}catch(e){}})();", null);
                     }
                 }
             });
@@ -2212,6 +2296,19 @@ private void postGuideResult(final String json) {
         } catch (Exception ignored) {}
     }
 
+    private void sendPhotosToMain(final String photosJson) {
+        runOnUiThread(new Runnable() { public void run() {
+            try {
+                if (webView == null) return;
+                String js = "(function(){try{"
+                    + "var p=" + org.json.JSONObject.quote(photosJson == null ? "[]" : photosJson) + ";"
+                    + "if(window.onProductPhotosExtracted){window.onProductPhotosExtracted(p);}"
+                    + "}catch(e){}})();";
+                webView.evaluateJavascript(js, null);
+            } catch (Exception ignored) {}
+        }});
+    }
+
     private void sendExtractedToMain(final String text, final String url) {
         runOnUiThread(new Runnable() { public void run() {
             try {
@@ -2237,6 +2334,11 @@ private void postGuideResult(final String json) {
         @JavascriptInterface
         public void close() {
             runOnUiThread(new Runnable() { public void run() { closeProductWebView(); }});
+        }
+
+        @JavascriptInterface
+        public void onPhotosExtracted(String photosJson) {
+            sendPhotosToMain(photosJson);
         }
     }
 
