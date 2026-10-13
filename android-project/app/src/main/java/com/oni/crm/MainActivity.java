@@ -2309,6 +2309,21 @@ private void postGuideResult(final String json) {
         }});
     }
 
+    private void sendExtractedSeparate(final String desc, final String specs, final String url) {
+        runOnUiThread(new Runnable() { public void run() {
+            try {
+                if (webView == null) return;
+                String js = "(function(){try{"
+                    + "var d=" + org.json.JSONObject.quote(desc == null ? "" : desc) + ";"
+                    + "var s=" + org.json.JSONObject.quote(specs == null ? "" : specs) + ";"
+                    + "var u=" + org.json.JSONObject.quote(url == null ? "" : url) + ";"
+                    + "if(window.onProductWebViewExtracted){window.onProductWebViewExtracted(d,s,u);}"
+                    + "}catch(e){}})();";
+                webView.evaluateJavascript(js, null);
+            } catch (Exception ignored) {}
+        }});
+    }
+
     private void sendExtractedToMain(final String text, final String url) {
         runOnUiThread(new Runnable() { public void run() {
             try {
@@ -2325,11 +2340,13 @@ private void postGuideResult(final String json) {
 
     private final class ProductWV {
         @JavascriptInterface
-        public void onExtracted(String text, String url) {
-            if (text == null) text = "";
-            text = text.trim();
-            if (text.isEmpty() && (url == null || url.isEmpty())) return;
-            sendExtractedToMain(text, url);
+        public void onExtracted(String desc, String specs, String url) {
+            if (desc == null) desc = "";
+            if (specs == null) specs = "";
+            desc = desc.trim();
+            specs = specs.trim();
+            if (desc.isEmpty() && specs.isEmpty()) return;
+            sendExtractedSeparate(desc, specs, url);
         }
         @JavascriptInterface
         public void close() {
@@ -2344,36 +2361,92 @@ private void postGuideResult(final String json) {
 
     private static final String PRODUCT_EXTRACT_JS =
         "(function(){try{" +
-        "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
-        "if(!tabs||!tabs.length){var b=document.body?document.body.innerText:'';var t=b?b.replace(/\\s+/g,' ').trim().slice(0,5000):'';if(window.AndroidWV)window.AndroidWV.onExtracted(t,location.href);return;}" +
-        "var parts=[];var i=0;" +
-        "function nextTab(){if(i>=tabs.length){var full=parts.join('\\n\\n');if(full.length>50&&window.AndroidWV)window.AndroidWV.onExtracted(full,location.href);return;}" +
-        "try{tabs[i].click();}catch(e){}" +
+        "if(window.__oniExtractRunning)return;window.__oniExtractRunning=true;" +
+        "var result={desc:'',specs:''};" +
+        "function cleanText(t){if(!t)return '';return String(t).replace(/\\s+/g,' ').trim();}" +
+        "function tryExpandDescription(){" +
+        "var expanded=false;" +
+        "var btns=document.querySelectorAll('button,a,span,div[role=\"button\"]');" +
+        "for(var i=0;i<btns.length;i++){" +
+        "var t=cleanText(btns[i].innerText).toLowerCase();" +
+        "if(!t)continue;" +
+        "if(t==='смотреть все'||t==='показать все'||t==='показать всё'||t==='показать полностью'||t==='все характеристики'||t==='показать ещё'||t==='ещё'){" +
+        "try{btns[i].click();expanded=true;}catch(e){}" +
+        "}" +
+        "}" +
+        "return expanded;" +
+        "}" +
+        "function collectDescription(){" +
+        "var sels=['[class*=\"item__description\"]','[class*=\"product-description\"]','[class*=\"description-text\"]','[itemprop=\"description\"]','[class*=\"description\"]'];" +
+        "var best='';" +
+        "for(var i=0;i<sels.length;i++){" +
+        "var els=document.querySelectorAll(sels[i]);" +
+        "for(var j=0;j<els.length;j++){" +
+        "var t=cleanText(els[j].innerText||els[j].textContent);" +
+        "if(t&&t.length>best.length&&t.length>80&&!/Характеристик|Продавц|Доставк|Отзыв|Гаранти/i.test(t.slice(0,150)))best=t;" +
+        "}" +
+        "if(best.length>200)break;" +
+        "}" +
+        "return best;" +
+        "}" +
+        "function collectSpecs(){" +
+        "var sels=['[class*=\"specifications\"]','[class*=\"characteristics\"]','[class*=\"harakteristik\"]','table[class*=\"spec\"]']; " +
+        "var best='';" +
+        "for(var i=0;i<sels.length;i++){" +
+        "var els=document.querySelectorAll(sels[i]);" +
+        "for(var j=0;j<els.length;j++){" +
+        "var t=cleanText(els[j].innerText||els[j].textContent);" +
+        "if(t&&t.length>best.length&&t.length>50)best=t;" +
+        "}" +
+        "}" +
+        "return best;" +
+        "}" +
+        "function findTab(name){" +
+        "var all=document.querySelectorAll('li.tabs-content__tab[data-tab]');" +
+        "for(var i=0;i<all.length;i++){if(String(all[i].getAttribute('data-tab')||'').toLowerCase()===name)return all[i];}" +
+        "return null;" +
+        "}" +
+        "var descTab=findTab('description');" +
+        "var specsTab=findTab('specifications');" +
+        "function finish(){" +
+        "result.desc=collectDescription();" +
+        "result.specs=collectSpecs();" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted){" +
+        "window.AndroidWV.onExtracted(result.desc||'',result.specs||'',location.href);" +
+        "}" +
+        "window.__oniExtractRunning=false;" +
+        "}" +
+        "if(descTab){" +
+        "try{descTab.click();}catch(e){}" +
         "setTimeout(function(){" +
-        "try{var content=document.querySelector('#ItemView .item-content');if(!content)content=document.body;" +
-        "var text=(content.innerText||'').replace(/\\s+/g,' ').trim();" +
-        "var name=String(tabs[i].getAttribute('data-tab')||'').toUpperCase();" +
-        "if(text.length>30)parts.push('['+name+']\\n'+text);" +
-        "}catch(e){}i++;nextTab();},1400);" +
-        "}nextTab();" +
-        "}catch(e){}})();";
+        "tryExpandDescription();" +
+        "setTimeout(function(){" +
+        "var d1=collectDescription();" +
+        "if(specsTab){try{specsTab.click();}catch(e){}}" +
+        "setTimeout(function(){" +
+        "var s1=collectSpecs();" +
+        "result.desc=d1;result.specs=s1;" +
+        "if(!result.desc){try{descTab.click();}catch(e){}setTimeout(function(){result.desc=collectDescription();finish();},800);}" +
+        "else finish();" +
+        "},1000);" +
+        "},600);" +
+        "},1000);" +
+        "}else{finish();}" +
+        "}catch(e){if(window.AndroidWV)window.AndroidWV.onExtracted('','',location.href);}})();";
 
     private static final String PRODUCT_EXTRACT_JS_MANUAL =
         "(function(){try{" +
         "var sel=window.getSelection?String(window.getSelection()).trim():'';" +
-        "if(sel.length>=30){if(window.AndroidWV)window.AndroidWV.onExtracted(sel.replace(/\\s+/g,' '),location.href);return;}" +
-        "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
-        "if(!tabs||!tabs.length){var c=[];document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\s+/g,' ').trim();if(t&&t.length>=60)c.push(t);});c.sort(function(a,b){return b.length-a.length;});var t=c.length?c[0]:(document.body?document.body.innerText.replace(/\\s+/g,' ').trim().slice(0,5000):'');if(window.AndroidWV)window.AndroidWV.onExtracted(t,location.href);return;}" +
-        "var parts=[];var i=0;" +
-        "function nextTab(){if(i>=tabs.length){var full=parts.join('\\n\\n');if(full.length>30&&window.AndroidWV)window.AndroidWV.onExtracted(full,location.href);return;}" +
-        "try{tabs[i].click();}catch(e){}" +
-        "setTimeout(function(){" +
-        "try{var content=document.querySelector('#ItemView .item-content');if(!content)content=document.body;" +
-        "var text=(content.innerText||'').replace(/\\s+/g,' ').trim();" +
-        "var name=String(tabs[i].getAttribute('data-tab')||'').toUpperCase();" +
-        "if(text.length>30)parts.push('['+name+']\\n'+text);" +
-        "}catch(e){}i++;nextTab();},1400);" +
-        "}nextTab();" +
+        "if(sel.length>=30){" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(sel.replace(/\\s+/g,' '),'',location.href);" +
+        "return;" +
+        "}" +
+        "var desc=window.__oniLastDesc||'';var specs=window.__oniLastSpecs||'';" +
+        "if(!desc&&!specs){" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted('','',location.href);" +
+        "return;" +
+        "}" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(desc,specs,location.href);" +
         "}catch(e){}})();";
 
     private void launchFileChooser(WebChromeClient.FileChooserParams params) {
