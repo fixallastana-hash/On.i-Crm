@@ -2071,9 +2071,8 @@ private void postGuideResult(final String json) {
                             pendingGeminiQuery = null;
                             productWebView.postDelayed(new Runnable() { public void run() {
                                 try {
-                                    String esc = q.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","");
-                                    String js = "(function(){var ta=document.querySelector('textarea');if(!ta)return;ta.focus();ta.value='" + esc + "';ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));})();";
-                                    productWebView.evaluateJavascript(js, null);
+                                    String js = "(function(){var ta=document.querySelector('textarea');if(!ta)return;ta.focus();ta.value=" + JSONObject.quote(q) + ";ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));})();"
+                                productWebView.evaluateJavascript(js, null);
                                 } catch (Exception ignored) {}
                             }}, 2500);
                         }
