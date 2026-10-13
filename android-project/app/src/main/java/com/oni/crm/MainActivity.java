@@ -2760,17 +2760,42 @@ private void postGuideResult(final String json) {
 
     private static final String PRODUCT_EXTRACT_JS_MANUAL =
         "(function(){try{" +
+        // 1. Если юзер что-то выделил — берём выделенное
         "var sel=window.getSelection?String(window.getSelection()).trim():'';" +
         "if(sel.length>=30){" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(sel.replace(/\\s+/g,' '),'',location.href);" +
-        "return;" +
-        "}" +
-        "var desc=window.__oniLastDesc||'';var specs=window.__oniLastSpecs||'';" +
-        "if(!desc&&!specs){" +
-        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted('','',location.href);" +
-        "return;" +
-        "}" +
-        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(desc,specs,location.href);" +
+        "return;}" +
+        // 2. Проверяем не Gemini/Perplexity/чат ли это
+        "var host=(location.hostname||'').toLowerCase();" +
+        "var isChat=host.indexOf('gemini.google.com')>=0||host.indexOf('chatgpt.com')>=0||host.indexOf('perplexity.ai')>=0||host.indexOf('claude.ai')>=0||host.indexOf('chat.deepseek.com')>=0;" +
+        "if(isChat){" +
+        "var msgs=document.querySelectorAll('.markdown,.message-content,[class*=\"prose\"],[class*=\"response\"],[class*=\"answer\"]');" +
+        "if(msgs.length){" +
+        "var txt=String(msgs[msgs.length-1].innerText||msgs[msgs.length-1].textContent||'').trim();" +
+        "if(txt.length>=30){txt=txt.replace(/\\s+/g,' ');" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(txt,'',location.href);" +
+        "return;}}" +
+        "var whole=(document.body&&document.body.innerText?document.body.innerText:'').trim();" +
+        "if(whole.length>=50){whole=whole.replace(/\\s+/g,' ').slice(0,8000);" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(whole,'',location.href);" +
+        "return;}}" +
+        // 3. Kaspi и подобные — ищем табы
+        "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
+        "if(!tabs||!tabs.length){var c=[];" +
+        "document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"],[class*=\"harakteristik\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\s+/g,' ').trim();if(t&&t.length>=60)c.push(t);});" +
+        "c.sort(function(a,b){return b.length-a.length;});" +
+        "var t=c.length?c[0]:(document.body?document.body.innerText.replace(/\\s+/g,' ').trim().slice(0,5000):'');" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(t,'',location.href);return;}" +
+        "var parts=[];var i=0;" +
+        "function nextTab(){if(i>=tabs.length){var full=parts.join('\\n\\n');if(full.length>30&&window.AndroidWV)window.AndroidWV.onExtracted(full,'',location.href);return;}" +
+        "try{tabs[i].click();}catch(e){}" +
+        "setTimeout(function(){" +
+        "try{var content=document.querySelector('#ItemView .item-content');if(!content)content=document.body;" +
+        "var text=(content.innerText||'').replace(/\\s+/g,' ').trim();" +
+        "var name=String(tabs[i].getAttribute('data-tab')||'').toUpperCase();" +
+        "if(text.length>30)parts.push('['+name+']\\n'+text);" +
+        "}catch(e){}i++;nextTab();},1400);" +
+        "}nextTab();" +
         "}catch(e){}})();";
 
     private void launchFileChooser(WebChromeClient.FileChooserParams params) {

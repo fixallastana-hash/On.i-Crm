@@ -6143,7 +6143,9 @@ function renderSearchLinks(name){
     {t:'🛒 Wildberries', u:'https://www.wildberries.ru/catalog/0/search.aspx?search='+enc},
     {t:'🛍 Ozon', u:'https://www.ozon.ru/search/?text='+enc},
     {t:'🏪 Kaspi', u:'https://kaspi.kz/shop/search/?text='+enc},
-    {t:'🔍 Google', u:'https://www.google.com/search?q='+enc}
+    {t:'🔍 Google', u:'https://www.google.com/search?q='+enc+' описание характеристики'},
+    {t:'✨ Gemini', u:'https://gemini.google.com/app?q='+enc+' описание характеристики'},
+    {t:'🔮 Perplexity', u:'https://www.perplexity.ai/search?q='+enc+' описание характеристики'}
   ];
   box.innerHTML=links.map(function(l){
     return '<button type="button" data-wv-url="'+l.u+'" class="oni-wv-btn" style="padding:6px 10px;border:1px solid #E5E5E5;border-radius:14px;font-size:12px;color:#0A84FF;background:#FFFFFF;font-weight:600;cursor:pointer;">'+l.t+'</button>';
