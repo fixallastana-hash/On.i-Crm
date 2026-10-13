@@ -174,10 +174,10 @@ private void injectAIChat() {
         "    function addAI(text){var d=document.createElement('div');d.style.cssText='display:flex;margin-bottom:20px;';d.innerHTML='<div style=\"max-width:86%;padding:11px 15px;background:#F7F7F8;border-radius:18px;font-size:15px;line-height:1.65;letter-spacing:-0.005em;color:#0D0D0D;word-break:break-word;\">'+esc(text).replace(/\\n/g,'<br>')+'</div>';body.appendChild(d);scrollDown();}" +
         "    function addLoading(){var d=document.createElement('div');d.id='oni-chat-loading';d.style.cssText='display:flex;margin-bottom:20px;';d.innerHTML='<div style=\"padding:11px 15px;background:#F7F7F8;border-radius:18px;font-size:15px;color:#999;letter-spacing:2px;\">● ● ●</div>';body.appendChild(d);scrollDown();}" +
         "    function removeLoading(){var l=document.getElementById(''oni-chat-loading'');if(l)l.remove();}" +
-        "    function _chatHistory(){if(!window.firebase||!firebase.app)return null;try{return firebase.app().functions(''us-central1'').httpsCallable(''chatHistory'');}catch(e){console.warn('[chat] fn',e);return null;}}" +
-        "    function saveChatMsg(role,text,provider){var fn=_chatHistory();if(!fn)return;try{fn({action:''append'',message:{r:role,t:String(text||'''').slice(0,8000),p:provider||''''}}).catch(function(e){console.warn('[chat] save',e);});}catch(e){console.warn('[chat] save throw',e);}}" +
-        "    function loadChatHistory(){var fn=_chatHistory();if(!fn)return;fn({action:''load''}).then(function(r){var msgs=(r&&r.data&&r.data.messages)||[];if(!msgs.length)return;body.innerHTML='''';for(var i=0;i<msgs.length;i++){var m=msgs[i];if(m.r===''a''){addAI(m.t||'''');}else{addUser(m.t||'''');}}}).catch(function(e){console.warn('[chat] load',e);});}" +
-        "    function clearChatHistory(){var fn=_chatHistory();if(!fn)return;fn({action:''clear''}).then(function(){body.innerHTML='''';}).catch(function(e){console.warn('[chat] clear',e);});}" +
+        "    function _chatHistory(){if(!window.firebase||!firebase.app)return null;try{return firebase.app().functions('us-central1').httpsCallable('chatHistory');}catch(e){console.warn('[chat] fn',e);return null;}}" +
+        "    function saveChatMsg(role,text,provider){var fn=_chatHistory();if(!fn)return;try{fn({action:'append',message:{r:role,t:String(text||'').slice(0,8000),p:provider||''}}).catch(function(e){console.warn('[chat] save',e);});}catch(e){console.warn('[chat] save throw',e);}}" +
+        "    function loadChatHistory(){var fn=_chatHistory();if(!fn)return;fn({action:'load'}).then(function(r){var msgs=(r&&r.data&&r.data.messages)||[];if(!msgs.length)return;body.innerHTML='';for(var i=0;i<msgs.length;i++){var m=msgs[i];if(m.r==='a'){addAI(m.t||'');}else{addUser(m.t||'');}}}).catch(function(e){console.warn('[chat] load',e);});}" +
+        "    function clearChatHistory(){var fn=_chatHistory();if(!fn)return;fn({action:'clear'}).then(function(){body.innerHTML='';}).catch(function(e){console.warn('[chat] clear',e);});}" +
 
         "    window.onAIChatResult=function(raw){" +
         "      removeLoading();" +
@@ -235,7 +235,7 @@ private void injectAIChat() {
         "    sendBtn.onclick=send;" +
         "    input.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};" +
         "    input.oninput=function(){input.style.height='auto';input.style.height=Math.min(120,input.scrollHeight)+'px';};" +
-        "    document.getElementById(''oni-chat-clear'').onclick=function(){if(confirm(''Очистить историю чата?'')){clearChatHistory();}};" +
+        "    document.getElementById('oni-chat-clear').onclick=function(){if(confirm('Очистить историю чата?')){clearChatHistory();}};" +
         "    document.getElementById(''oni-chat-close'').onclick=function(){clearInterval(statusTimer);ov.remove();};" +
         "    setTimeout(function(){input.focus();},200);" +
 "    loadChatHistory();" +
