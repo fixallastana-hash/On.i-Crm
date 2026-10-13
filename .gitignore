@@ -17,3 +17,5 @@ Thumbs.db
 skills-lock.json
 
 *.bak*
+
+firebase-debug.log
