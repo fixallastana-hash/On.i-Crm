@@ -96,6 +96,8 @@ public class MainActivity extends Activity {
         webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 500);
         webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 1500);
         webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 3500);
+        webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 6000);
+        webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 10000);
         webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 500);
         webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 1500);
         webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 3500);
@@ -3249,9 +3251,7 @@ private void injectProductHandlers() {
 private void injectAIChat() {
     String js =
         "(function(){" +
-        "if(document.readyState==='loading'){return;}" +
         "if(window.__aiChatInjected){return;}" +
-        "window.__aiChatInjected=true;" +
 
         "var history=[];" +
         "var webSearchOn=(localStorage.getItem('oni_websearch')==='1');" +
@@ -3501,6 +3501,7 @@ private void injectAIChat() {
         "};" +
         "addNavButton();" +
         "setInterval(addNavButton, 1500);" +
+        "window.__aiChatInjected=true;" +
         "console.log('[On.i] AI chat v15 (seller + catalog toggle)');" +
         "})();";
     webView.evaluateJavascript(js, null);
