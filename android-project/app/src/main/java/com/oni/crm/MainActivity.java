@@ -2676,7 +2676,7 @@ private void postGuideResult(final String json) {
         "};" +
         "})();";
 
-    private static final String PRODUCT_EXTRACT_JS ='
+    private static final String PRODUCT_EXTRACT_JS =
         "(function(){try{" +
         "var __st=document.createElement('style');__st.textContent='[class*=\"smart-banner\"],[class*=\"app-banner\"],[class*=\"appBanner\"],[class*=\"open-in-app\"],[class*=\"openInApp\"],[class*=\"deep-link\"],[class*=\"deeplink\"],[class*=\"install-banner\"],[class*=\"installApp\"],[class*=\"mobile-app\"],[id*=\"smartBanner\"],[id*=\"appBanner\"],a[href^=\"kaspi://\"],[data-test=\"smart-banner\"],[data-test=\"app-banner\"]{display:none !important;height:0 !important;max-height:0 !important;}';document.head&&document.head.appendChild(__st);" +
         "if(window.__oniExtractRunning)return;window.__oniExtractRunning=true;" +
