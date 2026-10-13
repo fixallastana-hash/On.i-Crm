@@ -527,3 +527,52 @@ exports.aiUsage = onCall(
     };
   }
 );
+
+// ============ CHAT HISTORY ============
+// Действия: load | append | clear. Хранит последние 100 сообщений в users/{uid}/aiChat/main
+const CHAT_HISTORY_LIMIT = 100;
+
+exports.chatHistory = onCall(
+  { region: "us-central1" },
+  async (req) => {
+    if (!req.auth || !req.auth.uid) {
+      throw new HttpsError("unauthenticated", "Требуется вход");
+    }
+    const uid = req.auth.uid;
+    const action = (req.data && req.data.action) || "";
+    const ref = db.collection("users").doc(uid).collection("aiChat").doc("main");
+
+    if (action === "load") {
+      const snap = await ref.get();
+      const msgs = snap.exists ? (snap.data().messages || []) : [];
+      return { ok: true, messages: msgs };
+    }
+
+    if (action === "append") {
+      const msg = req.data && req.data.message;
+      if (!msg || typeof msg.t !== "string") {
+        throw new HttpsError("invalid-argument", "Пустое сообщение");
+      }
+      const snap = await ref.get();
+      let msgs = snap.exists ? (snap.data().messages || []) : [];
+      msgs.push({
+        r: msg.r === "a" ? "a" : "u",
+        t: String(msg.t).slice(0, 8000),
+        p: msg.p ? String(msg.p).slice(0, 64) : undefined,
+        ts: Date.now()
+      });
+      if (msgs.length > CHAT_HISTORY_LIMIT) {
+        msgs = msgs.slice(msgs.length - CHAT_HISTORY_LIMIT);
+      }
+      await ref.set({ messages: msgs, updatedAt: Date.now() }, { merge: true });
+      return { ok: true, count: msgs.length };
+    }
+
+    if (action === "clear") {
+      await ref.set({ messages: [], updatedAt: Date.now() }, { merge: true });
+      return { ok: true };
+    }
+
+    throw new HttpsError("invalid-argument", "Неизвестное действие: " + action);
+  }
+);
