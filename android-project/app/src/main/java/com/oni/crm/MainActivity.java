@@ -154,6 +154,8 @@ public class MainActivity extends Activity {
 
     private final class AndroidBridge {
         @JavascriptInterface
+        public void saveGeminiQuery(String q) { pendingGeminiQuery = q; }
+        @JavascriptInterface
         public void pickExcelFile() {
             runOnUiThread(() -> {
                 Intent document = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -2063,6 +2065,18 @@ private void postGuideResult(final String json) {
                             productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
                         }
                         updateMacroUI();
+                        // G4: авто-инжект textarea для Gemini
+                        if (url != null && url.contains("gemini.google.com") && pendingGeminiQuery != null) {
+                            final String q = pendingGeminiQuery;
+                            pendingGeminiQuery = null;
+                            productWebView.postDelayed(new Runnable() { public void run() {
+                                try {
+                                    String esc = q.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","");
+                                    String js = "(function(){var ta=document.querySelector('textarea');if(!ta)return;ta.focus();ta.value='" + esc + "';ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));})();";
+                                    productWebView.evaluateJavascript(js, null);
+                                } catch (Exception ignored) {}
+                            }}, 2500);
+                        }
                     } catch (Exception ignored) {}
                 }
             });
@@ -2559,7 +2573,12 @@ private void postGuideResult(final String json) {
         }});
     }
 
+    private static String pendingGeminiQuery = null;
     private final class ProductWV {
+        @JavascriptInterface
+        public void saveGeminiQuery(String q) {
+            pendingGeminiQuery = q;
+        }
         @JavascriptInterface
         public void onExtracted(String desc, String specs, String url) {
             if (desc == null) desc = "";

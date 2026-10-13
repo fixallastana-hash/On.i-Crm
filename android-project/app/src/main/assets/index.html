@@ -6144,7 +6144,7 @@ function renderSearchLinks(name){
     {t:'🛍 Ozon', u:'https://www.ozon.ru/search/?text='+enc},
     {t:'🏪 Kaspi', u:'https://kaspi.kz/shop/search/?text='+enc},
     {t:'🔍 Google', u:'https://www.google.com/search?q='+enc+' описание характеристики'},
-    {t:'✨ Gemini', u:'https://gemini.google.com/app?q='+enc+' описание характеристики'},
+    {t:'✨ Gemini', u:'https://gemini.google.com/app'},
     {t:'🔮 Perplexity', u:'https://www.perplexity.ai/search?q='+enc+' описание характеристики'}
   ];
   box.innerHTML=links.map(function(l){
@@ -6152,7 +6152,7 @@ function renderSearchLinks(name){
   }).join('');
   var btns=box.querySelectorAll('.oni-wv-btn');
   for(var i=0;i<btns.length;i++){
-    (function(b){ b.onclick=function(){ window.openInWV(b.getAttribute('data-wv-url')); }; })(btns[i]);
+    (function(b){ b.onclick=function(){ (function(){var _u=b.getAttribute('data-wv-url');if(_u&&_u.indexOf('gemini.google.com')>=0){var _p='Отвечай строго по делу. Формат ответа:\nОПИСАНИЕ: [сухой текст]\nХАРАКТЕРИСТИКИ: [список]\nЗАПРЕЩЕНО: вопросы в конце, фразы «Хотите узнать больше?», «Задайте вопрос», «Могу ли я помочь», источники, ссылки, дисклеймеры, мета-фразы о себе как об ИИ. Не предлагай действий.\n\nТовар: '+q;var _b=window.Android||window.AndroidWV;if(_b&&_b.saveGeminiQuery){_b.saveGeminiQuery(_p);}window.openInWV('https://gemini.google.com/app');return;}window.openInWV(_u);})(); }; })(btns[i]);
   }
 }
 function openProductModal(id,options={}){
