@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
     private boolean macroRecording = false;
     private final java.util.List<String> macroSteps = new java.util.ArrayList<>();
     private android.widget.Button macroBtn = null;
+    private android.widget.TextView macroStatusBar = null;
     private String pendingSaveBase64;
     private String pendingSaveName;
     private final java.util.concurrent.ExecutorService kaspiExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -2054,6 +2055,22 @@ private void postGuideResult(final String json) {
             btnClose.setMinimumWidth(0);
             topBar.addView(btnClose);
 
+            // Статус-строка: Описание / Характеристики / Фото
+            final android.widget.TextView statusBar = new android.widget.TextView(this);
+            statusBar.setText("○ Описание   ○ Характеристики   ○ Фото");
+            statusBar.setTextSize(11);
+            statusBar.setTextColor(0xFF666666);
+            statusBar.setBackgroundColor(0xFFFFFFFF);
+            statusBar.setPadding(pad * 2, pad, pad * 2, pad);
+            statusBar.setSingleLine(true);
+            statusBar.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            statusBar.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+
+            macroStatusBar = statusBar;
+
             // WebView
             productWebView = new WebView(this);
             android.widget.LinearLayout.LayoutParams wvLp = new android.widget.LinearLayout.LayoutParams(
@@ -2094,7 +2111,12 @@ private void postGuideResult(final String json) {
                                 addrBar.setText(url);
                             }
                         }
+                        productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
+                        if (macroRecording) {
+                            productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
+                        }
+                        updateMacroUI();
                     } catch (Exception ignored) {}
                 }
             });
@@ -2137,6 +2159,7 @@ private void postGuideResult(final String json) {
             bottomBar.addView(btnPhoto);
 
             container.addView(topBar);
+            container.addView(statusBar);
             container.addView(productWebView);
             container.addView(bottomBar);
             productOverlay.addView(container);
@@ -2231,6 +2254,7 @@ private void postGuideResult(final String json) {
                 }
             });
 
+            resetStatusBar();
             productWebView.loadUrl(startUrl);
         } catch (Exception e) {
             try { android.util.Log.e("On.i CRM", "showProductWebView failed", e); } catch (Exception ignored) {}
@@ -2386,6 +2410,36 @@ private void postGuideResult(final String json) {
         } catch (Exception ignored) {}
     }
 
+    private volatile boolean statusDesc = false;
+    private volatile boolean statusSpecs = false;
+    private volatile int statusPhotosCur = 0;
+    private volatile int statusPhotosTotal = 0;
+    private volatile boolean statusPhotosDone = false;
+
+    private void resetStatusBar() {
+        statusDesc = false;
+        statusSpecs = false;
+        statusPhotosCur = 0;
+        statusPhotosTotal = 0;
+        statusPhotosDone = false;
+        runOnUiThread(new Runnable() { public void run() { renderStatusBar(); }});
+    }
+
+    private void renderStatusBar() {
+        try {
+            if (macroStatusBar == null) return;
+            StringBuilder sb = new StringBuilder();
+            sb.append(statusDesc ? "✓ Описание" : "○ Описание");
+            sb.append("   ");
+            sb.append(statusSpecs ? "✓ Характеристики" : "○ Характеристики");
+            sb.append("   ");
+            if (statusPhotosDone) sb.append("✓ Фото");
+            else if (statusPhotosTotal > 0) sb.append("⏳ Фото (" + statusPhotosCur + "/" + statusPhotosTotal + ")");
+            else sb.append("○ Фото");
+            macroStatusBar.setText(sb.toString());
+        } catch (Exception ignored) {}
+    }
+
     private String getCurrentDomain() {
         try {
             if (productWebView == null) return "";
@@ -2401,7 +2455,7 @@ private void postGuideResult(final String json) {
             if (macroBtn == null) return;
             String domain = getCurrentDomain();
             if (macroRecording) {
-                macroBtn.setText("⏹ Стоп (" + macroSteps.size() + ")");
+                macroBtn.setText("⏹" + macroSteps.size());
                 macroBtn.setBackgroundColor(0xFFFF3B30);
                 macroBtn.setTextColor(0xFFFFFFFF);
             } else {
@@ -2412,13 +2466,13 @@ private void postGuideResult(final String json) {
                 if (saved != null && !saved.isEmpty()) {
                     int n = 0;
                     try { n = new org.json.JSONArray(saved).length(); } catch (Exception ignored) {}
-                    macroBtn.setText("▶ Макрос (" + n + ")");
+                    macroBtn.setText("▶" + n);
                     macroBtn.setBackgroundColor(0xFF34C759);
                     macroBtn.setTextColor(0xFFFFFFFF);
                 } else {
-                    macroBtn.setText("🎬 Записать макрос");
+                    macroBtn.setText("🔴");
                     macroBtn.setBackgroundColor(0xFFF0F0F0);
-                    macroBtn.setTextColor(0xFF333333);
+                    macroBtn.setTextColor(0xFF666666);
                 }
             }
         } catch (Exception ignored) {}
@@ -2447,6 +2501,10 @@ private void postGuideResult(final String json) {
                 org.json.JSONArray arr = new org.json.JSONArray(photosJson == null ? "[]" : photosJson);
                 final org.json.JSONArray out = new org.json.JSONArray();
                 int maxCount = Math.min(arr.length(), 15);
+                statusPhotosTotal = maxCount;
+                statusPhotosCur = 0;
+                statusPhotosDone = false;
+                runOnUiThread(new Runnable() { public void run() { renderStatusBar(); }});
                 for (int i = 0; i < maxCount; i++) {
                     String url = arr.optString(i, "");
                     if (url.isEmpty()) continue;
@@ -2454,7 +2512,11 @@ private void postGuideResult(final String json) {
                         String dataUrl = downloadAndCompressPhoto(url);
                         if (dataUrl != null && !dataUrl.isEmpty()) out.put(dataUrl);
                     } catch (Exception ignored) {}
+                    statusPhotosCur = i + 1;
+                    runOnUiThread(new Runnable() { public void run() { renderStatusBar(); }});
                 }
+                statusPhotosDone = true;
+                runOnUiThread(new Runnable() { public void run() { renderStatusBar(); }});
                 if (out.length() == 0) return;
                 final String json = out.toString();
                 runOnUiThread(new Runnable() { public void run() {
@@ -2563,12 +2625,112 @@ private void postGuideResult(final String json) {
         }
 
         @JavascriptInterface
+        public void setStatus(final String step, final String state, final int count) {
+            if ("desc".equals(step)) {
+                statusDesc = "ok".equals(state);
+            } else if ("specs".equals(step)) {
+                statusSpecs = "ok".equals(state);
+            } else if ("photos".equals(step)) {
+                if ("start".equals(state)) {
+                    statusPhotosTotal = count;
+                    statusPhotosCur = 0;
+                    statusPhotosDone = false;
+                } else if ("progress".equals(state)) {
+                    statusPhotosCur = count;
+                } else if ("ok".equals(state)) {
+                    statusPhotosDone = true;
+                }
+            }
+            runOnUiThread(new Runnable() { public void run() { renderStatusBar(); }});
+        }
+
+        @JavascriptInterface
         public void onPhotosExtracted(String photosJson) {
             downloadAndSendPhotos(photosJson);
         }
+
+        @JavascriptInterface
+        public void recordMacroStep(String stepJson) {
+            recordMacroStepImpl(stepJson);
+        }
+
+        @JavascriptInterface
+        public void stopMacroRecording() {
+            runOnUiThread(new Runnable() { public void run() { stopMacroRecordingImpl(); }});
+        }
+
+        @JavascriptInterface
+        public boolean isMacroRecording() {
+            return macroRecording;
+        }
+
+        @JavascriptInterface
+        public void __playDone() {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    if (productWebView != null) {
+                        productWebView.postDelayed(new Runnable() { public void run() {
+                            try { productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null); } catch (Exception ignored) {}
+                        }}, 400);
+                    }
+                } catch (Exception ignored) {}
+            }});
+        }
     }
 
-    private static final String PRODUCT_EXTRACT_JS =
+    private static final String PRODUCT_MACRO_RECORDER_JS =
+        "(function(){" +
+        "if(window.__oniMacroInstalled)return;window.__oniMacroInstalled=true;" +
+        "window.__oniMacroSteps=[];window.__oniMacroRecording=false;" +
+        "function buildSelector(el){" +
+        "if(!el||el.nodeType!==1)return '';" +
+        "if(el.id)return '#'+el.id;" +
+        "var parts=[];var cur=el;var depth=0;" +
+        "while(cur&&cur.nodeType===1&&depth<6){" +
+        "var tag=cur.tagName.toLowerCase();" +
+        "var cls='';if(cur.className&&typeof cur.className==='string'){" +
+        "var cn=cur.className.split(/\\s+/).filter(function(x){return x&&x.length<30;}).slice(0,3);" +
+        "if(cn.length)cls='.'+cn.join('.');}" +
+        "var nth=1;var sib=cur.previousElementSibling;" +
+        "while(sib){if(sib.tagName===cur.tagName)nth++;sib=sib.previousElementSibling;}" +
+        "parts.unshift(tag+(nth>1?(':nth-of-type('+nth+')'):'')+cls);" +
+        "cur=cur.parentElement;depth++;" +
+        "}" +
+        "return parts.join(' > ');" +
+        "}" +
+        "function handler(e){" +
+        "if(!window.__oniMacroRecording)return;" +
+        "var el=e.target;if(!el||el.nodeType!==1)return;" +
+        "var sel=buildSelector(el);if(!sel)return;" +
+        "var txt=(el.innerText||el.textContent||'').slice(0,40).replace(/\\s+/g,' ');" +
+        "var step={sel:sel,label:txt};" +
+        "window.__oniMacroSteps.push(step);" +
+        "try{if(window.AndroidWV&&window.AndroidWV.recordMacroStep)window.AndroidWV.recordMacroStep(JSON.stringify(step));}catch(_){}" +
+        "}" +
+        "window.__oniMacroStart=function(){" +
+        "window.__oniMacroRecording=true;window.__oniMacroSteps=[];" +
+        "document.addEventListener('click',handler,true);" +
+        "};" +
+        "window.__oniMacroStop=function(){" +
+        "window.__oniMacroRecording=false;" +
+        "document.removeEventListener('click',handler,true);" +
+        "try{if(window.AndroidWV&&window.AndroidWV.stopMacroRecording)window.AndroidWV.stopMacroRecording();}catch(_){}" +
+        "};" +
+        "window.__oniMacroPlay=function(stepsJson){" +
+        "var steps=[];try{steps=JSON.parse(stepsJson||'[]');}catch(e){return;}" +
+        "if(!steps.length)return;" +
+        "var i=0;" +
+        "function next(){" +
+        "if(i>=steps.length){setTimeout(function(){try{window.__oniExtractRunning=false;if(window.AndroidWV&&window.AndroidWV.__playDone)window.AndroidWV.__playDone();}catch(_){}},600);return;}" +
+        "var s=steps[i++];" +
+        "try{var el=document.querySelector(s.sel);if(el){el.scrollIntoView({block:'center'});el.click();}}catch(_){}" +
+        "setTimeout(next,900);" +
+        "}" +
+        "next();" +
+        "};" +
+        "})();";
+
+    private static final String PRODUCT_EXTRACT_JS ='
         "(function(){try{" +
         "var __st=document.createElement('style');__st.textContent='[class*=\"smart-banner\"],[class*=\"app-banner\"],[class*=\"appBanner\"],[class*=\"open-in-app\"],[class*=\"openInApp\"],[class*=\"deep-link\"],[class*=\"deeplink\"],[class*=\"install-banner\"],[class*=\"installApp\"],[class*=\"mobile-app\"],[id*=\"smartBanner\"],[id*=\"appBanner\"],a[href^=\"kaspi://\"],[data-test=\"smart-banner\"],[data-test=\"app-banner\"]{display:none !important;height:0 !important;max-height:0 !important;}';document.head&&document.head.appendChild(__st);" +
         "if(window.__oniExtractRunning)return;window.__oniExtractRunning=true;" +
@@ -2622,7 +2784,7 @@ private void postGuideResult(final String json) {
         "result.desc=collectDescription();" +
         "result.specs=collectSpecs();" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted){" +
-        "window.AndroidWV.onExtracted(result.desc||'',result.specs||'',location.href);" +
+        "if(window.AndroidWV&&window.AndroidWV.setStatus){window.AndroidWV.setStatus('desc','ok',(result.desc||'').length);window.AndroidWV.setStatus('specs','ok',(result.specs||'').length);}window.AndroidWV.onExtracted(result.desc||'',result.specs||'',location.href);" +
         "}" +
         "window.__oniExtractRunning=false;" +
         "}" +
