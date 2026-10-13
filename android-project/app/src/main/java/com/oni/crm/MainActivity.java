@@ -2157,7 +2157,7 @@ private void postGuideResult(final String json) {
                         String domain = getCurrentDomain();
                         if (macroRecording) {
                             if (productWebView != null) productWebView.evaluateJavascript("window.__oniMacroStop&&window.__oniMacroStop();", null);
-                            stopMacroRecording();
+                            stopMacroRecordingImpl();
                         } else {
                             String saved = "";
                             if (!domain.isEmpty()) saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
@@ -2167,7 +2167,7 @@ private void postGuideResult(final String json) {
                                 if (productWebView != null) productWebView.evaluateJavascript(js, null);
                             } else {
                                 // Начать запись
-                                startMacroRecording();
+                                startMacroRecordingImpl();
                                 if (productWebView != null) productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
                             }
                         }
@@ -2188,7 +2188,7 @@ private void postGuideResult(final String json) {
                             .setMessage("Макрос для " + domain + " будет удалён.")
                             .setPositiveButton("Удалить", new android.content.DialogInterface.OnClickListener() {
                                 @Override public void onClick(android.content.DialogInterface d, int w) {
-                                    deleteMacroForDomain(getCurrentDomain());
+                                    deleteMacroForDomainImpl(getCurrentDomain());
                                 }
                             })
                             .setNegativeButton("Отмена", null)
@@ -2239,6 +2239,52 @@ private void postGuideResult(final String json) {
             try { android.util.Log.e("On.i CRM", "showProductWebView failed", e); } catch (Exception ignored) {}
             closeProductWebView();
         }
+    }
+
+    private void startMacroRecordingImpl() {
+        macroRecording = true;
+        macroSteps.clear();
+        runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
+    }
+
+    private void recordMacroStepImpl(String stepJson) {
+        if (!macroRecording) return;
+        if (stepJson == null || stepJson.isEmpty()) return;
+        macroSteps.add(stepJson);
+        runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
+    }
+
+    private void stopMacroRecordingImpl() {
+        if (!macroRecording) return;
+        macroRecording = false;
+        try {
+            String domain = getCurrentDomain();
+            if (domain != null && !domain.isEmpty() && !macroSteps.isEmpty()) {
+                org.json.JSONArray arr = new org.json.JSONArray();
+                for (String s : macroSteps) arr.put(new org.json.JSONObject(s));
+                getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("macro_" + domain, arr.toString()).apply();
+            }
+        } catch (Exception ignored) {}
+        macroSteps.clear();
+        runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
+    }
+
+    private void cancelMacroRecordingImpl() {
+        macroRecording = false;
+        macroSteps.clear();
+        runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
+    }
+
+    private String getMacroForDomainImpl(String domain) {
+        if (domain == null || domain.isEmpty()) return "";
+        try { return getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, ""); }
+        catch (Exception e) { return ""; }
+    }
+
+    private void deleteMacroForDomainImpl(String domain) {
+        if (domain == null || domain.isEmpty()) return;
+        try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).apply(); } catch (Exception ignored) {}
+        runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
     }
 
     private String getCurrentDomain() {
