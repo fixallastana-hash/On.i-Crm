@@ -20,12 +20,8 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 // Gemini модели в порядке приоритета (рабочие у ключа)
 const GEMINI_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
-  "gemini-flash-lite-latest",
-  "gemini-flash-latest"
+  "gemini-3.5-flash-lite",
+  "gemini-flash-lite-latest"
 ];
 
 function todayKey() {
@@ -61,7 +57,7 @@ function isRetryable(msg) {
 
 // ============ GEMINI ============
 async function callGeminiModel(apiKey, model, prompt, imageBase64, imageMime) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const parts = [];
   if (imageBase64 && imageMime) {
     parts.push({ inline_data: { mime_type: imageMime, data: imageBase64 } });
@@ -74,7 +70,7 @@ async function callGeminiModel(apiKey, model, prompt, imageBase64, imageMime) {
   // Для поиска (tools) нельзя response_mime_type
   const r = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(body)
   });
   if (!r.ok) {
