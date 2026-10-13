@@ -197,7 +197,7 @@ async function callOpenRouter(prompt, model) {
 async function callMistral(prompt, model) {
   const key = MISTRAL_API_KEY.value();
   if (!key) throw new Error("MISTRAL_API_KEY не задан");
-  const usedModel = model || process.env.MISTRAL_MODEL || "mistral-small-latest";
+  const usedModel = model || process.env.MISTRAL_MODEL || "ministral-8b-latest";
   const r = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -441,19 +441,19 @@ exports.aiProxy = onCall(
       }
     }
 
-    // 1.9. Mistral (только текст)
-    if (!text && !hasImage) {
-      try {
-        const g = await callMistral(prompt);
-        if (g.text && g.text.trim()) {
-          text = g.text;
-          usedProvider = "mistral";
-          usedModel = g.model;
-        }
-      } catch (e) {
-        errors.push("mistral: " + (e.message || e));
-      }
-    }
+    // 1.9. Mistral — отключён в Auto (free-tier 429). Доступен только через forced-селектор.
+    // if (!text && !hasImage) {
+    //   try {
+    //     const g = await callMistral(prompt);
+    //     if (g.text && g.text.trim()) {
+    //       text = g.text;
+    //       usedProvider = "mistral";
+    //       usedModel = g.model;
+    //     }
+    //   } catch (e) {
+    //     errors.push("mistral: " + (e.message || e));
+    //   }
+    // }
 
     // 2. Gemini
     if (!text) {
