@@ -2143,18 +2143,36 @@ private void postGuideResult(final String json) {
 
     private static final String PRODUCT_EXTRACT_JS =
         "(function(){try{" +
-        "var pick=function(){var sels=['meta[name=\"description\"]','meta[property=\"og:description\"]','meta[property=\"twitter:description\"]','[itemprop=\"description\"]','.product-description','.product__description','.description','#description','.a5a5','.product-detail__description','article','main'];" +
-        "for(var i=0;i<sels.length;i++){var e=document.querySelector(sels[i]);if(!e)continue;var t=e.getAttribute&&e.getAttribute('content');if(!t)t=e.innerText||e.textContent;if(t){t=t.replace(/\\s+/g,' ').trim();if(t.length>=40)return t;}}" +
-        "var b=document.body?document.body.innerText:'';return b?b.replace(/\\s+/g,' ').trim().slice(0,5000):'';};" +
-        "var t=pick();if(window.AndroidWV&&window.AndroidWV.onExtracted){window.AndroidWV.onExtracted(t,location.href);}" +
+        "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
+        "if(!tabs||!tabs.length){var b=document.body?document.body.innerText:'';var t=b?b.replace(/\\s+/g,' ').trim().slice(0,5000):'';if(window.AndroidWV)window.AndroidWV.onExtracted(t,location.href);return;}" +
+        "var parts=[];var i=0;" +
+        "function nextTab(){if(i>=tabs.length){var full=parts.join('\\n\\n');if(full.length>50&&window.AndroidWV)window.AndroidWV.onExtracted(full,location.href);return;}" +
+        "try{tabs[i].click();}catch(e){}" +
+        "setTimeout(function(){" +
+        "try{var content=document.querySelector('#ItemView .item-content');if(!content)content=document.body;" +
+        "var text=(content.innerText||'').replace(/\\s+/g,' ').trim();" +
+        "var name=String(tabs[i].getAttribute('data-tab')||'').toUpperCase();" +
+        "if(text.length>30)parts.push('['+name+']\\n'+text);" +
+        "}catch(e){}i++;nextTab();},1400);" +
+        "}nextTab();" +
         "}catch(e){}})();";
 
     private static final String PRODUCT_EXTRACT_JS_MANUAL =
         "(function(){try{" +
-        "var pick=function(){var sels=['meta[name=\"description\"]','meta[property=\"og:description\"]','meta[property=\"twitter:description\"]','[itemprop=\"description\"]','.product-description','.product__description','.description','#description','.a5a5','.product-detail__description','article','main'];" +
-        "for(var i=0;i<sels.length;i++){var e=document.querySelector(sels[i]);if(!e)continue;var t=e.getAttribute&&e.getAttribute('content');if(!t)t=e.innerText||e.textContent;if(t){t=t.replace(/\\s+/g,' ').trim();if(t.length>=20)return t;}}" +
-        "var b=document.body?document.body.innerText:'';return b?b.replace(/\\s+/g,' ').trim().slice(0,5000):'';};" +
-        "var t=pick();if(window.AndroidWV&&window.AndroidWV.onExtracted){window.AndroidWV.onExtracted(t,location.href);}" +
+        "var sel=window.getSelection?String(window.getSelection()).trim():'';" +
+        "if(sel.length>=30){if(window.AndroidWV)window.AndroidWV.onExtracted(sel.replace(/\\s+/g,' '),location.href);return;}" +
+        "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
+        "if(!tabs||!tabs.length){var c=[];document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\s+/g,' ').trim();if(t&&t.length>=60)c.push(t);});c.sort(function(a,b){return b.length-a.length;});var t=c.length?c[0]:(document.body?document.body.innerText.replace(/\\s+/g,' ').trim().slice(0,5000):'');if(window.AndroidWV)window.AndroidWV.onExtracted(t,location.href);return;}" +
+        "var parts=[];var i=0;" +
+        "function nextTab(){if(i>=tabs.length){var full=parts.join('\\n\\n');if(full.length>30&&window.AndroidWV)window.AndroidWV.onExtracted(full,location.href);return;}" +
+        "try{tabs[i].click();}catch(e){}" +
+        "setTimeout(function(){" +
+        "try{var content=document.querySelector('#ItemView .item-content');if(!content)content=document.body;" +
+        "var text=(content.innerText||'').replace(/\\s+/g,' ').trim();" +
+        "var name=String(tabs[i].getAttribute('data-tab')||'').toUpperCase();" +
+        "if(text.length>30)parts.push('['+name+']\\n'+text);" +
+        "}catch(e){}i++;nextTab();},1400);" +
+        "}nextTab();" +
         "}catch(e){}})();";
 
     private void launchFileChooser(WebChromeClient.FileChooserParams params) {
