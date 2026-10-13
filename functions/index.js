@@ -194,10 +194,10 @@ async function callOpenRouter(prompt, model) {
 }
 
 // ============ MISTRAL ============
-async function callMistral(prompt) {
+async function callMistral(prompt, model) {
   const key = MISTRAL_API_KEY.value();
   if (!key) throw new Error("MISTRAL_API_KEY не задан");
-  const model = process.env.MISTRAL_MODEL || "mistral-small-latest";
+  const usedModel = model || process.env.MISTRAL_MODEL || "mistral-small-latest";
   const r = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -205,7 +205,7 @@ async function callMistral(prompt) {
       "Authorization": "Bearer " + key.trim()
     },
     body: JSON.stringify({
-      model,
+      model: usedModel,
       stream: false,
       messages: [{ role: "user", content: prompt }]
     })
@@ -218,17 +218,17 @@ async function callMistral(prompt) {
   const text = j && j.choices && j.choices[0] && j.choices[0].message
     ? (j.choices[0].message.content || "")
     : "";
-  return { text, model };
+  return { text, model: usedModel };
 }
 
 // ============ CLOUDFLARE WORKERS AI ============
-async function callCloudflare(prompt) {
+async function callCloudflare(prompt, model) {
   const account = CLOUDFLARE_ACCOUNT_ID.value();
   const token = CLOUDFLARE_API_TOKEN.value();
   if (!account) throw new Error("CLOUDFLARE_ACCOUNT_ID не задан");
   if (!token) throw new Error("CLOUDFLARE_API_TOKEN не задан");
-  const model = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-  const url = "https://api.cloudflare.com/client/v4/accounts/" + account.trim() + "/ai/run/" + model;
+  const usedModel = model || process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const url = "https://api.cloudflare.com/client/v4/accounts/" + account.trim() + "/ai/run/" + usedModel;
   const r = await fetch(url, {
     method: "POST",
     headers: {
@@ -248,7 +248,7 @@ async function callCloudflare(prompt) {
     throw new Error("Cloudflare error: " + JSON.stringify(j && j.errors).slice(0, 200));
   }
   const text = (j.result && (j.result.response || j.result.text)) || "";
-  return { text, model };
+  return { text, model: usedModel };
 }
 
 // ============ DEEPSEEK ============
@@ -315,7 +315,7 @@ exports.aiProxy = onCall(
     const errors = [];
     const mode = (req.data && req.data.mode) || "auto";
     const isReasoning = mode === "reasoning";
-    const FORCED_LIST = ["groq","cerebras","openrouter","mistral","gemini","deepseek","cloudflare"];
+    const FORCED_LIST = ["groq","cerebras","openrouter","mistral","gemini","deepseek","cloudflare","nemotron-ultra","qwen-coder","magistral"];
     const isForced = FORCED_LIST.indexOf(mode) >= 0;
     let reasoning = null;
 
@@ -340,6 +340,17 @@ exports.aiProxy = onCall(
             usedModel = g.model;
           }
         } catch (e) { errors.push("cerebras-reasoning: " + (e.message || e)); }
+      }
+
+      if (!text) {
+        try {
+          const g = await callMistral(prompt, "magistral-small-latest");
+          if (g.text && g.text.trim()) {
+            text = g.text;
+            usedProvider = "mistral";
+            usedModel = g.model;
+          }
+        } catch (e) { errors.push("magistral-reasoning: " + (e.message || e)); }
       }
 
       if (!text) {
@@ -370,6 +381,9 @@ exports.aiProxy = onCall(
         else if (mode === "gemini")    g = await callGemini(prompt, imageBase64, imageMime);
         else if (mode === "deepseek")  g = await callDeepSeek(prompt);
         else if (mode === "cloudflare") g = await callCloudflare(prompt);
+        else if (mode === "nemotron-ultra") g = await callOpenRouter(prompt, "nvidia/nemotron-3-ultra-550b-a55b:free");
+        else if (mode === "qwen-coder")     g = await callCloudflare(prompt, "@cf/qwen/qwen2.5-coder-32b-instruct");
+        else if (mode === "magistral")      g = await callMistral(prompt, "magistral-small-latest");
         if (g && g.text && g.text.trim()) {
           return {
             ok: true,

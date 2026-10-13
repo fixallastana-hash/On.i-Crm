@@ -161,9 +161,9 @@ private void injectAIChat() {
         "        catalogLabel.textContent='Каталог';" +
         "      }" +
         "    }" +
-        "    function paintProvider(){if(!providerBtn)return;var _pl={auto:'Auto',groq:'Groq',cerebras:'Cerebras',openrouter:'OpenRouter',mistral:'Mistral',gemini:'Gemini',deepseek:'DeepSeek',cloudflare:'Cloudflare'};providerBtn.textContent=_pl[aiMode]||'Auto';if(aiMode==='auto'){providerBtn.style.background='#FFFFFF';providerBtn.style.borderColor='#E5E5E5';providerBtn.style.color='#666';}else{providerBtn.style.background='#0A84FF';providerBtn.style.borderColor='#0A84FF';providerBtn.style.color='#FFFFFF';}}" +
+        "    function paintProvider(){if(!providerBtn)return;var _pl={auto:'Auto',groq:'Groq',cerebras:'Cerebras',openrouter:'OpenRouter',mistral:'Mistral',gemini:'Gemini',deepseek:'DeepSeek',cloudflare:'Cloudflare','nemotron-ultra':'Nemotron-550B','qwen-coder':'Qwen-Coder','magistral':'Magistral'};providerBtn.textContent=_pl[aiMode]||'Auto';if(aiMode==='auto'){providerBtn.style.background='#FFFFFF';providerBtn.style.borderColor='#E5E5E5';providerBtn.style.color='#666';}else{providerBtn.style.background='#0A84FF';providerBtn.style.borderColor='#0A84FF';providerBtn.style.color='#FFFFFF';}}" +
         "    paintProvider();" +
-        "    if(providerBtn){providerBtn.onclick=function(){var _order=['auto','groq','cerebras','openrouter','mistral','gemini','deepseek','cloudflare'];var _i=_order.indexOf(aiMode);if(_i<0)_i=0;aiMode=_order[(_i+1)%_order.length];try{localStorage.setItem('oni_ai_mode',aiMode);}catch(e){}paintProvider();};}" +
+        "    if(providerBtn){providerBtn.onclick=function(){var _order=['auto','groq','cerebras','openrouter','mistral','gemini','deepseek','cloudflare','nemotron-ultra','qwen-coder','magistral'];var _i=_order.indexOf(aiMode);if(_i<0)_i=0;aiMode=_order[(_i+1)%_order.length];try{localStorage.setItem('oni_ai_mode',aiMode);}catch(e){}paintProvider();};}" +
         "    paintCatalog();" +
         "    catalogBtn.onclick=function(){ catalogOn=!catalogOn; try{localStorage.setItem('oni_catalog',catalogOn?'1':'0');}catch(e){} paintCatalog(); };" +
 
