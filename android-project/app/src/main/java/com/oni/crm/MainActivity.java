@@ -2163,28 +2163,7 @@ private void postGuideResult(final String json) {
             });
             btnReview.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) {
-                    if (productWebView == null) return;
-                    try {
-                        String _rv = getReviewInjectJs();
-                        if (_rv != null && _rv.length() > 0) {
-                            productWebView.evaluateJavascript(_rv, new android.webkit.ValueCallback<String>() {
-                                public void onReceiveValue(String result) {
-                                    android.widget.Toast.makeText(MainActivity.this, "Inj: "+result, android.widget.Toast.LENGTH_LONG).show();
-                                }
-                            });
-                        }
-                    } catch (Exception e) {
-                        android.widget.Toast.makeText(MainActivity.this, "Inj ERR: "+e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
-                    }
-                    productWebView.postDelayed(new Runnable() { public void run() {
-                        try {
-                            productWebView.evaluateJavascript("(function(){try{if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();return \"ok\";}return \"missing\";}catch(e){return \"err: \"+e.message;}})()", new android.webkit.ValueCallback<String>() {
-                                public void onReceiveValue(String result) {
-                                    android.widget.Toast.makeText(MainActivity.this, "Show: "+result, android.widget.Toast.LENGTH_LONG).show();
-                                }
-                            });
-                        } catch (Exception ignored) {}
-                    }}, 600);
+                    openReviewSheet();
                 }
             });
 
@@ -2625,6 +2604,10 @@ private void postGuideResult(final String json) {
     }
 
     private static String reviewLang = "kz";
+
+    private android.app.Dialog reviewDialog = null;
+    private final java.util.List<String[]> reviewSections = new java.util.ArrayList<>();
+    private final java.util.List<String> reviewPhotos = new java.util.ArrayList<>();
     private static String adblockJsCache = null;
     private String getAdblockJs() {
         if (adblockJsCache != null) return adblockJsCache;
@@ -2639,6 +2622,202 @@ private void postGuideResult(final String json) {
         return adblockJsCache;
     }
     private static String reviewInjectJsCache = null;
+    private void openReviewSheet() {
+        try {
+            if (reviewDialog != null && reviewDialog.isShowing()) return;
+            final android.app.Dialog d = new android.app.Dialog(this);
+            android.widget.LinearLayout root = new android.widget.LinearLayout(this);
+            root.setOrientation(android.widget.LinearLayout.VERTICAL);
+            root.setBackgroundColor(0xFFFFFFFF);
+            int pad = (int)(16 * getResources().getDisplayMetrics().density);
+            root.setPadding(pad, pad, pad, pad);
+            android.widget.TextView title = new android.widget.TextView(this);
+            title.setText("Что взять из товара");
+            title.setTextSize(16);
+            title.setTextColor(0xFF1D2130);
+            title.setPadding(0, 0, 0, pad);
+            root.addView(title);
+            android.widget.HorizontalScrollView langScroll = new android.widget.HorizontalScrollView(this);
+            android.widget.LinearLayout langRow = new android.widget.LinearLayout(this);
+            langRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            final String[] langs = {"auto", "ru", "kz", "both"};
+            final String[] langNames = {"Авто", "RU", "KZ", "RU+KZ"};
+            final android.widget.Button[] langBtns = new android.widget.Button[4];
+            for (int i = 0; i < 4; i++) {
+                final int _i = i;
+                android.widget.Button b = new android.widget.Button(this);
+                b.setText(langNames[i]);
+                b.setTextSize(11);
+                if (langs[i].equals(reviewLang)) { b.setBackgroundColor(0xFF2F6FED); b.setTextColor(0xFFFFFFFF); } else { b.setBackgroundColor(0xFFF5F6F8); b.setTextColor(0xFF7A8291); }
+                b.setOnClickListener(new android.view.View.OnClickListener() {
+                    public void onClick(android.view.View v) {
+                        reviewLang = langs[_i];
+                        for (int k = 0; k < langBtns.length; k++) {
+                            if (k == _i) { langBtns[k].setBackgroundColor(0xFF2F6FED); langBtns[k].setTextColor(0xFFFFFFFF); }
+                            else { langBtns[k].setBackgroundColor(0xFFF5F6F8); langBtns[k].setTextColor(0xFF7A8291); }
+                        }
+                    }
+                });
+                langBtns[i] = b;
+                langRow.addView(b);
+            }
+            langScroll.addView(langRow);
+            root.addView(langScroll);
+            final android.widget.LinearLayout sectionsBox = new android.widget.LinearLayout(this);
+            sectionsBox.setOrientation(android.widget.LinearLayout.VERTICAL);
+            root.addView(sectionsBox);
+            final Runnable[] renderSectionsHolder = new Runnable[1];
+            renderSectionsHolder[0] = new Runnable() { public void run() {
+                sectionsBox.removeAllViews();
+                for (int i = 0; i < reviewSections.size(); i++) {
+                    final int _i = i;
+                    String[] sec = reviewSections.get(i);
+                    android.widget.LinearLayout row = new android.widget.LinearLayout(MainActivity.this);
+                    row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+                    final android.widget.EditText nameInput = new android.widget.EditText(MainActivity.this);
+                    nameInput.setText(sec[0]);
+                    nameInput.setTextSize(12);
+                    nameInput.setEnabled(i > 0);
+                    android.widget.LinearLayout.LayoutParams nlp = new android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+                    nameInput.setLayoutParams(nlp);
+                    row.addView(nameInput);
+                    if (i > 0) {
+                        android.widget.Button del = new android.widget.Button(MainActivity.this);
+                        del.setText("X");
+                        del.setTextSize(10);
+                        del.setBackgroundColor(0xFFFFE5E5);
+                        del.setTextColor(0xFFE1503F);
+                        del.setOnClickListener(new android.view.View.OnClickListener() {
+                            public void onClick(android.view.View v) { reviewSections.remove(_i); renderSectionsHolder[0].run(); }
+                        });
+                        row.addView(del);
+                    }
+                    sectionsBox.addView(row);
+                    final android.widget.EditText area = new android.widget.EditText(MainActivity.this);
+                    area.setText(sec[1]);
+                    area.setTextSize(13);
+                    area.setMinLines(3);
+                    area.setGravity(android.view.Gravity.TOP);
+                    area.setBackgroundColor(0xFFFAFBFC);
+                    sectionsBox.addView(area);
+                    final android.widget.EditText _na = area;
+                    _na.addTextChangedListener(new android.text.TextWatcher() {
+                        public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+                        public void onTextChanged(CharSequence s, int st, int b, int c) {}
+                        public void afterTextChanged(android.text.Editable s) { reviewSections.get(_i)[1] = s.toString(); }
+                    });
+                }
+            }};
+            final Runnable renderSections = renderSectionsHolder[0];
+            renderSections.run();
+            android.widget.Button addBtn = new android.widget.Button(this);
+            addBtn.setText("+ Добавить секцию");
+            addBtn.setTextSize(12);
+            addBtn.setBackgroundColor(0xFFE8EFFE);
+            addBtn.setTextColor(0xFF2F6FED);
+            addBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                public void onClick(android.view.View v) { reviewSections.add(new String[]{"Новая секция",""}); renderSections.run(); }
+            });
+            root.addView(addBtn);
+            android.widget.TextView photoLabel = new android.widget.TextView(this);
+            photoLabel.setText("ФОТО (" + reviewPhotos.size() + ")");
+            photoLabel.setTextSize(11);
+            photoLabel.setTextColor(0xFF7A8291);
+            root.addView(photoLabel);
+            android.widget.LinearLayout photosBox = new android.widget.LinearLayout(this);
+            photosBox.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            root.addView(photosBox);
+            final android.widget.LinearLayout _pb = photosBox;
+            final android.widget.TextView _pl = photoLabel;
+            final Runnable renderPhotos = new Runnable() { public void run() {
+                _pb.removeAllViews();
+                _pl.setText("ФОТО (" + reviewPhotos.size() + ")");
+                for (int i = 0; i < reviewPhotos.size(); i++) {
+                    final int _i = i;
+                    String u = reviewPhotos.get(i);
+                    android.widget.LinearLayout wrap = new android.widget.LinearLayout(MainActivity.this);
+                    wrap.setOrientation(android.widget.LinearLayout.VERTICAL);
+                    android.widget.TextView tv = new android.widget.TextView(MainActivity.this);
+                    tv.setText("Фото " + (i+1));
+                    tv.setTextSize(10);
+                    wrap.addView(tv);
+                    android.widget.Button del = new android.widget.Button(MainActivity.this);
+                    del.setText("X");
+                    del.setTextSize(10);
+                    del.setBackgroundColor(0xFFFFE5E5);
+                    del.setTextColor(0xFFE1503F);
+                    del.setOnClickListener(new android.view.View.OnClickListener() {
+                        public void onClick(android.view.View v) { reviewPhotos.remove(_i); }
+                    });
+                    wrap.addView(del);
+                    _pb.addView(wrap);
+                }
+            }};
+            renderPhotos.run();
+            android.widget.LinearLayout btnRow = new android.widget.LinearLayout(this);
+            btnRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            android.widget.Button cleanBtn = new android.widget.Button(this);
+            cleanBtn.setText("Очистить");
+            cleanBtn.setTextSize(12);
+            cleanBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                public void onClick(android.view.View v) {
+                    try {
+                        String bad = "kaspi.kz|wildberries|ozon.ru|Откроется в новом окне|Действуют Условия|Политика конфиденциальности|Общайтесь с Gemini|Теперь в Google Play";
+                        for (int i = 0; i < reviewSections.size(); i++) {
+                            String s = reviewSections.get(i)[1];
+                            String[] lines = s.split("\\n");
+                            StringBuilder sb = new StringBuilder();
+                            for (String ln : lines) { if (ln.trim().length() > 0 && !ln.matches(".*(" + bad + ").*")) { sb.append(ln).append("\\n"); } }
+                            reviewSections.get(i)[1] = sb.toString().trim();
+                        }
+                        renderSections.run();
+                    } catch (Exception ignored) {}
+                }
+            });
+            btnRow.addView(cleanBtn);
+            android.widget.Button resetBtn = new android.widget.Button(this);
+            resetBtn.setText("Сброс");
+            resetBtn.setTextSize(12);
+            resetBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                public void onClick(android.view.View v) {
+                    reviewSections.clear(); reviewSections.add(new String[]{"Описание",""}); reviewPhotos.clear();
+                    renderSections.run(); renderPhotos.run();
+                }
+            });
+            btnRow.addView(resetBtn);
+            android.widget.Button applyBtn = new android.widget.Button(this);
+            applyBtn.setText("Применить");
+            applyBtn.setTextSize(12);
+            applyBtn.setBackgroundColor(0xFF2F6FED);
+            applyBtn.setTextColor(0xFFFFFFFF);
+            applyBtn.setOnClickListener(new android.view.View.OnClickListener() {
+                public void onClick(android.view.View v) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < reviewSections.size(); i++) {
+                        String[] sec = reviewSections.get(i);
+                        if (sec[1].trim().isEmpty()) continue;
+                        if (i == 0) sb.append(sec[1]);
+                        else sb.append("\\n\\n[").append(sec[0].toUpperCase()).append("]\\n").append(sec[1]);
+                    }
+                    sendExtractedSeparate(sb.toString(), "", "");
+                    if (reviewPhotos.size() > 0) {
+                        StringBuilder pj = new StringBuilder("[");
+                        for (int i = 0; i < reviewPhotos.size(); i++) { if (i > 0) pj.append(","); pj.append(org.json.JSONObject.quote(reviewPhotos.get(i))); }
+                        pj.append("]");
+                        downloadAndSendPhotos(pj.toString());
+                    }
+                    d.dismiss();
+                }
+            });
+            btnRow.addView(applyBtn);
+            root.addView(btnRow);
+            d.setContentView(root);
+            reviewDialog = d;
+            d.show();
+        } catch (Exception e) { android.util.Log.e("On.i", "openReviewSheet", e); }
+    }
+
+
     private String getReviewInjectJs() {
         if (reviewInjectJsCache != null) return reviewInjectJsCache;
         try {
