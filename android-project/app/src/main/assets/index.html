@@ -6152,7 +6152,7 @@ function renderSearchLinks(name){
   }).join('');
   var btns=box.querySelectorAll('.oni-wv-btn');
   for(var i=0;i<btns.length;i++){
-    (function(b){ b.onclick=function(){ (function(){var _u=b.getAttribute('data-wv-url');if(_u&&_u.indexOf('gemini.google.com')>=0){var _p='Отвечай строго по делу. Формат ответа:\nОПИСАНИЕ: [сухой текст]\nХАРАКТЕРИСТИКИ: [список]\nЗАПРЕЩЕНО: вопросы в конце, фразы «Хотите узнать больше?», «Задайте вопрос», «Могу ли я помочь», источники, ссылки, дисклеймеры, мета-фразы о себе как об ИИ. Не предлагай действий.\n\nТовар: '+q;var _b=window.Android||window.AndroidWV;if(_b&&_b.saveGeminiQuery){_b.saveGeminiQuery(_p);}window.openInWV('https://gemini.google.com/app');return;}window.openInWV(_u);})(); }; })(btns[i]);
+    (function(b){ b.onclick=function(){ (function(){var _u=b.getAttribute('data-wv-url');if(_u&&_u.indexOf('gemini.google.com')>=0){var _p='Отвечай строго по делу. Формат ответа:\nОПИСАНИЕ: [подробное хорошее описание]\nХАРАКТЕРИСТИКИ: [список]\nЗАПРЕЩЕНО: вопросы в конце, фразы «Хотите узнать больше?», «Задайте вопрос», «Могу ли я помочь», ссылки на магазины, слова Купить, Источник, Откроется в новом окне, Действуют Условия, дисклеймеры Google, элементы интерфейса, фразы о себе как об ИИ. Не предлагай действий.\n\nТовар: '+q;var _b=window.Android||window.AndroidWV;if(_b&&_b.saveGeminiQuery){_b.saveGeminiQuery(_p);}window.openInWV('https://gemini.google.com/app');return;}window.openInWV(_u);})(); }; })(btns[i]);
   }
 }
 function openProductModal(id,options={}){
