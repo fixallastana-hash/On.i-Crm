@@ -2165,7 +2165,7 @@ private void postGuideResult(final String json) {
                 @Override public void onClick(android.view.View v) {
                     android.widget.Toast.makeText(MainActivity.this, "Review: tap", android.widget.Toast.LENGTH_SHORT).show();
                     if (productWebView != null) {
-                        productWebView.evaluateJavascript("(function(){var r=typeof window.__oniRvShow;var d=!!window.__oniRvData;window.AndroidWV&&window.AndroidWV.setStatus&&window.AndroidWV.setStatus(\"rv\",r+\"|\"+d,0);try{if(!window.__oniRvData)window.__oniRvData={desc:\"\",specs:\"\",photos:[]};if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}}catch(e){console.log(\"rv show err\",e);}})();", null);
+                        productWebView.evaluateJavascript("(function(){try{if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}else if(window.AndroidWV&&window.AndroidWV.toast){window.AndroidWV.toast(\"__oniRvShow missing\");}}catch(e){if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast(\"show err: \"+e.message);}})();", null);
                     }
                 }
             });
