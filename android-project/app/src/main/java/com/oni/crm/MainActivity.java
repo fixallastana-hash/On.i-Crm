@@ -2063,7 +2063,8 @@ private void postGuideResult(final String json) {
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
-                        try { String _rv = getReviewInjectJs(); android.widget.Toast.makeText(MainActivity.this, "Inject: "+(_rv==null?0:_rv.length())+" bytes", android.widget.Toast.LENGTH_SHORT).show(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception e) { android.widget.Toast.makeText(MainActivity.this, "Inject ERR: "+e.getMessage(), android.widget.Toast.LENGTH_LONG).show(); }
+                        try { String _ab = getAdblockJs(); if(_ab != null && _ab.length() > 0) productWebView.evaluateJavascript(_ab, null); } catch(Exception ignored) {}
+                        try { String _rv = getReviewInjectJs(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception ignored) {}
                         if (macroRecording) { productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null); }
                         updateMacroUI();
                         if (macroRecording) {
@@ -2601,6 +2602,19 @@ private void postGuideResult(final String json) {
         }});
     }
 
+    private static String adblockJsCache = null;
+    private String getAdblockJs() {
+        if (adblockJsCache != null) return adblockJsCache;
+        try {
+            java.io.InputStream is = getAssets().open("adblock.js");
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096]; int n;
+            while((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+            is.close();
+            adblockJsCache = bos.toString("UTF-8");
+        } catch (Exception e) { adblockJsCache = ""; }
+        return adblockJsCache;
+    }
     private static String reviewInjectJsCache = null;
     private String getReviewInjectJs() {
         if (reviewInjectJsCache != null) return reviewInjectJsCache;
