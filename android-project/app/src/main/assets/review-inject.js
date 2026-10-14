@@ -35,7 +35,7 @@ if(!document.getElementById("oni-rv-overlay")){
     '<div id="oni-rv-popup"><div id="oni-rv-popup-title">Куда добавить текст?</div><div id="oni-rv-popup-btns"></div></div>'
   ];
   var _w=document.createElement("div");
-  _w.innerHTML=_parts.join("");
+  var _html=_parts.join("");if(window.trustedTypes&&window.trustedTypes.createPolicy){try{var _p=window.trustedTypes.createPolicy("oniRvPolicy",{createHTML:function(s){return s;}});_w.innerHTML=_p.createHTML(_html);}catch(e){try{_w.innerHTML=_html;}catch(e2){_w.textContent="";}}}else{_w.innerHTML=_html;}
   while(_w.firstChild)document.body.appendChild(_w.firstChild);
 }
 if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("A3: html done");
