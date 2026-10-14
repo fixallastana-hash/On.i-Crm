@@ -1,6 +1,6 @@
 (function(){
 if(window.__oniRvInjected)return;
-window.__oniRvInjected=true;if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("A1: start");
+if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("A1: start");
 window.__oniRvData={sections:[{name:"Описание",value:""}],photos:[],lastTarget:"Описание"};
 window.__oniRvOpen=false;
 var css=document.getElementById("oni-rv-style");
@@ -165,5 +165,5 @@ if(t.className&&String(t.className).indexOf("oni-rv-lang")>=0){var _l=t.getAttri
     window.__oniRvHide();return;
   }
 });
-if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("inject v2 ready");
+window.__oniRvInjected=true;if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("inject v2 ready");
 })();

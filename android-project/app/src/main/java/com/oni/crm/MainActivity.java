@@ -2167,14 +2167,24 @@ private void postGuideResult(final String json) {
                     try {
                         String _rv = getReviewInjectJs();
                         if (_rv != null && _rv.length() > 0) {
-                            productWebView.evaluateJavascript(_rv, null);
+                            productWebView.evaluateJavascript(_rv, new android.webkit.ValueCallback<String>() {
+                                public void onReceiveValue(String result) {
+                                    android.widget.Toast.makeText(MainActivity.this, "Inj: "+result, android.widget.Toast.LENGTH_LONG).show();
+                                }
+                            });
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        android.widget.Toast.makeText(MainActivity.this, "Inj ERR: "+e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+                    }
                     productWebView.postDelayed(new Runnable() { public void run() {
                         try {
-                            productWebView.evaluateJavascript("(function(){try{if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}else if(window.AndroidWV&&window.AndroidWV.toast){window.AndroidWV.toast(\"show missing\");}}catch(e){if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast(\"show err: \"+e.message);}})();", null);
+                            productWebView.evaluateJavascript("(function(){try{if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();return \"ok\";}return \"missing\";}catch(e){return \"err: \"+e.message;}})()", new android.webkit.ValueCallback<String>() {
+                                public void onReceiveValue(String result) {
+                                    android.widget.Toast.makeText(MainActivity.this, "Show: "+result, android.widget.Toast.LENGTH_LONG).show();
+                                }
+                            });
                         } catch (Exception ignored) {}
-                    }}, 400);
+                    }}, 600);
                 }
             });
 
