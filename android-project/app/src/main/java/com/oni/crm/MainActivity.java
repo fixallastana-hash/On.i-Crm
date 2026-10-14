@@ -2155,6 +2155,7 @@ private void postGuideResult(final String json) {
             });
             btnReview.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) {
+                    android.widget.Toast.makeText(MainActivity.this, "Review: tap", android.widget.Toast.LENGTH_SHORT).show();
                     if (productWebView != null && webView != null) {
                         webView.evaluateJavascript("window.__oniReviewMode=true;window.__oniReviewDesc=\"\";window.__oniReviewSpecs=\"\";window.__oniReviewPhotos=[];window.__oniReviewMain=\"\";", null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS_MANUAL, null);
@@ -2569,6 +2570,7 @@ private void postGuideResult(final String json) {
     }
 
     private void sendExtractedSeparate(final String desc, final String specs, final String url) {
+        android.widget.Toast.makeText(MainActivity.this, "Data: d="+(desc==null?0:desc.length())+" s="+(specs==null?0:specs.length()), android.widget.Toast.LENGTH_SHORT).show();
         runOnUiThread(new Runnable() { public void run() {
             try {
                 if (webView == null) return;
