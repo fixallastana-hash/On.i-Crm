@@ -40,7 +40,16 @@ function renderPhotos(){
   var dels=box.querySelectorAll(".oni-rv-del");
   for(var j=0;j<dels.length;j++){(function(btn){btn.onclick=function(ev){ev.stopPropagation();var i=parseInt(btn.getAttribute("data-i"),10);window.__oniRvData.photos.splice(i,1);renderPhotos();};})(dels[j]);}
 }
-window.__oniRvShow=function(){window.__oniRvOpen=true;var ov=document.getElementById("oni-rv-overlay");if(!ov)return;ov.classList.add("open");renderSections();renderPhotos();};
+window.__oniRvShow=function(){
+try{if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("S1: enter");}catch(e){}
+window.__oniRvOpen=true;var ov=document.getElementById("oni-rv-overlay");
+try{if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("S2: ov="+(ov?"yes":"NO"));}catch(e){}
+if(!ov)return;ov.classList.add("open");
+try{if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("S3: open added");}catch(e){}
+try{renderSections();}catch(e){if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("S4 err: "+e.message);}
+try{renderPhotos();}catch(e){if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("S5 err: "+e.message);}
+try{if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("S6: done");}catch(e){}
+};
 window.__oniRvHide=function(){window.__oniRvOpen=false;var ov=document.getElementById("oni-rv-overlay");if(ov)ov.classList.remove("open");};
 function detectSection(el){var cur=el,_d=0;while(cur&&cur!==document.body&&_d<10){var t=(cur.innerText||"").toLowerCase();if(t.indexOf("характеристик")>=0||t.indexOf("сипаттамалар")>=0||t.indexOf("specification")>=0)return "Характеристики";if(t.indexOf("применени")>=0||t.indexOf("қолдану")>=0||t.indexOf("application")>=0)return "Применение";if(t.indexOf("состав")>=0||t.indexOf("құрам")>=0||t.indexOf("ingredient")>=0)return "Состав";if(t.indexOf("описани")>=0||t.indexOf("сипаттама")>=0||t.indexOf("description")>=0)return "Описание";cur=cur.parentElement;_d++;}return null;}
 function addToSection(name,text){
