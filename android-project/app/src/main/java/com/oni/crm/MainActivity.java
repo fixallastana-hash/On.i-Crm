@@ -2068,7 +2068,7 @@ private void postGuideResult(final String json) {
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
                         try { String _ab = getAdblockJs(); if(_ab != null && _ab.length() > 0) productWebView.evaluateJavascript(_ab, null); } catch(Exception ignored) {}
-                        try { String _rv = getReviewInjectJs(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception ignored) {}
+                        try { String _rv = getReviewInjectJs(); android.widget.Toast.makeText(MainActivity.this, "RV: "+(_rv==null?0:_rv.length())+"b", android.widget.Toast.LENGTH_SHORT).show(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception e) { android.widget.Toast.makeText(MainActivity.this, "RV ERR: "+e.getMessage(), android.widget.Toast.LENGTH_LONG).show(); }
                         if (macroRecording) { productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null); }
                         updateMacroUI();
                         if (macroRecording) {
@@ -2165,7 +2165,7 @@ private void postGuideResult(final String json) {
                 @Override public void onClick(android.view.View v) {
                     android.widget.Toast.makeText(MainActivity.this, "Review: tap", android.widget.Toast.LENGTH_SHORT).show();
                     if (productWebView != null) {
-                        productWebView.evaluateJavascript("(function(){try{if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}else if(window.AndroidWV&&window.AndroidWV.toast){window.AndroidWV.toast(\"__oniRvShow missing\");}}catch(e){if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast(\"show err: \"+e.message);}})();", null);
+                        productWebView.evaluateJavascript("(function(){return typeof window.__oniRvShow;})()", new android.webkit.ValueCallback<String>() { public void onReceiveValue(String v) { android.widget.Toast.makeText(MainActivity.this, "typeof show: "+v, android.widget.Toast.LENGTH_LONG).show(); if(v != null && v.indexOf("function") >= 0) { productWebView.evaluateJavascript("window.__oniRvShow()", null); } }});
                     }
                 }
             });
