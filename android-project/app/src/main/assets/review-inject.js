@@ -35,7 +35,7 @@ function renderPhotos(){
   if(!box)return;
   if(!window.__oniRvData.photos.length){box.innerHTML="<div style=\"color:#888;font-size:13px;\">Двойной тап по фото на сайте</div>";return;}
   var h="";
-  for(var i=0;i<window.__oniRvData.photos.length;i++){var p=window.__oniRvData.photos[i];h+="<div class=\"oni-rv-photo\"><img src=\""+String(p).replace(/\"/g,"&quot;")+"\" style=\"width:100%;height:100%;object-fit:cover;display:block;\"><button class=\"oni-rv-del\" data-i=\""+i+"\">X</button></div>";}
+  for(var i=0;i<window.__oniRvData.photos.length;i++){var p=window.__oniRvData.photos[i];h+="<div class=\"oni-rv-photo\"><img src=\""+String(p).replace(/\"/g,"&quot;")+"\" referrerpolicy=\"no-referrer\" style=\"width:100%;height:100%;object-fit:cover;display:block;\"><button class=\"oni-rv-del\" data-i=\""+i+"\">X</button></div>";}
   box.innerHTML=h;
   var dels=box.querySelectorAll(".oni-rv-del");
   for(var j=0;j<dels.length;j++){(function(btn){btn.onclick=function(ev){ev.stopPropagation();var i=parseInt(btn.getAttribute("data-i"),10);window.__oniRvData.photos.splice(i,1);renderPhotos();};})(dels[j]);}
@@ -63,7 +63,7 @@ function showPopupForText(txt){
 }
 function handleTap(el){
   if(!el)return;
-  if(el.tagName==="IMG"){var src=el.currentSrc||el.src;if(!src){toast("Фото без URL");return;}for(var i=0;i<window.__oniRvData.photos.length;i++){if(window.__oniRvData.photos[i]===src){toast("Уже добавлено");return;}}window.__oniRvData.photos.push(src);toast("Фото добавлено ("+window.__oniRvData.photos.length+")");if(window.__oniRvOpen)renderPhotos();return;}
+  if(el.tagName==="IMG"){var src=el.currentSrc||el.src;if(!src){toast("Фото без URL");return;}for(var i=0;i<window.__oniRvData.photos.length;i++){if(window.__oniRvData.photos[i]===src){toast("Уже добавлено");return;}}window.__oniRvData.photos.push(src);toast("Фото "+window.__oniRvData.photos.length+": "+String(src).substring(0,60));if(window.__oniRvOpen)renderPhotos();return;}
   var cur=el,txt="";while(cur&&cur!==document.body){var t=(cur.innerText||"").replace(/\s+/g," ").trim();if(t.length>=30&&t.length<=5000){txt=t;break;}cur=cur.parentElement;}
   if(!txt){toast("Тут нет текста");return;}
   var detected=detectSection(el);
@@ -72,6 +72,27 @@ function handleTap(el){
   showPopupForText(txt);
 }
 var _lastTapTime=0,_lastTapX=0,_lastTapY=0;
+var _lpTimer=null,_lpTarget=null,_lpX=0,_lpY=0,_lpFired=false;
+document.addEventListener("touchstart",function(ev){
+var t=ev.target;if(!t)return;
+if(t.closest&&(t.closest("#oni-rv-overlay")||t.closest("#oni-rv-popup")))return;
+if(t.tagName!=="IMG")return;
+_lpTarget=t;_lpX=ev.touches[0].clientX;_lpY=ev.touches[0].clientY;_lpFired=false;
+if(_lpTimer)clearTimeout(_lpTimer);
+_lpTimer=setTimeout(function(){_lpTimer=null;_lpFired=true;handleTap(_lpTarget);},600);
+},{passive:true});
+document.addEventListener("touchmove",function(ev){
+if(!_lpTimer)return;
+var dx=Math.abs(ev.touches[0].clientX-_lpX);var dy=Math.abs(ev.touches[0].clientY-_lpY);
+if(dx>10||dy>10){clearTimeout(_lpTimer);_lpTimer=null;}
+},{passive:true});
+document.addEventListener("touchend",function(ev){
+if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
+if(_lpFired){_lpFired=false;ev.preventDefault();return;}
+},{passive:false});
+document.addEventListener("touchcancel",function(){if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}},{passive:true});
+document.addEventListener("contextmenu",function(ev){ev.preventDefault();return false;},true);
+var _style=document.createElement("style");_style.textContent="img,a{-webkit-touch-callout:none !important;-webkit-user-select:none !important;user-select:none !important;}";document.head.appendChild(_style);
 var _linkBlockTimer=null;
 document.addEventListener("click",function(ev){
 var a=ev.target&&ev.target.closest?ev.target.closest("a[href]"):null;
@@ -89,7 +110,8 @@ document.addEventListener("touchend",function(ev){
   var t=ev.target;if(!t)return;
   if(t.closest&&(t.closest("#oni-rv-overlay")||t.closest("#oni-rv-popup")||t.closest("#oni-rv-toast")))return;
   var now=Date.now();var x=ev.changedTouches[0].clientX;var y=ev.changedTouches[0].clientY;
-  if(now-_lastTapTime<350&&Math.abs(x-_lastTapX)<30&&Math.abs(y-_lastTapY)<30){_lastTapTime=0;handleTap(t);return;}
+  if(t.tagName==="IMG")return;
+if(now-_lastTapTime<350&&Math.abs(x-_lastTapX)<30&&Math.abs(y-_lastTapY)<30){_lastTapTime=0;handleTap(t);return;}
   _lastTapTime=now;_lastTapX=x;_lastTapY=y;
 },{passive:true});
 document.addEventListener("click",function(ev){
