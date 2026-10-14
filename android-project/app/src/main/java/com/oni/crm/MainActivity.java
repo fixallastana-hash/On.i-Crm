@@ -2811,7 +2811,20 @@ private void postGuideResult(final String json) {
             });
             btnRow.addView(applyBtn);
             root.addView(btnRow);
-            d.setContentView(root);
+                        android.view.Window w = d.getWindow();
+            if (w != null) {
+                w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
+                w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+                w.setGravity(android.view.Gravity.BOTTOM);
+                android.view.WindowManager.LayoutParams lp = w.getAttributes();
+                lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+                w.setAttributes(lp);
+            }
+            android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+            scroll.addView(root);
+            root.setBackgroundColor(0xFFFFFFFF);
+d.setContentView(scroll);
             reviewDialog = d;
             d.show();
         } catch (Exception e) { android.util.Log.e("On.i", "openReviewSheet", e); }
