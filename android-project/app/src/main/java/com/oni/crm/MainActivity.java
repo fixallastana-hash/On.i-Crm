@@ -2640,6 +2640,8 @@ private void postGuideResult(final String json) {
             pendingGeminiQuery = q;
         }
         @JavascriptInterface
+        public void toast(String m) { final String _m = m; runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+_m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
+        @JavascriptInterface
         public void setReviewLang(String l) { if(l != null) reviewLang = l; }
         @JavascriptInterface
         public String getReviewLang() { return reviewLang; }
