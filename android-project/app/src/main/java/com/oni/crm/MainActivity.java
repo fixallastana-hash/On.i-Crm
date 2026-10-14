@@ -2076,7 +2076,7 @@ private void postGuideResult(final String json) {
                                 final int _d = delays[_i];
                                 productWebView.postDelayed(new Runnable() { public void run() {
                                     try {
-                                        String js = "(function(){try{var qs=['rich-textarea .ql-editor','rich-textarea [contenteditable=\"true\"]','[contenteditable=\"true\"]','textarea'];var el=null;for(var i=0;i<qs.length;i++){el=document.querySelector(qs[i]);if(el)break;}if(!el){console.log(\"[On.i] Gemini: input not found yet\");return;}el.focus();var v=" + JSONObject.quote(q) + ";if(el.tagName===\"TEXTAREA\"){  var d=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,\"value\");  if(d&&d.set){d.set.call(el,v);}else{el.value=v;}}else{  try{el.innerHTML=\"\";document.execCommand(\"insertText\",false,v);}catch(e1){try{el.innerText=v;}catch(e2){el.textContent=v;}}}el.dispatchEvent(new Event(\"input\",{bubbles:true}));el.dispatchEvent(new Event(\"change\",{bubbles:true}));el.dispatchEvent(new KeyboardEvent(\"keyup\",{bubbles:true,key:\"a\"}));console.log(\"[On.i] Gemini: prompt injected len=\"+v.length);}catch(e){console.log(\"[On.i] Gemini inject error: \"+e.message);}})();";
+                                        String js = "(function(){try{if(window.__oniGeminiInjected)return;var qs=['rich-textarea .ql-editor','rich-textarea [contenteditable=\"true\"]','[contenteditable=\"true\"]','textarea'];var el=null;for(var i=0;i<qs.length;i++){el=document.querySelector(qs[i]);if(el)break;}if(!el){console.log(\"[On.i] Gemini: input not found yet\");return;}el.focus();var v=" + JSONObject.quote(q) + ";if(el.tagName===\"TEXTAREA\"){  var d=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,\"value\");  if(d&&d.set){d.set.call(el,v);}else{el.value=v;}}else{  try{el.innerHTML=\"\";document.execCommand(\"insertText\",false,v);}catch(e1){try{el.innerText=v;}catch(e2){el.textContent=v;}}}el.dispatchEvent(new Event(\"input\",{bubbles:true}));el.dispatchEvent(new Event(\"change\",{bubbles:true}));el.dispatchEvent(new KeyboardEvent(\"keyup\",{bubbles:true,key:\"a\"}));window.__oniGeminiInjected=true;console.log(\"[On.i] Gemini: prompt injected len=\"+v.length);}catch(e){console.log(\"[On.i] Gemini inject error: \"+e.message);}})();";
                                         productWebView.evaluateJavascript(js, null);
                                     } catch (Exception ignored) {}
                                 }}, _d);
@@ -2099,6 +2099,16 @@ private void postGuideResult(final String json) {
             ));
 
             int btnH = (int)(44 * getResources().getDisplayMetrics().density);
+            android.widget.Button btnReview = new android.widget.Button(this);
+            btnReview.setText("👁");
+            btnReview.setTextSize(15);
+            btnReview.setBackgroundColor(0xFF6F42C1);
+            btnReview.setTextColor(0xFFFFFFFF);
+            btnReview.setPadding(pad, 0, pad, 0);
+            android.widget.LinearLayout.LayoutParams bLpR = new android.widget.LinearLayout.LayoutParams(0, btnH, 0.5f);
+            btnReview.setLayoutParams(bLpR);
+            bottomBar.addView(btnReview);
+
             android.widget.Button btnExtract = new android.widget.Button(this);
             btnExtract.setText("📋 Описание");
             btnExtract.setTextSize(13);
@@ -2143,6 +2153,15 @@ private void postGuideResult(final String json) {
                     }
                 }
             });
+            btnReview.setOnClickListener(new android.view.View.OnClickListener() {
+                @Override public void onClick(android.view.View v) {
+                    if (productWebView != null && webView != null) {
+                        webView.evaluateJavascript("window.__oniReviewMode=true;window.__oniReviewDesc=\"\";window.__oniReviewSpecs=\"\";window.__oniReviewPhotos=[];window.__oniReviewMain=\"\";", null);
+                        productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS_MANUAL, null);
+                    }
+                }
+            });
+
             btnExtract.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) {
                     if (productWebView != null) {

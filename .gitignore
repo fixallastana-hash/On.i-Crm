@@ -19,3 +19,7 @@ skills-lock.json
 *.bak*
 
 firebase-debug.log
+
+*.bak_*
+index.html.before_patch
+MainActivity.before_patch
