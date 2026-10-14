@@ -2061,6 +2061,7 @@ private void postGuideResult(final String json) {
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
+                        try { String _rv = getReviewInjectJs(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception ignored) {}
                         if (macroRecording) { productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null); }
                         updateMacroUI();
                         if (macroRecording) {
@@ -2156,9 +2157,8 @@ private void postGuideResult(final String json) {
             btnReview.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) {
                     android.widget.Toast.makeText(MainActivity.this, "Review: tap", android.widget.Toast.LENGTH_SHORT).show();
-                    if (productWebView != null && webView != null) {
-                        webView.evaluateJavascript("window.__oniReviewMode=true;window.__oniReviewDesc=\"\";window.__oniReviewSpecs=\"\";window.__oniReviewPhotos=[];window.__oniReviewMain=\"\";", null);
-                        productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS_MANUAL, null);
+                    if (productWebView != null) {
+                        productWebView.evaluateJavascript("try{if(window.__oniRvData){window.__oniRvData.desc=window.__oniRvData.desc||\"\";window.__oniRvData.specs=window.__oniRvData.specs||\"\";window.__oniRvData.photos=window.__oniRvData.photos||[];}else{window.__oniRvData={desc:\"\",specs:\"\",photos:[]};}if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}}catch(e){console.log(\"rv show err\",e);}", null);
                     }
                 }
             });
@@ -2599,6 +2599,19 @@ private void postGuideResult(final String json) {
         }});
     }
 
+    private static String reviewInjectJsCache = null;
+    private String getReviewInjectJs() {
+        if (reviewInjectJsCache != null) return reviewInjectJsCache;
+        try {
+            java.io.InputStream is = getAssets().open("review-inject.js");
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096]; int n;
+            while((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+            is.close();
+            reviewInjectJsCache = bos.toString("UTF-8");
+        } catch (Exception e) { reviewInjectJsCache = ""; }
+        return reviewInjectJsCache;
+    }
     private static String pendingGeminiQuery = null;
     private final class ProductWV {
         @JavascriptInterface
