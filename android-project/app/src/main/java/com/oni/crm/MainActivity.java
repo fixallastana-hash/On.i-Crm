@@ -158,6 +158,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void saveGeminiQuery(String q) { pendingGeminiQuery = q; }
         @JavascriptInterface
+        public void toast(String m) { runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
+        @JavascriptInterface
         public void pickExcelFile() {
             runOnUiThread(() -> {
                 Intent document = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -2061,7 +2063,7 @@ private void postGuideResult(final String json) {
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
-                        try { String _rv = getReviewInjectJs(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception ignored) {}
+                        try { String _rv = getReviewInjectJs(); android.widget.Toast.makeText(MainActivity.this, "Inject: "+(_rv==null?0:_rv.length())+" bytes", android.widget.Toast.LENGTH_SHORT).show(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception e) { android.widget.Toast.makeText(MainActivity.this, "Inject ERR: "+e.getMessage(), android.widget.Toast.LENGTH_LONG).show(); }
                         if (macroRecording) { productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null); }
                         updateMacroUI();
                         if (macroRecording) {
@@ -2158,7 +2160,7 @@ private void postGuideResult(final String json) {
                 @Override public void onClick(android.view.View v) {
                     android.widget.Toast.makeText(MainActivity.this, "Review: tap", android.widget.Toast.LENGTH_SHORT).show();
                     if (productWebView != null) {
-                        productWebView.evaluateJavascript("try{if(window.__oniRvData){window.__oniRvData.desc=window.__oniRvData.desc||\"\";window.__oniRvData.specs=window.__oniRvData.specs||\"\";window.__oniRvData.photos=window.__oniRvData.photos||[];}else{window.__oniRvData={desc:\"\",specs:\"\",photos:[]};}if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}}catch(e){console.log(\"rv show err\",e);}", null);
+                        productWebView.evaluateJavascript("(function(){var r=typeof window.__oniRvShow;var d=!!window.__oniRvData;window.AndroidWV&&window.AndroidWV.setStatus&&window.AndroidWV.setStatus(\"rv\",r+\"|\"+d,0);try{if(!window.__oniRvData)window.__oniRvData={desc:\"\",specs:\"\",photos:[]};if(typeof window.__oniRvShow===\"function\"){window.__oniRvShow();}}catch(e){console.log(\"rv show err\",e);}})();", null);
                     }
                 }
             });
