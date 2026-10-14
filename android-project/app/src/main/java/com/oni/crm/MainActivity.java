@@ -2608,6 +2608,8 @@ private void postGuideResult(final String json) {
     private android.app.Dialog reviewDialog = null;
     private final java.util.List<String[]> reviewSections = new java.util.ArrayList<>();
     private final java.util.List<String> reviewPhotos = new java.util.ArrayList<>();
+    private Runnable reviewRenderSections = null;
+    private Runnable reviewRenderPhotos = null;
     private static String adblockJsCache = null;
     private String getAdblockJs() {
         if (adblockJsCache != null) return adblockJsCache;
@@ -2709,6 +2711,7 @@ private void postGuideResult(final String json) {
                 }
             }};
             final Runnable renderSections = renderSectionsHolder[0];
+            reviewRenderSections = renderSections;
             renderSections.run();
             android.widget.Button addBtn = new android.widget.Button(this);
             addBtn.setText("+ Добавить секцию");
@@ -2754,6 +2757,7 @@ private void postGuideResult(final String json) {
                 }
             }};
             renderPhotos.run();
+            reviewRenderPhotos = renderPhotos;
             android.widget.LinearLayout btnRow = new android.widget.LinearLayout(this);
             btnRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
             android.widget.Button cleanBtn = new android.widget.Button(this);
@@ -2826,7 +2830,51 @@ private void postGuideResult(final String json) {
             root.setBackgroundColor(0xFFFFFFFF);
 d.setContentView(scroll);
             reviewDialog = d;
-            d.show();
+                        if (productWebView != null) {
+                productWebView.evaluateJavascript("(function(){try{if(!window.__oniRvData)return \"none\";var out={sections:window.__oniRvData.sections||[],photos:window.__oniRvData.photos||[]};return JSON.stringify(out);}catch(e){return \"err:\"+e.message;}})()", new android.webkit.ValueCallback<String>() {
+                    public void onReceiveValue(String result) {
+                        try {
+                            if (result == null || result.length() < 4 || result.startsWith("\"none")) return;
+                            String s = result;
+                            if (s.startsWith("\"") && s.endsWith("\"")) s = s.substring(1, s.length() - 1);
+                            s = s.replace("\\\\\"", "\"").replace("\\\\n", "\\n");
+                            org.json.JSONObject o = new org.json.JSONObject(s);
+                            org.json.JSONArray secs = o.optJSONArray("sections");
+                            if (secs != null) {
+                                for (int i = 0; i < secs.length(); i++) {
+                                    org.json.JSONObject so = secs.optJSONObject(i);
+                                    if (so == null) continue;
+                                    String nm = so.optString("name", "");
+                                    String vl = so.optString("value", "");
+                                    if (nm.isEmpty() || vl.isEmpty()) continue;
+                                    boolean found = false;
+                                    for (int j = 0; j < reviewSections.size(); j++) {
+                                        if (reviewSections.get(j)[0].equalsIgnoreCase(nm)) {
+                                            String cur = reviewSections.get(j)[1];
+                                            if (cur.indexOf(vl) < 0) reviewSections.get(j)[1] = cur.isEmpty() ? vl : (cur + "\n\n" + vl);
+                                            found = true; break;
+                                        }
+                                    }
+                                    if (!found) reviewSections.add(new String[]{nm, vl});
+                                }
+                            }
+                            org.json.JSONArray phs = o.optJSONArray("photos");
+                            if (phs != null) {
+                                for (int i = 0; i < phs.length(); i++) {
+                                    String u = phs.optString(i, "");
+                                    if (u.isEmpty()) continue;
+                                    boolean dup = false;
+                                    for (int j = 0; j < reviewPhotos.size(); j++) if (reviewPhotos.get(j).equals(u)) { dup = true; break; }
+                                    if (!dup) reviewPhotos.add(u);
+                                }
+                            }
+                            if (reviewRenderSections != null) reviewRenderSections.run();
+                            if (reviewRenderPhotos != null) reviewRenderPhotos.run();
+                        } catch (Exception ignored) {}
+                    }
+                });
+            }
+d.show();
         } catch (Exception e) { android.util.Log.e("On.i", "openReviewSheet", e); }
     }
 
@@ -2848,6 +2896,41 @@ d.setContentView(scroll);
         @JavascriptInterface
         public void saveGeminiQuery(String q) {
             pendingGeminiQuery = q;
+        }
+
+        @JavascriptInterface
+        public void rvAddText(final String sectionName, final String text) {
+            if (text == null || text.trim().isEmpty()) return;
+            final String _name = (sectionName == null || sectionName.trim().isEmpty()) ? "Описание" : sectionName.trim();
+            final String _text = text.trim();
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    boolean found = false;
+                    for (int i = 0; i < reviewSections.size(); i++) {
+                        if (reviewSections.get(i)[0].equalsIgnoreCase(_name)) {
+                            String cur = reviewSections.get(i)[1];
+                            reviewSections.get(i)[1] = cur.isEmpty() ? _text : (cur + "\n\n" + _text);
+                            found = true; break;
+                        }
+                    }
+                    if (!found) reviewSections.add(new String[]{_name, _text});
+                    if (reviewRenderSections != null) reviewRenderSections.run();
+                } catch (Exception ignored) {}
+            }});
+        }
+        @JavascriptInterface
+        public void rvAddPhoto(final String url) {
+            if (url == null || url.trim().isEmpty()) return;
+            final String _url = url.trim();
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    for (int i = 0; i < reviewPhotos.size(); i++) {
+                        if (reviewPhotos.get(i).equals(_url)) return;
+                    }
+                    reviewPhotos.add(_url);
+                    if (reviewRenderPhotos != null) reviewRenderPhotos.run();
+                } catch (Exception ignored) {}
+            }});
         }
         @JavascriptInterface
         public void toast(String m) { final String _m = m; runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+_m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
