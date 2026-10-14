@@ -142,4 +142,5 @@ document.addEventListener("click",function(ev){
 });
 
 if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("inject ready");
+if(window.AndroidWV&&window.AndroidWV.toast)window.AndroidWV.toast("B: IIFE done");
 })();
