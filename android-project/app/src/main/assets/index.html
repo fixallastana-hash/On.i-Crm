@@ -6085,7 +6085,16 @@ window.openInWV = function(url){
   }catch(e){ console.warn('[wv] openInWV failed', e); }
 };
 
-window.onProductWebViewExtracted = function(descText, specsText, sourceUrl){
+window.__oniBuildPrompt = function(lang, q){
+  var RU = 'Ты эксперт по товарам. Дай полную информацию о товаре на русском языке.\n\nСтруктуру выбери сам, в зависимости от типа товара:\n- Парфюм: описание аромата, ноты (верхние/средние/базовые), сезон, пол, стойкость, шлейф, похожие\n- Книга: автор, жанр, год, аннотация, содержание, аудитория\n- Электроника: характеристики, комплектация, гарантия\n- Косметика: состав, применение, тип кожи, объём\n- БАД/лекарство: действие, показания, дозировка, противопоказания\n- Одежда: материал, размеры, уход\n- Иначе: описание и главные характеристики\n\nЕсли найдёшь 3+ фотографий товара разных ракурсов — дай ссылки в конце в формате:\nФОТО:\nhttps://...jpg\nhttps://...jpg\nhttps://...jpg\n\nЕсли фотографий меньше 3 или не нашёл — не упоминай ФОТО вообще.\n\nНе добавляй: вопросы в конце, ссылки на магазины, слова Купить, Источник, Откроется в новом окне, Действуют Условия, дисклеймеры Google, элементы интерфейса, фразы о себе как об ИИ. Не предлагай действий.\n\nТовар: ';
+  var KZ = 'Сен тауарлар бойынша сарапшысың. Тауар туралы қазақ тілінде толық ақпарат бер.\n\nҚұрылымын өзің таңда, тауар түріне байланысты:\n- Парфюм: хош иістің сипаттамасы, ноталар (жоғарғы/ортаңғы/базалық), маусым, жыныс, тұрақтылық, із, ұқсастар\n- Кітап: авторы, жанры, жылы, аннотациясы, мазмұны, оқырман аудиториясы\n- Электроника: сипаттамалары, жинағы, кепілдігі\n- Косметика: құрамы, қолданылуы, тері түрі, көлемі\n- Дәрі/БАД: әсері, көрсетілімдері, дозалауы, қарсы көрсетілімдері\n- Киім: материалы, өлшемдері, күтімі\n- Әйтпесе: сипаттама мен негізгі мінездемелері\n\nЕгер 3+ фото тапсаң — соңында сілтемелер бер:\nФОТО:\nhttps://...jpg\nhttps://...jpg\nhttps://...jpg\n\nЕгер 3-тен аз фото болса немесе таппасаң — ФОТО туралы мүлде айтпа.\n\nҚоспа: соңында сұрақтар, дүкен сілтемелері, Сатып алу, Дереккөз, Google ескертпелері, интерфейс элементтері, өзің туралы мета-фразалар. Әрекеттерді ұсынба.\n\nТауар: ';
+  var BOTH = 'Ответь на двух языках: сначала полный блок на русском, потом такой же на казахском.\n\nФормат:\n[RU]\n(полная информация на русском, структуру выбери сам)\n\n[KZ]\n(толық ақпарат қазақ тілінде, құрылымын өзің таңда)\n\nЕсли найдёшь 3+ фото — дай ссылки один раз в конце:\nФОТО:\nhttps://...jpg\nhttps://...jpg\nhttps://...jpg\n\nЕсли фото меньше 3 — не упоминай ФОТО.\n\nНе добавляй: вопросы, ссылки на магазины, дисклеймеры Google, фразы о себе как об ИИ.\n\nТовар: ';
+  var L = String(lang || 'kz').toLowerCase();
+  if(L === 'auto'){ L = /[әғқңөұүһі]/i.test(String(q||'')) ? 'kz' : 'ru'; }
+  if(L === 'ru') return RU + q;
+  if(L === 'both') return BOTH + q;
+  return KZ + q;
+};window.onProductWebViewExtracted = function(descText, specsText, sourceUrl){
   try{
     var desc = document.getElementById('f-description');
     var purpose = document.getElementById('f-purpose');
@@ -6152,7 +6161,7 @@ function renderSearchLinks(name){
   }).join('');
   var btns=box.querySelectorAll('.oni-wv-btn');
   for(var i=0;i<btns.length;i++){
-    (function(b){ b.onclick=function(){ (function(){var _u=b.getAttribute('data-wv-url');if(_u&&_u.indexOf('gemini.google.com')>=0){var _p='Отвечай строго по делу. Формат ответа:\nОПИСАНИЕ: [подробное хорошее описание]\nХАРАКТЕРИСТИКИ: [список]\nЗАПРЕЩЕНО: вопросы в конце, фразы «Хотите узнать больше?», «Задайте вопрос», «Могу ли я помочь», ссылки на магазины, слова Купить, Источник, Откроется в новом окне, Действуют Условия, дисклеймеры Google, элементы интерфейса, фразы о себе как об ИИ. Не предлагай действий.\n\nТовар: '+q;var _b=window.Android||window.AndroidWV;if(_b&&_b.saveGeminiQuery){_b.saveGeminiQuery(_p);}window.openInWV('https://gemini.google.com/app');return;}window.openInWV(_u);})(); }; })(btns[i]);
+    (function(b){ b.onclick=function(){ (function(){var _u=b.getAttribute('data-wv-url');if(_u&&_u.indexOf('gemini.google.com')>=0){var _b=window.Android||window.AndroidWV;var _lang=(_b&&_b.getReviewLang)?_b.getReviewLang():'kz';var _p=window.__oniBuildPrompt?window.__oniBuildPrompt(_lang,q):('Товар: '+q);if(_b&&_b.saveGeminiQuery){_b.saveGeminiQuery(_p);}window.openInWV('https://gemini.google.com/app');return;}window.openInWV(_u);})(); }; })(btns[i]);
   }
 }
 function openProductModal(id,options={}){

@@ -158,6 +158,10 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void saveGeminiQuery(String q) { pendingGeminiQuery = q; }
         @JavascriptInterface
+        public String getReviewLang() { return reviewLang; }
+        @JavascriptInterface
+        public void setReviewLang(String l) { if(l != null) reviewLang = l; }
+        @JavascriptInterface
         public void toast(String m) { runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
         @JavascriptInterface
         public void pickExcelFile() {
@@ -2602,6 +2606,7 @@ private void postGuideResult(final String json) {
         }});
     }
 
+    private static String reviewLang = "kz";
     private static String adblockJsCache = null;
     private String getAdblockJs() {
         if (adblockJsCache != null) return adblockJsCache;
@@ -2634,6 +2639,10 @@ private void postGuideResult(final String json) {
         public void saveGeminiQuery(String q) {
             pendingGeminiQuery = q;
         }
+        @JavascriptInterface
+        public void setReviewLang(String l) { if(l != null) reviewLang = l; }
+        @JavascriptInterface
+        public String getReviewLang() { return reviewLang; }
         @JavascriptInterface
         public void onExtracted(String desc, String specs, String url) {
             if (desc == null) desc = "";
