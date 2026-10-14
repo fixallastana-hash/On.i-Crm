@@ -345,7 +345,7 @@ body.theme-dark .topbar-menu-head{border-color:var(--border);}
 .sheet{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;overflow-y:auto;
   padding-bottom:calc(16px + env(safe-area-inset-bottom));}
 .sheet-handle{width:34px;height:4px;background:var(--border);border-radius:2px;margin:9px auto 2px;}
-.sheet-head{padding:8px 18px 12px;display:flex;align-items:center;justify-content:space-between;}
+.sheet-head{padding:8px 18px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;background:var(--surface);box-shadow:0 1px 0 var(--border);}
 .sheet-title{font-size:15px;font-weight:700;}
 .sheet-close{background:var(--surface-2);border:none;width:26px;height:26px;border-radius:50%;color:var(--muted);font-size:13px;}
 .sheet-body{padding:0 18px 8px;}
