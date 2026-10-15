@@ -2700,7 +2700,7 @@ private void postGuideResult(final String json) {
                     row.addView(nameInput);
                     if (i > 0) {
                         android.widget.Button del = new android.widget.Button(MainActivity.this);
-                        del.setText("X");
+                        del.setText("×");
                         del.setTextSize(10);
                         del.setBackgroundColor(0xFFFFE5E5);
                         del.setTextColor(0xFFE1503F);
@@ -2801,7 +2801,7 @@ private void postGuideResult(final String json) {
                         pv.show();
                     }});
                     android.widget.Button del = new android.widget.Button(MainActivity.this);
-                    del.setText("X");
+                    del.setText("×");
                     del.setTextSize(11);
                     del.setBackgroundColor(0xE6E1503F);
                     del.setTextColor(0xFFFFFFFF);
