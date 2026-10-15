@@ -2815,20 +2815,25 @@ private void postGuideResult(final String json) {
             });
             btnRow.addView(applyBtn);
             root.addView(btnRow);
-                        android.view.Window w = d.getWindow();
+                                    android.view.Window w = d.getWindow();
             if (w != null) {
                 w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
                 w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
                 w.setGravity(android.view.Gravity.BOTTOM);
-                android.view.WindowManager.LayoutParams lp = w.getAttributes();
-                lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
-                lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-                w.setAttributes(lp);
             }
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(0xFFFFFFFF);
+            float r = 24 * getResources().getDisplayMetrics().density;
+            bg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+            android.widget.LinearLayout wrap = new android.widget.LinearLayout(this);
+            wrap.setOrientation(android.widget.LinearLayout.VERTICAL);
+            wrap.setBackground(bg);
+            wrap.setPadding(pad, pad, pad, pad);
             android.widget.ScrollView scroll = new android.widget.ScrollView(this);
             scroll.addView(root);
-            root.setBackgroundColor(0xFFFFFFFF);
-d.setContentView(scroll);
+            wrap.addView(scroll);
+            d.setContentView(wrap);
+
             reviewDialog = d;
                         if (productWebView != null) {
                 productWebView.evaluateJavascript("(function(){try{if(!window.__oniRvData)return \"none\";var out={sections:window.__oniRvData.sections||[],photos:window.__oniRvData.photos||[]};return JSON.stringify(out);}catch(e){return \"err:\"+e.message;}})()", new android.webkit.ValueCallback<String>() {
