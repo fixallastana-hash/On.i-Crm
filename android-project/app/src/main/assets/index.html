@@ -198,6 +198,8 @@ body.theme-dark .topbar-menu-head{border-color:var(--border);}
 .search input:focus{outline:none;border-color:var(--blue);}
 .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:13px;}
 .chip-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;padding-right:8px;margin-bottom:12px;min-height:40px;align-items:center;scrollbar-width:none;}
+.pos-sticky-header{position:sticky;top:0;z-index:40;background:var(--bg,#EEF0F3);padding:8px 0 6px 0;margin-top:-8px;}
+
 .chip-row::-webkit-scrollbar{display:none;}
 .chip{flex-shrink:0;padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60vw;}
 .chip.active{background:var(--blue);border-color:var(--blue);color:#fff;}
@@ -5255,29 +5257,18 @@ function exitProductSelection(){
 function toggleProductSelection(id){
   if(productSelectionSet.has(id)) productSelectionSet.delete(id);
   else productSelectionSet.add(id);
-  var _row=document.querySelector('[data-ps-row="'+String(id).replace(/"/g,'\\"')+'"]');
-  if(_row){
-    var _box=_row.firstElementChild;
-    if(_box){
-      var _checked=productSelectionSet.has(id);
-      _box.style.background=_checked?'var(--primary)':'';
-      _box.style.borderColor=_checked?'var(--primary)':'var(--border)';
-      _box.style.color=_checked?'#fff':'';
-      _box.textContent=_checked?'\u2713':'';
-    }
-  }
-  var _n=productSelectionSet.size;
-  var _del=document.getElementById('ps-delete');
-  if(_del) _del.disabled=(_n===0);
-  var _counter=document.querySelector('[data-ps-counter]');
-  if(_counter) _counter.textContent='\u0412\u044b\u0431\u0440\u0430\u043d\u043e: '+_n;
+  try{
+    var scrollY = window.scrollY || 0;
+    safeRender();
+    window.scrollTo(0, scrollY);
+  }catch(e){}
 }
-
 function renderProductSelectionView(){
   const all=products.filter(p=>!p.isCategoryPlaceholder);
   const _q=String(productSearch||'').trim();
   const filtered=_q?all.filter(p=>smartProductSearch(productSearchText(p),_q)):all;
   const n=productSelectionSet.size;
+  filtered.sort(function(a,b){var _a=productSelectionSet.has(a.id)?0:1;var _b=productSelectionSet.has(b.id)?0:1;return _a-_b;});
   return `
     <div class="panel" style="position:sticky;top:58px;z-index:45;margin-bottom:10px;">
       <div class="panel-body" style="display:flex;align-items:center;gap:8px;padding:10px 12px;">
@@ -6168,7 +6159,7 @@ function openProductModal(id,options={}){
   if(!requireAccess('products')) return;
   _lookupCategoryAuto=false;
   _lookupDescriptionAuto=false;
-  _lookupCandidateData=null;
+  _lookupCandidateData=null; if(!id && window.Android && typeof window.Android.resetReview==="function"){ try{ window.Android.resetReview(); }catch(e){} }
   const quickMode=!!options.quick;
   const quickQtyDefault=Math.max(1,Number(options.quickQty)||1);
   const editing = id ? products.find(p=>p.id===id) : null;
@@ -6700,7 +6691,7 @@ function viewPOS(){
   <div id="pos-notice" class="pos-notice"><span class="pos-notice-dot"></span><span id="pos-notice-text"></span></div>
   <div id="cart-tabs-root"></div>
   
-  <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+  <div class="pos-sticky-header"><div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
   <div class="search" style="flex:1;margin:0;"><span class="search-icon">⌕</span><input id="pos-search" placeholder="Поиск товара…" value="${escapeHtml(posSearch)}"></div>
   <button class="btn" id="pos-scan-btn" type="button" title="Сканер штрихкода" style="min-width:44px;min-height:44px;padding:0;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</button>
   <button class="btn" id="pos-problematic-btn" type="button" title="Проблемные товары" style="min-width:44px;min-height:44px;padding:0;font-size:18px;">⚠️</button>
@@ -6715,7 +6706,7 @@ function viewPOS(){
   <div class="chip-row" id="pos-category-list" style="display:${posCategoryOpen?'flex':'none'};margin-top:5px;">
     ${categorySet.length?categorySet.map(c=>`<button class="chip ${posCategory===c?'active':''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join(''):'<span class="form-hint">Категорий пока нет. Добавьте их в разделе «Товары».</span>'}
   </div>
-  <div class="pos-grid" id="pos-grid">
+  </div><div class="pos-grid" id="pos-grid">
     ${realProducts.map(p=>`
       <div class="pos-tile live-search-row" data-search-text="${escapeHtml(productSearchText(p))}" data-pos-category="${escapeHtml(p.category||'Без категории')}" data-frequent="${frequentIds.has(p.id)?'1':'0'}">
         <button type="button" class="product-info-btn pos-tile-info" data-product-info="${escapeHtml(p.id)}" aria-label="Информация о товаре">i</button>

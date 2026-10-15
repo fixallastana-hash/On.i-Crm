@@ -2968,6 +2968,18 @@ d.show();
             }});
         }
         @JavascriptInterface
+        public void resetReview() {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    reviewSections.clear();
+                    reviewSections.add(new String[]{"Описание", ""});
+                    reviewPhotos.clear();
+                    reviewRenderSections = null;
+                    reviewRenderPhotos = null;
+                } catch (Exception ignored) {}
+            }});
+        }
+        @JavascriptInterface
         public void toast(String m) { final String _m = m; runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+_m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
         @JavascriptInterface
         public void setReviewLang(String l) { if(l != null) reviewLang = l; }
