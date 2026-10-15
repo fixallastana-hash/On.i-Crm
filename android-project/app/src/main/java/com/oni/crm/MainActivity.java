@@ -2471,22 +2471,37 @@ private void postGuideResult(final String json) {
         } catch (Exception ignored) {}
     }
 
-    private void closeProductWebView() {
-        try {
-            if (productOverlay != null) {
-                android.view.ViewGroup parent = (android.view.ViewGroup) productOverlay.getParent();
-                if (parent != null) parent.removeView(productOverlay);
-                productOverlay = null;
-            }
-            if (productWebView != null) {
-                productWebView.stopLoading();
-                productWebView.loadUrl("about:blank");
-                productWebView.destroy();
-                productWebView = null;
-            }
-            productUrlHistory.clear();
-        } catch (Exception ignored) {}
+        private void closeProductWebView() {
+        final android.webkit.WebView oldWebView = productWebView;
+        final android.widget.FrameLayout oldOverlay = productOverlay;
+        productWebView = null;
+        productOverlay = null;
+        final android.app.Dialog oldDialog = reviewDialog;
+        reviewDialog = null;
+        if (oldDialog != null) {
+            try { oldDialog.setOnDismissListener(null); oldDialog.dismiss(); }
+            catch (Exception e) { android.util.Log.w("On.i", "Cannot dismiss review dialog", e); }
+        }
+        reviewRenderSections = null;
+        reviewRenderPhotos = null;
+        if (oldWebView != null) {
+            try {
+                android.view.ViewParent parent = oldWebView.getParent();
+                if (parent instanceof android.view.ViewGroup) { ((android.view.ViewGroup) parent).removeView(oldWebView); }
+            } catch (Exception e) { android.util.Log.w("On.i", "Cannot detach product WebView", e); }
+            try { oldWebView.stopLoading(); } catch (Exception ignored) {}
+            try { oldWebView.clearHistory(); } catch (Exception ignored) {}
+            try { oldWebView.destroy(); } catch (Exception e) { android.util.Log.w("On.i", "Cannot destroy product WebView", e); }
+        }
+        if (oldOverlay != null) {
+            try {
+                android.view.ViewParent parent = oldOverlay.getParent();
+                if (parent instanceof android.view.ViewGroup) { ((android.view.ViewGroup) parent).removeView(oldOverlay); }
+            } catch (Exception ignored) {}
+        }
+        productUrlHistory.clear();
     }
+
 
     private void downloadAndSendPhotos(final String photosJson) {
         new Thread(new Runnable() { public void run() {
