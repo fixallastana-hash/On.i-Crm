@@ -164,6 +164,19 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void toast(String m) { runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
         @JavascriptInterface
+        public void resetReview() {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    reviewSections.clear();
+                    reviewSections.add(new String[]{"Описание", ""});
+                    reviewPhotos.clear();
+                    reviewRenderSections = null;
+                    reviewRenderPhotos = null;
+                    android.util.Log.i("On.i.Review", "resetReview invoked from main WebView");
+                } catch (Exception e) { android.util.Log.e("On.i.Review", "resetReview failed", e); }
+            }});
+        }
+        @JavascriptInterface
         public void pickExcelFile() {
             runOnUiThread(() -> {
                 Intent document = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -2700,7 +2713,7 @@ private void postGuideResult(final String json) {
                     row.addView(nameInput);
                     if (i > 0) {
                         android.widget.Button del = new android.widget.Button(MainActivity.this);
-                        del.setText("×");
+                        del.setText("x");
                         del.setTextSize(10);
                         del.setBackgroundColor(0xFFFFE5E5);
                         del.setTextColor(0xFFE1503F);
@@ -2801,7 +2814,7 @@ private void postGuideResult(final String json) {
                         pv.show();
                     }});
                     android.widget.Button del = new android.widget.Button(MainActivity.this);
-                    del.setText("×");
+                    del.setText("x");
                     del.setTextSize(11);
                     del.setBackgroundColor(0xE6E1503F);
                     del.setTextColor(0xFFFFFFFF);
