@@ -5383,7 +5383,7 @@ function _pfApplySort(list){
   function n(v){var x=Number(v);return isFinite(x)?x:0;}
   arr.sort(function(a,b){
     switch(f){
-      case 'createdAt': return ((Date.parse(a.createdAt||a.addedAt||0)||0)-(Date.parse(b.createdAt||b.addedAt||0)||0))*d;
+      case 'createdAt': return ((Date.parse(a.createdAt||a.addedAt||a.updatedAt||0)||0)-(Date.parse(b.createdAt||b.addedAt||b.updatedAt||0)||0))*d;
       case 'name': return String(a.name||'').toLowerCase().localeCompare(String(b.name||'').toLowerCase(),'ru')*d;
       case 'category': return String(a.category||'').toLowerCase().localeCompare(String(b.category||'').toLowerCase(),'ru')*d;
       case 'price': return (n(a.price)-n(b.price))*d;
@@ -5830,7 +5830,7 @@ async function importProductsFromExcel(file){
         updated++;
         if(importedSku) seenInThisImport.set(skuKey,existing);
       }else{
-        const newProduct={id:uid(),sku,name,category,productType,description,purpose,unit,cost,price,minPrice,qty,reserved,expected,minStock,vatRate,country,weight,volume,isWeighted,supplierSku,archived,manufactureDate,expiryDate,barcode,barcodes,packaging,photo:'',photos:[],mainPhoto:'',originalName:name,keywords:[],updatedAt:nowISO()};
+        const newProduct={id:uid(),sku,name,category,productType,description,purpose,unit,cost,price,minPrice,qty,reserved,expected,minStock,vatRate,country,weight,volume,isWeighted,supplierSku,archived,manufactureDate,expiryDate,barcode,barcodes,packaging,photo:'',photos:[],mainPhoto:'',originalName:name,keywords:[],createdAt:nowISO(),updatedAt:nowISO()};
         products.push(newProduct);
         added++;
         if(importedSku) seenInThisImport.set(skuKey,newProduct);
@@ -6285,7 +6285,7 @@ window.__oniAddExternalPhotos = function(list0){
       editing.hasPhotos = _urlsEdit.length > 0;
     }
     else {
-      const newProduct={id:uid(),...fields,stock:{'wh-default':Number(fields.qty)||0},hasPhotos:false,mainPhotoIndex:mainPhotoIndex,photos:[],photo:'',mainPhoto:'',keywords:[],updatedAt:nowISO()};
+      const newProduct={id:uid(),...fields,stock:{'wh-default':Number(fields.qty)||0},hasPhotos:false,mainPhotoIndex:mainPhotoIndex,photos:[],photo:'',mainPhoto:'',keywords:[],createdAt:nowISO(),updatedAt:nowISO()};
       products.push(newProduct);
       var _urlsNew = await saveProductPhotos(newProduct.id, photos);
       newProduct.photos = _urlsNew;

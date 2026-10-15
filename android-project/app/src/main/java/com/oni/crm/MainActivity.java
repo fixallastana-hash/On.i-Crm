@@ -2747,32 +2747,80 @@ private void postGuideResult(final String json) {
             root.addView(photosBox);
             final android.widget.LinearLayout _pb = photosBox;
             final android.widget.TextView _pl = photoLabel;
-            final Runnable renderPhotos = new Runnable() { public void run() {
+                        final Runnable renderPhotos = new Runnable() { public void run() {
                 _pb.removeAllViews();
                 _pl.setText("ФОТО (" + reviewPhotos.size() + ")");
                 for (int i = 0; i < reviewPhotos.size(); i++) {
                     final int _i = i;
-                    String u = reviewPhotos.get(i);
-                    android.widget.LinearLayout wrap = new android.widget.LinearLayout(MainActivity.this);
-                    wrap.setOrientation(android.widget.LinearLayout.VERTICAL);
-                    android.widget.TextView tv = new android.widget.TextView(MainActivity.this);
-                    tv.setText("Фото " + (i+1));
-                    tv.setTextSize(10);
-                    wrap.addView(tv);
+                    final String _url = reviewPhotos.get(i);
+                    android.widget.FrameLayout fw = new android.widget.FrameLayout(MainActivity.this);
+                    int sz = (int)(90 * getResources().getDisplayMetrics().density);
+                    android.widget.FrameLayout.LayoutParams flp = new android.widget.FrameLayout.LayoutParams(sz, sz);
+                    fw.setLayoutParams(flp);
+                    android.widget.ImageView iv = new android.widget.ImageView(MainActivity.this);
+                    iv.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+                    iv.setBackgroundColor(0xFFF5F6F8);
+                    fw.addView(iv, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+                    final android.widget.ImageView _iv = iv;
+                    new Thread(new Runnable() { public void run() {
+                        try {
+                            java.net.URL uu = new java.net.URL(_url);
+                            java.net.HttpURLConnection cc = (java.net.HttpURLConnection) uu.openConnection();
+                            cc.setConnectTimeout(10000); cc.setReadTimeout(15000);
+                            cc.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
+                            java.io.InputStream is = cc.getInputStream();
+                            final android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeStream(is);
+                            is.close(); cc.disconnect();
+                            if (bmp != null) {
+                                _iv.post(new Runnable() { public void run() { _iv.setImageBitmap(bmp); }});
+                            }
+                        } catch (Exception ignored) {}
+                    }}).start();
+                    fw.setOnClickListener(new android.view.View.OnClickListener() { public void onClick(android.view.View v) {
+                        android.app.Dialog pv = new android.app.Dialog(MainActivity.this);
+                        android.widget.ImageView big = new android.widget.ImageView(MainActivity.this);
+                        big.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                        big.setBackgroundColor(0xFF000000);
+                        big.setOnClickListener(new android.view.View.OnClickListener() { public void onClick(android.view.View v2) { pv.dismiss(); }});
+                        pv.setContentView(big);
+                        android.view.Window pw = pv.getWindow();
+                        if (pw != null) pw.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT);
+                        final android.widget.ImageView _big = big;
+                        new Thread(new Runnable() { public void run() {
+                            try {
+                                java.net.URL u2 = new java.net.URL(_url);
+                                java.net.HttpURLConnection c2 = (java.net.HttpURLConnection) u2.openConnection();
+                                c2.setConnectTimeout(10000); c2.setReadTimeout(15000);
+                                c2.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
+                                java.io.InputStream is2 = c2.getInputStream();
+                                final android.graphics.Bitmap bmp2 = android.graphics.BitmapFactory.decodeStream(is2);
+                                is2.close(); c2.disconnect();
+                                if (bmp2 != null) _big.post(new Runnable() { public void run() { _big.setImageBitmap(bmp2); }});
+                            } catch (Exception ignored) {}
+                        }}).start();
+                        pv.show();
+                    }});
                     android.widget.Button del = new android.widget.Button(MainActivity.this);
                     del.setText("X");
-                    del.setTextSize(10);
-                    del.setBackgroundColor(0xFFFFE5E5);
-                    del.setTextColor(0xFFE1503F);
-                    del.setOnClickListener(new android.view.View.OnClickListener() {
-                        public void onClick(android.view.View v) { reviewPhotos.remove(_i); }
-                    });
-                    wrap.addView(del);
-                    _pb.addView(wrap);
+                    del.setTextSize(11);
+                    del.setBackgroundColor(0xE6E1503F);
+                    del.setTextColor(0xFFFFFFFF);
+                    android.widget.FrameLayout.LayoutParams dlp = new android.widget.FrameLayout.LayoutParams((int)(24*getResources().getDisplayMetrics().density), (int)(24*getResources().getDisplayMetrics().density));
+                    dlp.gravity = android.view.Gravity.TOP | android.view.Gravity.RIGHT;
+                    dlp.topMargin = (int)(4*getResources().getDisplayMetrics().density);
+                    dlp.rightMargin = (int)(4*getResources().getDisplayMetrics().density);
+                    del.setLayoutParams(dlp);
+                    del.setOnClickListener(new android.view.View.OnClickListener() { public void onClick(android.view.View v) {
+                        reviewPhotos.remove(_i);
+                        if (reviewRenderPhotos != null) reviewRenderPhotos.run();
+                    }});
+                    fw.addView(del);
+                    _pb.addView(fw);
                 }
             }};
             renderPhotos.run();
             reviewRenderPhotos = renderPhotos;
+
             android.widget.LinearLayout btnRow = new android.widget.LinearLayout(this);
             btnRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
             android.widget.Button cleanBtn = new android.widget.Button(this);
@@ -2786,7 +2834,7 @@ private void postGuideResult(final String json) {
                             String s = reviewSections.get(i)[1];
                             String[] lines = s.split("\\n");
                             StringBuilder sb = new StringBuilder();
-                            for (String ln : lines) { if (ln.trim().length() > 0 && !ln.matches(".*(" + bad + ").*")) { sb.append(ln).append("\\n"); } }
+                            for (String ln : lines) { if (ln.trim().length() > 0 && !ln.matches(".*(" + bad + ").*")) { sb.append(ln).append("\n"); } }
                             reviewSections.get(i)[1] = sb.toString().trim();
                         }
                         renderSections.run();
@@ -2816,7 +2864,7 @@ private void postGuideResult(final String json) {
                         String[] sec = reviewSections.get(i);
                         if (sec[1].trim().isEmpty()) continue;
                         if (i == 0) sb.append(sec[1]);
-                        else sb.append("\\n\\n[").append(sec[0].toUpperCase()).append("]\\n").append(sec[1]);
+                        else sb.append("\n\n[").append(sec[0].toUpperCase()).append("]\n").append(sec[1]);
                     }
                     sendExtractedSeparate(sb.toString(), "", "");
                     if (reviewPhotos.size() > 0) {
