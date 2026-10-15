@@ -23,3 +23,8 @@ firebase-debug.log
 *.bak_*
 index.html.before_patch
 MainActivity.before_patch
+
+*_method.txt
+*_block.txt
+*_new.txt
+review_inject_new.txt
