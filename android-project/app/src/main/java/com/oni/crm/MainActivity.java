@@ -2850,50 +2850,17 @@ private void postGuideResult(final String json) {
             d.setContentView(wrap);
 
             reviewDialog = d;
-                        if (productWebView != null) {
-                productWebView.evaluateJavascript("(function(){try{if(!window.__oniRvData)return \"none\";var out={sections:window.__oniRvData.sections||[],photos:window.__oniRvData.photos||[]};return JSON.stringify(out);}catch(e){return \"err:\"+e.message;}})()", new android.webkit.ValueCallback<String>() {
-                    public void onReceiveValue(String result) {
-                        try {
-                            if (result == null || result.length() < 4 || result.startsWith("\"none")) return;
-                            String s = result;
-                            if (s.startsWith("\"") && s.endsWith("\"")) s = s.substring(1, s.length() - 1);
-                            s = s.replace("\\\\\"", "\"").replace("\\\\n", "\\n");
-                            org.json.JSONObject o = new org.json.JSONObject(s);
-                            org.json.JSONArray secs = o.optJSONArray("sections");
-                            if (secs != null) {
-                                for (int i = 0; i < secs.length(); i++) {
-                                    org.json.JSONObject so = secs.optJSONObject(i);
-                                    if (so == null) continue;
-                                    String nm = so.optString("name", "");
-                                    String vl = so.optString("value", "");
-                                    if (nm.isEmpty() || vl.isEmpty()) continue;
-                                    boolean found = false;
-                                    for (int j = 0; j < reviewSections.size(); j++) {
-                                        if (reviewSections.get(j)[0].equalsIgnoreCase(nm)) {
-                                            String cur = reviewSections.get(j)[1];
-                                            if (cur.indexOf(vl) < 0) reviewSections.get(j)[1] = cur.isEmpty() ? vl : (cur + "\n\n" + vl);
-                                            found = true; break;
-                                        }
-                                    }
-                                    if (!found) reviewSections.add(new String[]{nm, vl});
-                                }
-                            }
-                            org.json.JSONArray phs = o.optJSONArray("photos");
-                            if (phs != null) {
-                                for (int i = 0; i < phs.length(); i++) {
-                                    String u = phs.optString(i, "");
-                                    if (u.isEmpty()) continue;
-                                    boolean dup = false;
-                                    for (int j = 0; j < reviewPhotos.size(); j++) if (reviewPhotos.get(j).equals(u)) { dup = true; break; }
-                                    if (!dup) reviewPhotos.add(u);
-                                }
-                            }
-                            if (reviewRenderSections != null) reviewRenderSections.run();
-                            if (reviewRenderPhotos != null) reviewRenderPhotos.run();
-                        } catch (Exception ignored) {}
-                    }
-                });
+                                    if (reviewSections.isEmpty()) {
+                reviewSections.add(new String[]{"Описание", ""});
             }
+            d.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+                public void onDismiss(android.content.DialogInterface dialog) {
+                    if (reviewDialog == d) reviewDialog = null;
+                    reviewRenderSections = null;
+                    reviewRenderPhotos = null;
+                }
+            });
+            
 d.show();
         } catch (Exception e) { android.util.Log.e("On.i", "openReviewSheet", e); }
     }
