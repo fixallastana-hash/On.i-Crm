@@ -894,84 +894,6 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     return text;
 }
 
-private String callAiProxyAnalyze(String lightDomJson) throws Exception {
-    if (aiIdToken == null || aiIdToken.isEmpty()) throw new IOException("Нет авторизации для AI");
-    URL url = new URL(AI_PROXY_URL);
-    HttpsURLConnection c = (HttpsURLConnection) url.openConnection();
-    c.setRequestMethod("POST");
-    c.setConnectTimeout(20000);
-    c.setReadTimeout(60000);
-    c.setDoOutput(true);
-    c.setRequestProperty("Content-Type", "application/json");
-    c.setRequestProperty("Authorization", "Bearer " + aiIdToken);
-    JSONObject data = new JSONObject();
-    data.put("mode", "analyze");
-    data.put("prompt", lightDomJson == null ? "" : lightDomJson);
-    JSONObject body = new JSONObject();
-    body.put("data", data);
-    try (OutputStream os = c.getOutputStream()) {
-        os.write(body.toString().getBytes(StandardCharsets.UTF_8));
-    }
-    int code = c.getResponseCode();
-    InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-    String response = readAll(is);
-    if (code < 200 || code >= 300) {
-        String errMsg = "AI proxy HTTP " + code;
-        try {
-            JSONObject er = new JSONObject(response);
-            JSONObject errorObj = er.optJSONObject("error");
-            if (errorObj != null) {
-                String m = errorObj.optString("message", "");
-                if (m != null && !m.isEmpty()) errMsg = m;
-            }
-        } catch (Exception ignored) {}
-        throw new IOException(errMsg);
-    }
-    JSONObject r = new JSONObject(response);
-    JSONObject result = r.optJSONObject("result");
-    if (result == null) throw new IOException("Некорректный ответ AI analyze");
-    JSONObject plan = result.optJSONObject("plan");
-    if (plan == null) throw new IOException("AI не вернул план");
-    String prov = result.optString("provider", "");
-    android.util.Log.i("On.i.AI", "Analyze OK via " + prov);
-    return plan.toString();
-}
-
-private void analyzeLightDom(final String lightDomJson) {
-    new Thread(new Runnable() { public void run() {
-        try {
-            runOnUiThread(new Runnable() { public void run() {
-                try { android.widget.Toast.makeText(MainActivity.this, "🤖 AI анализирует...", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
-            }});
-            final String planJson = callAiProxyAnalyze(lightDomJson);
-            try {
-                String domain = getCurrentDomain();
-                if (domain != null && !domain.isEmpty()) {
-                    getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("aiplan_" + domain, planJson).apply();
-                }
-            } catch (Exception ignored) {}
-            runOnUiThread(new Runnable() { public void run() {
-                try {
-                    if (productWebView != null) {
-                        String js = "window.__oniApplyAIPlan && window.__oniApplyAIPlan(" + planJson + ");";
-                        productWebView.evaluateJavascript(js, null);
-                        android.widget.Toast.makeText(MainActivity.this, "🤖 Применяю план AI...", android.widget.Toast.LENGTH_SHORT).show();
-                    }
-                    updateMacroUI();
-                } catch (Exception ignored) {}
-            }});
-        } catch (final Exception e) {
-            runOnUiThread(new Runnable() { public void run() {
-                try {
-                    String msg = e.getMessage() == null ? String.valueOf(e) : e.getMessage();
-                    if (msg.length() > 150) msg = msg.substring(0, 150) + "…";
-                    android.widget.Toast.makeText(MainActivity.this, "AI: " + msg, android.widget.Toast.LENGTH_LONG).show();
-                } catch (Exception ignored) {}
-            }});
-        }
-    }}).start();
-}
-
 private String callSelectedProvider(String input, boolean webSearch) throws Exception {
     // 1. Пытаемся через серверный AI-прокси (ключи на сервере, безопасно)
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
@@ -2054,6 +1976,85 @@ private void postGuideResult(final String json) {
     }
 
     // ============ PRODUCT WEBVIEW OVERLAY ============
+
+private String callAiProxyAnalyze(String lightDomJson) throws Exception {
+    if (aiIdToken == null || aiIdToken.isEmpty()) throw new IOException("Нет авторизации для AI");
+    URL url = new URL(AI_PROXY_URL);
+    HttpsURLConnection c = (HttpsURLConnection) url.openConnection();
+    c.setRequestMethod("POST");
+    c.setConnectTimeout(20000);
+    c.setReadTimeout(60000);
+    c.setDoOutput(true);
+    c.setRequestProperty("Content-Type", "application/json");
+    c.setRequestProperty("Authorization", "Bearer " + aiIdToken);
+    JSONObject data = new JSONObject();
+    data.put("mode", "analyze");
+    data.put("prompt", lightDomJson == null ? "" : lightDomJson);
+    JSONObject body = new JSONObject();
+    body.put("data", data);
+    try (OutputStream os = c.getOutputStream()) {
+        os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+    }
+    int code = c.getResponseCode();
+    InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+    String response = readAll(is);
+    if (code < 200 || code >= 300) {
+        String errMsg = "AI proxy HTTP " + code;
+        try {
+            JSONObject er = new JSONObject(response);
+            JSONObject errorObj = er.optJSONObject("error");
+            if (errorObj != null) {
+                String m = errorObj.optString("message", "");
+                if (m != null && !m.isEmpty()) errMsg = m;
+            }
+        } catch (Exception ignored) {}
+        throw new IOException(errMsg);
+    }
+    JSONObject r = new JSONObject(response);
+    JSONObject result = r.optJSONObject("result");
+    if (result == null) throw new IOException("Некорректный ответ AI analyze");
+    JSONObject plan = result.optJSONObject("plan");
+    if (plan == null) throw new IOException("AI не вернул план");
+    String prov = result.optString("provider", "");
+    android.util.Log.i("On.i.AI", "Analyze OK via " + prov);
+    return plan.toString();
+}
+
+private void analyzeLightDom(final String lightDomJson) {
+    new Thread(new Runnable() { public void run() {
+        try {
+            runOnUiThread(new Runnable() { public void run() {
+                try { android.widget.Toast.makeText(MainActivity.this, "🤖 AI анализирует...", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+            }});
+            final String planJson = callAiProxyAnalyze(lightDomJson);
+            try {
+                String domain = getCurrentDomain();
+                if (domain != null && !domain.isEmpty()) {
+                    getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("aiplan_" + domain, planJson).apply();
+                }
+            } catch (Exception ignored) {}
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    if (productWebView != null) {
+                        String js = "window.__oniApplyAIPlan && window.__oniApplyAIPlan(" + planJson + ");";
+                        productWebView.evaluateJavascript(js, null);
+                        android.widget.Toast.makeText(MainActivity.this, "🤖 Применяю план AI...", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                    updateMacroUI();
+                } catch (Exception ignored) {}
+            }});
+        } catch (final Exception e) {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    String msg = e.getMessage() == null ? String.valueOf(e) : e.getMessage();
+                    if (msg.length() > 150) msg = msg.substring(0, 150) + "…";
+                    android.widget.Toast.makeText(MainActivity.this, "AI: " + msg, android.widget.Toast.LENGTH_LONG).show();
+                } catch (Exception ignored) {}
+            }});
+        }
+    }}).start();
+}
+
     private void showProductWebView(final String startUrl) {
         if (productOverlay != null) return;
         try {
