@@ -2186,6 +2186,20 @@ private void analyzeLightDom(final String lightDomJson) {
 
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    try {
+                        if (request != null && request.getUrl() != null) {
+                            String u = request.getUrl().toString();
+                            if (u != null && u.contains("://m.fragrantica.")) {
+                                long now = System.currentTimeMillis();
+                                Object tg = view.getTag();
+                                long last = (tg instanceof Long) ? ((Long)tg).longValue() : 0L;
+                                if (now - last < 2500L) return false;
+                                view.setTag(Long.valueOf(now));
+                                view.loadUrl(u.replace("://m.fragrantica.", "://www.fragrantica."));
+                                return true;
+                            }
+                        }
+                    } catch (Exception ignored) {}
                     return false;
                 }
                 @Override
