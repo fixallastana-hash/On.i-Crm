@@ -1966,14 +1966,6 @@ private void postGuideResult(final String json) {
 
     }
 
-private static String readAll(InputStream in) throws IOException {
-    if (in == null) return "";
-    byte[] buf = new byte[8192];
-    int n;
-    StringBuilder sb = new StringBuilder();
-    while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
-    return sb.toString();
-}
 
     // ============ PRODUCT WEBVIEW OVERLAY ============
 
@@ -3096,6 +3088,15 @@ d.show();
         } catch (Exception e) { reviewInjectJsCache = ""; }
         return reviewInjectJsCache;
     }
+private static String readAll(InputStream in) throws IOException {
+    if (in == null) return "";
+    byte[] buf = new byte[8192];
+    int n;
+    StringBuilder sb = new StringBuilder();
+    while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+    return sb.toString();
+}
+
     private static String pendingGeminiQuery = null;
     private final class ProductWV {
         @JavascriptInterface

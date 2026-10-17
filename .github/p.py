@@ -94,7 +94,7 @@ names = [
     'parseFragranticaStructured','fetchFragranticaPerfume','structuredFieldCount',
     'mergeStructured','translateToRussian','triggerVisionFromUri','doTriggerVision',
     'recognizeProductPhoto','lookupProductDescriptionFull',
-    'callSelectedProvider','callDeepSeekReasoner','readAll','callGemini','callDeepSeek',
+    'callSelectedProvider','callDeepSeekReasoner','callGemini','callDeepSeek',
     'callOpenAI','callGeminiWithSearch','callDeepSeekWithSearch','extractAnswerText',
     'pickStringFromJson','pickStringFromArray','askAIChat','postAIChatResult','injectAIChat',
     'askGuide','postGuideResult','injectGuideChat',
