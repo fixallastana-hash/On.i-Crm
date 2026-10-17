@@ -1966,7 +1966,7 @@ private void postGuideResult(final String json) {
 
     }
 
-private String readAll(InputStream in) throws IOException {
+private static String readAll(InputStream in) throws IOException {
     if (in == null) return "";
     byte[] buf = new byte[8192];
     int n;
