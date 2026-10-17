@@ -2427,7 +2427,7 @@ private void analyzeLightDom(final String lightDomJson) {
 
     private void deleteMacroForDomainImpl(String domain) {
         if (domain == null || domain.isEmpty()) return;
-        try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).apply(); } catch (Exception ignored) {}
+        try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove(isAi ? "aiplan_" + domain : "macro_" + domain).apply(); } catch (Exception ignored) {}
         runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
     }
 
@@ -2455,8 +2455,8 @@ private void analyzeLightDom(final String lightDomJson) {
             } else {
                 for(final java.util.Map.Entry<String,?> e : all.entrySet()){
                     final String key = e.getKey();
-                    if(!key.startsWith("macro_")) continue;
-                    final String domain = key.substring(6);
+                    final boolean isAi = key.startsWith("aiplan_"); if(!key.startsWith("macro_") && !isAi) continue;
+                    final String domain = isAi ? key.substring(7) : key.substring(6);
                     int cnt = 0;
                     try { cnt = new org.json.JSONArray(String.valueOf(e.getValue())).length(); } catch (Exception ignored) {}
                     final int _cnt = cnt;
@@ -2472,7 +2472,7 @@ private void analyzeLightDom(final String lightDomJson) {
                     row.setLayoutParams(rlp);
 
                     android.widget.TextView tv = new android.widget.TextView(this);
-                    tv.setText(domain + " · " + _cnt + " шаг.");
+                    tv.setText(isAi ? (domain + " [AI]") : (domain + " \u00b7 " + _cnt + " \u0448\u0430\u0433."));
                     tv.setTextSize(15);
                     android.widget.LinearLayout.LayoutParams tlp = new android.widget.LinearLayout.LayoutParams(
                         0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f
@@ -2492,9 +2492,9 @@ private void analyzeLightDom(final String lightDomJson) {
                         @Override public void onClick(android.view.View v) {
                             try {
                                 if(productWebView == null) return;
-                                String saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
+                                String _k = isAi ? "aiplan_" : "macro_"; String saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString(_k + domain, "");
                                 if(saved == null || saved.isEmpty()) return;
-                                productWebView.evaluateJavascript("window.__oniMacroPlay&&window.__oniMacroPlay(" + org.json.JSONObject.quote(saved) + ");", null);
+                                if(isAi) productWebView.evaluateJavascript("window.__oniApplyAIPlan && window.__oniApplyAIPlan(" + saved + ");", null); else productWebView.evaluateJavascript("window.__oniMacroPlay&&window.__oniMacroPlay(" + org.json.JSONObject.quote(saved) + ");", null);
                             } catch (Exception ignored) {}
                         }
                     });
@@ -2517,7 +2517,7 @@ private void analyzeLightDom(final String lightDomJson) {
                     delBtn.setOnClickListener(new android.view.View.OnClickListener() {
                         @Override public void onClick(android.view.View v) {
                             try {
-                                getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).apply();
+                                getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove(isAi ? "aiplan_" + domain : "macro_" + domain).apply();
                                 ((android.view.ViewGroup)v.getParent().getParent()).removeView((android.view.View)v.getParent());
                             } catch (Exception ignored) {}
                         }
