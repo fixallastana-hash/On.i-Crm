@@ -276,6 +276,72 @@ async function callDeepSeek(prompt) {
 }
 
 // ============ MAIN ============
+// ============ AI ANALYZE (light DOM → план извлечения) ============
+async function analyzePageStructure(lightDom) {
+  const systemPrompt = [
+    "Ты — эксперт по веб-скрапингу. Анализируй структуру страницы товара и верни CSS-селекторы для извлечения данных.",
+    "",
+    "ПРАВИЛА:",
+    "1. Возвращай ТОЛЬКО валидный JSON без markdown и пояснений.",
+    "2. Используй селекторы ИЗ структуры (теги, классы, атрибуты). Не выдумывай несуществующие классы.",
+    "3. Если не уверен — верни null.",
+    "4. Синонимы для поиска:",
+    "   - descTab: описание, о товаре, about, description, сипаттама, подробнее",
+    "   - specsTab: характеристики, specs, specifications, сипаттамасы, параметры",
+    "   - expand: показать, развернуть, ещё, read more, show more, details, полностью",
+    "",
+    "ФОРМАТ:",
+    "{",
+    '  "descTab": "CSS-селектор таба Описание или null",',
+    '  "specsTab": "CSS-селектор таба Характеристики или null",',
+    '  "expandSelectors": ["селекторы кнопок раскрытия"],',
+    '  "descContainer": "CSS-селектор блока описания или null",',
+    '  "specsContainer": "CSS-селектор блока характеристик или null",',
+    '  "photosSelector": "CSS-селектор для img фотографий или null",',
+    '  "photoMinWidth": 300,',
+    '  "confidence": "high|medium|low",',
+    '  "reasoning": "краткое объяснение выбора"',
+    "}"
+  ].join("\n");
+
+  const fullPrompt = systemPrompt + "\n\n=== СТРУКТУРА СТРАНИЦЫ ===\n" + lightDom + "\n\n=== ОТВЕТ (только JSON) ===";
+
+  // Fallback цепочка: Groq → Cerebras → DeepSeek
+  const providers = [
+    { name: "groq", fn: () => callGroq(fullPrompt) },
+    { name: "cerebras", fn: () => callCerebras(fullPrompt) },
+    { name: "deepseek", fn: () => callDeepSeek(fullPrompt) }
+  ];
+
+  const errors = [];
+  for (const p of providers) {
+    try {
+      const r = await p.fn();
+      if (r && r.text && r.text.trim()) {
+        let raw = r.text.trim();
+        // Срезаем ```json...``` если есть
+        if (raw.startsWith("```")) {
+          raw = raw.replace(/^```[a-zA-Z]*\s*/, "").replace(/```\s*$/, "").trim();
+        }
+        // Берём только {...}
+        const braceStart = raw.indexOf("{");
+        const braceEnd = raw.lastIndexOf("}");
+        if (braceStart < 0 || braceEnd <= braceStart) {
+          errors.push(p.name + ": не JSON");
+          continue;
+        }
+        raw = raw.substring(braceStart, braceEnd + 1);
+        const plan = JSON.parse(raw);
+        return { ok: true, plan, provider: p.name, model: r.model };
+      }
+      errors.push(p.name + ": пустой ответ");
+    } catch (e) {
+      errors.push(p.name + ": " + ((e && e.message) || e));
+    }
+  }
+  return { ok: false, error: errors.join("; ").slice(0, 500) };
+}
+
 exports.aiProxy = onCall(
   {
     secrets: [GEMINI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, MISTRAL_API_KEY, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN],
@@ -310,6 +376,25 @@ exports.aiProxy = onCall(
     let text = null;
     const errors = [];
     const mode = (req.data && req.data.mode) || "auto";
+
+    // === ANALYZE РЕЖИМ (light DOM → план) ===
+    if (mode === "analyze") {
+      if (!prompt || prompt.length < 50) {
+        throw new HttpsError("invalid-argument", "Пустой или слишком короткий light DOM");
+      }
+      const result = await analyzePageStructure(prompt);
+      if (!result.ok) {
+        throw new HttpsError("unavailable", "AI analyze: " + result.error);
+      }
+      return {
+        ok: true,
+        plan: result.plan,
+        provider: result.provider,
+        model: result.model,
+        remaining: userRemaining
+      };
+    }
+
     const isReasoning = mode === "reasoning";
     const FORCED_LIST = ["groq","cerebras","openrouter","mistral","gemini","deepseek","cloudflare","nemotron-ultra","qwen-coder"];
     const isForced = FORCED_LIST.indexOf(mode) >= 0;
