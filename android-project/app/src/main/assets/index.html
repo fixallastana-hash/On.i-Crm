@@ -6095,14 +6095,14 @@ window.__oniBuildPrompt = function(lang, q){
     if(cleanDesc && cleanDesc.length >= 10 && desc){
       var cur = String(desc.value||'').trim();
       if(!cur || cur.indexOf(cleanDesc) < 0){
-        desc.value = cur ? (cur + '\n\n' + cleanDesc) : cleanDesc;
+        desc.value = cleanDesc;
         window._lookupDescriptionAuto = true;
       }
     }
     if(cleanSpecs && cleanSpecs.length >= 10 && purpose){
       var curP = String(purpose.value||'').trim();
       if(!curP || curP.indexOf(cleanSpecs) < 0){
-        purpose.value = curP ? (curP + '\n\n' + cleanSpecs) : cleanSpecs;
+        purpose.value = cleanSpecs;
       }
     }
     var st = document.getElementById('name-lookup-status');

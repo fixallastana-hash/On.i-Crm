@@ -2166,7 +2166,7 @@ private void analyzeLightDom(final String lightDomJson) {
             ws.setDisplayZoomControls(false);
             String ua = ws.getUserAgentString();
             if (ua != null) {
-                ws.setUserAgentString(ua.replace("; wv", "").replaceAll("Version/\\d+\\.\\d+\\s*", ""));
+                ws.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
             }
             CookieManager cm = CookieManager.getInstance();
             cm.setAcceptCookie(true);
@@ -2191,7 +2191,7 @@ private void analyzeLightDom(final String lightDomJson) {
                         }
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
                         productWebView.evaluateJavascript(PRODUCT_MACRO_RECORDER_JS, null);
-                        productWebView.evaluateJavascript(PRODUCT_EXTRACT_JS, null);
+                        // auto-extract disabled (use manual btnExtract)
                         try { String _ab = getAdblockJs(); if(_ab != null && _ab.length() > 0) productWebView.evaluateJavascript(_ab, null); } catch(Exception ignored) {}
                         try { String _rv = getReviewInjectJs(); android.widget.Toast.makeText(MainActivity.this, "RV: "+(_rv==null?0:_rv.length())+"b", android.widget.Toast.LENGTH_SHORT).show(); if(_rv != null && _rv.length() > 0) productWebView.evaluateJavascript(_rv, null); } catch(Exception e) { android.widget.Toast.makeText(MainActivity.this, "RV ERR: "+e.getMessage(), android.widget.Toast.LENGTH_LONG).show(); }
                         if (macroRecording) { productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null); }
