@@ -1,4 +1,4 @@
-package com.oni.crm;
+﻿package com.oni.crm;
 
 import com.googlecode.tesseract.android.TessBaseAPI;
 import android.app.Activity;
@@ -2020,14 +2020,12 @@ private void analyzeLightDom(final String lightDomJson) {
                 try { android.widget.Toast.makeText(MainActivity.this, "🤖 AI анализирует...", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
             }});
             final String planJson = callAiProxyAnalyze(lightDomJson);
-            try {
-                String domain = getCurrentDomain();
-                if (domain != null && !domain.isEmpty()) {
-                    getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("aiplan_" + domain, planJson).apply();
-                }
-            } catch (Exception ignored) {}
             runOnUiThread(new Runnable() { public void run() {
                 try {
+                    String domain = getCurrentDomain();
+                    if (domain != null && !domain.isEmpty()) {
+                        getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("aiplan_" + domain, planJson).apply();
+                    }
                     if (productWebView != null) {
                         String js = "window.__oniApplyAIPlan && window.__oniApplyAIPlan(" + planJson + ");";
                         productWebView.evaluateJavascript(js, null);
