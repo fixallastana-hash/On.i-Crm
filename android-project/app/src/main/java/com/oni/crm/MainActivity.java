@@ -747,7 +747,7 @@ private String callDeepSeek(String input) throws Exception {
     try (OutputStream os = c.getOutputStream()) { os.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
     int code = c.getResponseCode();
     InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-    String response = readAll(is);
+    String response = MainActivity.readAll(is);
     if (code < 200 || code >= 300) throw new IOException("Ошибка DeepSeek API: " + code);
     JSONObject r = new JSONObject(response);
     JSONArray choices = r.optJSONArray("choices");
@@ -777,7 +777,7 @@ private String callOpenAI(String input, boolean webSearch) throws Exception {
     try (OutputStream os = c.getOutputStream()) { os.write(bytes); }
     int code = c.getResponseCode();
     InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-    String response = readAll(is);
+    String response = MainActivity.readAll(is);
     if (code < 200 || code >= 300) throw new IOException("Ошибка OpenAI API: " + code);
     JSONObject r = new JSONObject(response);
     String text = r.optString("output_text", "");
@@ -817,7 +817,7 @@ private String callDeepSeekReasoner(String input) throws Exception {
     try (OutputStream os = c.getOutputStream()) { os.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
     int code = c.getResponseCode();
     InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-    String response = readAll(is);
+    String response = MainActivity.readAll(is);
     if (code < 200 || code >= 300) throw new IOException("Ошибка DeepSeek Reasoner: " + code);
     JSONObject r = new JSONObject(response);
     JSONArray choices = r.optJSONArray("choices");
@@ -856,7 +856,7 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
 
     int code = c.getResponseCode();
     InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-    String response = readAll(is);
+    String response = MainActivity.readAll(is);
 
     if (code < 200 || code >= 300) {
         String errMsg = "AI proxy HTTP " + code;
@@ -1998,7 +1998,7 @@ private String callAiProxyAnalyze(String lightDomJson) throws Exception {
     }
     int code = c.getResponseCode();
     InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
-    String response = readAll(is);
+    String response = MainActivity.readAll(is);
     if (code < 200 || code >= 300) {
         String errMsg = "AI proxy HTTP " + code;
         try {
