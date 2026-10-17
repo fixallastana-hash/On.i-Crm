@@ -6089,8 +6089,8 @@ window.__oniBuildPrompt = function(lang, q){
   try{
     var desc = document.getElementById('f-description');
     var purpose = document.getElementById('f-purpose');
-    var cleanDesc = String(descText||'').replace(/\s+/g,' ').trim();
-    var cleanSpecs = String(specsText||'').replace(/\s+/g,' ').trim();
+    var cleanDesc = String(descText||'').split('\n').map(function(l){return l.replace(/[ \t]+/g,' ').trim();}).filter(function(l){return l;}).join('\n').trim();
+    var cleanSpecs = String(specsText||'').split('\n').map(function(l){return l.replace(/[ \t]+/g,' ').trim();}).filter(function(l){return l;}).join('\n').trim();
     if(cleanDesc && cleanDesc.length >= 10 && desc){
       var cur = String(desc.value||'').trim();
       if(!cur || cur.indexOf(cleanDesc) < 0){

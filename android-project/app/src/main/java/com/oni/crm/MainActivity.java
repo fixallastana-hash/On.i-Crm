@@ -3271,19 +3271,19 @@ d.show();
         "var respSel='model-response,message-content,.markdown,.model-response-text,[class*=\"response-content\"],[class*=\"prose\"],[class*=\"answer\"]';" +
         "var msgs=document.querySelectorAll(respSel);" +
         "if(msgs.length){" +
-        "var last=msgs[msgs.length-1];" +
+        "var __best=0;var last=null;for(var __i=0;__i<msgs.length;__i++){var __l=(msgs[__i].innerText||'').length;if(__l>__best){__best=__l;last=msgs[__i];}}" +
         "var clone=last.cloneNode(true);" +
         // Вырезаем кнопки/футеры/источники внутри ответа
         "clone.querySelectorAll('button,[role=\"button\"],.response-footer,.sources-list,.citation,.response-container-footer').forEach(function(e){e.remove();});" +
         "var txt=String(clone.innerText||clone.textContent||'').trim();" +
-        "if(txt.length>=30){txt=(function(s){var c=['window.BG3_DATA','this.gbar_','Откроется в новом окне','Действуют Условия использования','Политика конфиденциальности Google','Общайтесь с Gemini в приложении','Теперь в Google Play!','Gemini – это ИИ. Он может ошибаться.'];var m=s.length;for(var i=0;i<c.length;i++){var x=s.indexOf(c[i]);if(x>50&&x<m)m=x;}return s.slice(0,m).replace(/\\s+/g,' ').trim();})(txt);" +
+        "if(txt.length>=30){txt=(function(s){var c=['window.BG3_DATA','this.gbar_','Откроется в новом окне','Действуют Условия использования','Политика конфиденциальности Google','Общайтесь с Gemini в приложении','Теперь в Google Play!','Gemini – это ИИ. Он может ошибаться.'];var m=s.length;for(var i=0;i<c.length;i++){var x=s.indexOf(c[i]);if(x>50&&x<m)m=x;}return s.slice(0,m).replace(/\\n{3,}/g,'\\n\\n').trim();})(txt);" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(txt,'',location.href);" +
         "return;}}" +
         // Fallback: клон body, из которого выкинуты запросы и UI
         "var body=document.body.cloneNode(true);" +
         "body.querySelectorAll('user-query,[class*=\"user-query\"],[class*=\"user-message\"],[class*=\"query-text\"],textarea,input,button,nav,header,footer,[role=\"navigation\"],[role=\"banner\"]').forEach(function(e){e.remove();});" +
         "var whole=String(body.innerText||'').trim().replace(/\\s+/g,' ');" +
-        "if(whole.length>=50){whole=(function(s){var c=['window.BG3_DATA','this.gbar_','Откроется в новом окне','Действуют Условия использования','Политика конфиденциальности Google','Общайтесь с Gemini в приложении','Теперь в Google Play!','Gemini – это ИИ. Он может ошибаться.'];var m=s.length;for(var i=0;i<c.length;i++){var x=s.indexOf(c[i]);if(x>50&&x<m)m=x;}return s.slice(0,m).replace(/\\s+/g,' ').trim();})(whole).slice(0,8000);" +
+        "if(whole.length>=50){whole=(function(s){var c=['window.BG3_DATA','this.gbar_','Откроется в новом окне','Действуют Условия использования','Политика конфиденциальности Google','Общайтесь с Gemini в приложении','Теперь в Google Play!','Gemini – это ИИ. Он может ошибаться.'];var m=s.length;for(var i=0;i<c.length;i++){var x=s.indexOf(c[i]);if(x>50&&x<m)m=x;}return s.slice(0,m).replace(/\\n{3,}/g,'\\n\\n').trim();})(whole).slice(0,8000);" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(whole,'',location.href);" +
         "return;}}" +
         // 3. Kaspi и подобные — табы
