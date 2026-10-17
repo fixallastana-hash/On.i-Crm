@@ -1786,6 +1786,7 @@ async function loginViaFirebase(login, password){
         var slice=data.slice(i,i+CHUNK);
         for(var j=0;j<slice.length;j++){
           var item=slice[j];
+          if(collectionName === 'users'){ var _u=Object.assign({}, item); delete _u.password; item = _u; }
           var id=String(item.id||('auto-'+i+'-'+j));
           var safeId=id.replace(/[\/\s]+/g,'_');
           var ref=fbDb.collection('shops').doc(FB_SHOP_ID).collection(collectionName).doc(safeId);
@@ -1884,7 +1885,7 @@ async function loginViaFirebase(login, password){
       var usersSnap=await fbDb.collection('shops').doc(FB_SHOP_ID).collection('users').get();
       if(usersSnap && usersSnap.size>0){
         var usersArr=[];
-        usersSnap.forEach(function(doc){ usersArr.push(doc.data()); });
+        usersSnap.forEach(function(doc){ var _d=doc.data(); try{ var _l=(users||[]).find(function(u){return u.id===_d.id;}); if(_l&&_l.password)_d.password=_l.password; }catch(e){} usersArr.push(_d); });
         if(usersArr.length>0){ users=usersArr; pulled+=usersArr.length; }
       }
     }catch(e){}
