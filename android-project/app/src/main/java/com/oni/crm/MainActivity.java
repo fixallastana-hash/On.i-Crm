@@ -1,4 +1,4 @@
-﻿package com.oni.crm;
+package com.oni.crm;
 
 import com.googlecode.tesseract.android.TessBaseAPI;
 import android.app.Activity;
