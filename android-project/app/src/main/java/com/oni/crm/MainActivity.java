@@ -2173,6 +2173,17 @@ private void analyzeLightDom(final String lightDomJson) {
             cm.setAcceptThirdPartyCookies(productWebView, true);
 
             productWebView.setWebViewClient(new WebViewClient() {
+        @Override
+        public boolean shouldOverrideUrlLoading(android.webkit.WebView v, String u) {
+            try {
+                if (u != null && u.contains("://m.fragrantica.")) {
+                    v.loadUrl(u.replace("://m.fragrantica.", "://www.fragrantica."));
+                    return true;
+                }
+            } catch (Exception ignored) {}
+            return false;
+        }
+
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     return false;
