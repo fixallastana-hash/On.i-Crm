@@ -894,6 +894,84 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     return text;
 }
 
+private String callAiProxyAnalyze(String lightDomJson) throws Exception {
+    if (aiIdToken == null || aiIdToken.isEmpty()) throw new IOException("Нет авторизации для AI");
+    URL url = new URL(AI_PROXY_URL);
+    HttpsURLConnection c = (HttpsURLConnection) url.openConnection();
+    c.setRequestMethod("POST");
+    c.setConnectTimeout(20000);
+    c.setReadTimeout(60000);
+    c.setDoOutput(true);
+    c.setRequestProperty("Content-Type", "application/json");
+    c.setRequestProperty("Authorization", "Bearer " + aiIdToken);
+    JSONObject data = new JSONObject();
+    data.put("mode", "analyze");
+    data.put("prompt", lightDomJson == null ? "" : lightDomJson);
+    JSONObject body = new JSONObject();
+    body.put("data", data);
+    try (OutputStream os = c.getOutputStream()) {
+        os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+    }
+    int code = c.getResponseCode();
+    InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+    String response = readAll(is);
+    if (code < 200 || code >= 300) {
+        String errMsg = "AI proxy HTTP " + code;
+        try {
+            JSONObject er = new JSONObject(response);
+            JSONObject errorObj = er.optJSONObject("error");
+            if (errorObj != null) {
+                String m = errorObj.optString("message", "");
+                if (m != null && !m.isEmpty()) errMsg = m;
+            }
+        } catch (Exception ignored) {}
+        throw new IOException(errMsg);
+    }
+    JSONObject r = new JSONObject(response);
+    JSONObject result = r.optJSONObject("result");
+    if (result == null) throw new IOException("Некорректный ответ AI analyze");
+    JSONObject plan = result.optJSONObject("plan");
+    if (plan == null) throw new IOException("AI не вернул план");
+    String prov = result.optString("provider", "");
+    android.util.Log.i("On.i.AI", "Analyze OK via " + prov);
+    return plan.toString();
+}
+
+private void analyzeLightDom(final String lightDomJson) {
+    new Thread(new Runnable() { public void run() {
+        try {
+            runOnUiThread(new Runnable() { public void run() {
+                try { android.widget.Toast.makeText(MainActivity.this, "🤖 AI анализирует...", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+            }});
+            final String planJson = callAiProxyAnalyze(lightDomJson);
+            try {
+                String domain = getCurrentDomain();
+                if (domain != null && !domain.isEmpty()) {
+                    getSharedPreferences("oni_macros", MODE_PRIVATE).edit().putString("aiplan_" + domain, planJson).apply();
+                }
+            } catch (Exception ignored) {}
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    if (productWebView != null) {
+                        String js = "window.__oniApplyAIPlan && window.__oniApplyAIPlan(" + planJson + ");";
+                        productWebView.evaluateJavascript(js, null);
+                        android.widget.Toast.makeText(MainActivity.this, "🤖 Применяю план AI...", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                    updateMacroUI();
+                } catch (Exception ignored) {}
+            }});
+        } catch (final Exception e) {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    String msg = e.getMessage() == null ? String.valueOf(e) : e.getMessage();
+                    if (msg.length() > 150) msg = msg.substring(0, 150) + "…";
+                    android.widget.Toast.makeText(MainActivity.this, "AI: " + msg, android.widget.Toast.LENGTH_LONG).show();
+                } catch (Exception ignored) {}
+            }});
+        }
+    }}).start();
+}
+
 private String callSelectedProvider(String input, boolean webSearch) throws Exception {
     // 1. Пытаемся через серверный AI-прокси (ключи на сервере, безопасно)
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
@@ -2242,13 +2320,22 @@ private void postGuideResult(final String json) {
                             String saved = "";
                             if (!domain.isEmpty()) saved = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("macro_" + domain, "");
                             if (saved != null && !saved.isEmpty()) {
-                                // Запустить воспроизведение
+                                // Запустить воспроизведение ручного макроса
                                 String js = "window.__oniMacroPlay&&window.__oniMacroPlay(" + org.json.JSONObject.quote(saved) + ");";
                                 if (productWebView != null) productWebView.evaluateJavascript(js, null);
                             } else {
-                                // Запустить AI-разбор light DOM
-                                if (productWebView != null) productWebView.evaluateJavascript(PRODUCT_LIGHT_DOM_JS, null);
-                                android.widget.Toast.makeText(MainActivity.this, "🤖 Анализирую страницу...", android.widget.Toast.LENGTH_SHORT).show();
+                                String aiPlan = "";
+                                if (!domain.isEmpty()) aiPlan = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("aiplan_" + domain, "");
+                                if (aiPlan != null && !aiPlan.isEmpty()) {
+                                    // Применить сохранённый AI-план (без нового запроса к AI)
+                                    String js = "window.__oniApplyAIPlan && window.__oniApplyAIPlan(" + aiPlan + ");";
+                                    if (productWebView != null) productWebView.evaluateJavascript(js, null);
+                                    try { android.widget.Toast.makeText(MainActivity.this, "▶ AI план", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+                                } else {
+                                    // Запустить AI-разбор light DOM (первый раз для этого домена)
+                                    if (productWebView != null) productWebView.evaluateJavascript(PRODUCT_LIGHT_DOM_JS, null);
+                                    android.widget.Toast.makeText(MainActivity.this, "🤖 Анализирую страницу...", android.widget.Toast.LENGTH_SHORT).show();
+                                }
                             }
                         }
                     } catch (Exception ignored) {}
@@ -2518,9 +2605,17 @@ private void postGuideResult(final String json) {
                     macroBtn.setBackgroundColor(0xFF34C759);
                     macroBtn.setTextColor(0xFFFFFFFF);
                 } else {
-                    macroBtn.setText("🤖");
-                    macroBtn.setBackgroundColor(0xFFF0F0F0);
-                    macroBtn.setTextColor(0xFF666666);
+                    String aiPlan = "";
+                    if (!domain.isEmpty()) aiPlan = getSharedPreferences("oni_macros", MODE_PRIVATE).getString("aiplan_" + domain, "");
+                    if (aiPlan != null && !aiPlan.isEmpty()) {
+                        macroBtn.setText("▶AI");
+                        macroBtn.setBackgroundColor(0xFF0A84FF);
+                        macroBtn.setTextColor(0xFFFFFFFF);
+                    } else {
+                        macroBtn.setText("🤖");
+                        macroBtn.setBackgroundColor(0xFFF0F0F0);
+                        macroBtn.setTextColor(0xFF666666);
+                    }
                 }
             }
         } catch (Exception ignored) {}
@@ -3060,13 +3155,14 @@ d.show();
         public String getReviewLang() { return reviewLang; }
         @JavascriptInterface
         public void onLightDomCollected(final String json) {
-            runOnUiThread(new Runnable() { public void run() {
-                try {
-                    String preview = json == null ? "null" : (json.length() > 100 ? json.substring(0, 100) + "..." : json);
-                    android.util.Log.i("On.i.AI", "Light DOM received: " + (json == null ? 0 : json.length()) + " bytes");
-                    android.widget.Toast.makeText(MainActivity.this, "🤖 Light DOM: " + (json == null ? 0 : json.length()) + " символов", android.widget.Toast.LENGTH_LONG).show();
-                } catch (Exception ignored) {}
-            }});
+            if (json == null || json.length() < 50) {
+                runOnUiThread(new Runnable() { public void run() {
+                    try { android.widget.Toast.makeText(MainActivity.this, "Light DOM пустой", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+                }});
+                return;
+            }
+            android.util.Log.i("On.i.AI", "Light DOM: " + json.length() + " bytes");
+            analyzeLightDom(json);
         }
 
         @JavascriptInterface
@@ -3138,6 +3234,34 @@ d.show();
             }});
         }
     }
+
+    private static final String PRODUCT_APPLY_AI_PLAN_JS =
+        "window.__oniApplyAIPlan=function(plan){try{" +
+        "if(!plan)return;" +
+        "var result={desc:'',specs:''};" +
+        "function q(sel){if(!sel)return null;try{return document.querySelector(sel);}catch(e){return null;}}" +
+        "function qa(sel){if(!sel)return [];try{return document.querySelectorAll(sel);}catch(e){return [];}}" +
+        "function text(sel,fbs){var el=q(sel);if(el){var t=(el.innerText||el.textContent||'').trim();if(t.length>=30)return t;}" +
+        "if(fbs){for(var i=0;i<fbs.length;i++){var e2=q(fbs[i]);if(e2){var t2=(e2.innerText||e2.textContent||'').trim();if(t2.length>=30)return t2;}}}return '';}" +
+        "function photos(){var arr=[];var minW=plan.photoMinWidth||300;var el=qa(plan.photosSelector);" +
+        "el.forEach(function(img){var s=img.src||img.getAttribute('data-src');if(s&&s.indexOf('data:')!==0&&(img.naturalWidth>=minW||!img.naturalWidth)){if(arr.indexOf(s)<0)arr.push(s);}});" +
+        "if(!arr.length){qa('img').forEach(function(img){var s=img.src;if(s&&s.indexOf('data:')!==0&&img.naturalWidth>=minW){if(arr.indexOf(s)<0)arr.push(s);}});}" +
+        "return arr.slice(0,15);}" +
+        "function finish(){var url=location.href;" +
+        "try{if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(result.desc||'',result.specs||'',url);}catch(e){}" +
+        "try{var ph=photos();if(ph.length&&window.AndroidWV&&window.AndroidWV.onPhotosExtracted)window.AndroidWV.onPhotosExtracted(JSON.stringify(ph));}catch(e){}}" +
+        "if(plan.expandSelectors&&plan.expandSelectors.length){plan.expandSelectors.forEach(function(s){qa(s).forEach(function(el){try{el.click();}catch(e){}});});}" +
+        "if(plan.descTab){var dt=q(plan.descTab);if(dt){try{dt.click();}catch(e){}}}" +
+        "setTimeout(function(){" +
+        "result.desc=text(plan.descContainer,['[itemprop=\"description\"]','[class*=\"item__description\"]','[class*=\"product-description\"]','[class*=\"description\"]','article','main']);" +
+        "if(plan.specsTab){var st=q(plan.specsTab);if(st){try{st.click();}catch(e){}}}" +
+        "setTimeout(function(){" +
+        "result.specs=text(plan.specsContainer,['[class*=\"specifications\"]','[class*=\"characteristics\"]','[class*=\"harakteristik\"]','table']);" +
+        "finish();" +
+        "},1500);" +
+        "},1500);" +
+        "}catch(e){console.log('[ai-plan]',e);}};" +
+        "(function(){})();";
 
     private static final String PRODUCT_LIGHT_DOM_JS =
         "(function(){try{" +
