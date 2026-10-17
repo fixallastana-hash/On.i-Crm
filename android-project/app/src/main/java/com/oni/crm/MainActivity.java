@@ -2427,7 +2427,7 @@ private void analyzeLightDom(final String lightDomJson) {
 
     private void deleteMacroForDomainImpl(String domain) {
         if (domain == null || domain.isEmpty()) return;
-        try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove(isAi ? "aiplan_" + domain : "macro_" + domain).apply(); } catch (Exception ignored) {}
+        try { getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).remove("aiplan_" + domain).apply(); } catch (Exception ignored) {}
         runOnUiThread(new Runnable() { public void run() { try { updateMacroUI(); } catch (Exception ignored) {} }});
     }
 
@@ -2517,7 +2517,7 @@ private void analyzeLightDom(final String lightDomJson) {
                     delBtn.setOnClickListener(new android.view.View.OnClickListener() {
                         @Override public void onClick(android.view.View v) {
                             try {
-                                getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove(isAi ? "aiplan_" + domain : "macro_" + domain).apply();
+                                getSharedPreferences("oni_macros", MODE_PRIVATE).edit().remove("macro_" + domain).remove("aiplan_" + domain).apply();
                                 ((android.view.ViewGroup)v.getParent().getParent()).removeView((android.view.View)v.getParent());
                             } catch (Exception ignored) {}
                         }
