@@ -2246,9 +2246,9 @@ private void postGuideResult(final String json) {
                                 String js = "window.__oniMacroPlay&&window.__oniMacroPlay(" + org.json.JSONObject.quote(saved) + ");";
                                 if (productWebView != null) productWebView.evaluateJavascript(js, null);
                             } else {
-                                // Начать запись
-                                startMacroRecordingImpl();
-                                if (productWebView != null) productWebView.evaluateJavascript("window.__oniMacroStart&&window.__oniMacroStart();", null);
+                                // Запустить AI-разбор light DOM
+                                if (productWebView != null) productWebView.evaluateJavascript(PRODUCT_LIGHT_DOM_JS, null);
+                                android.widget.Toast.makeText(MainActivity.this, "🤖 Анализирую страницу...", android.widget.Toast.LENGTH_SHORT).show();
                             }
                         }
                     } catch (Exception ignored) {}
@@ -2518,7 +2518,7 @@ private void postGuideResult(final String json) {
                     macroBtn.setBackgroundColor(0xFF34C759);
                     macroBtn.setTextColor(0xFFFFFFFF);
                 } else {
-                    macroBtn.setText("🔴");
+                    macroBtn.setText("🤖");
                     macroBtn.setBackgroundColor(0xFFF0F0F0);
                     macroBtn.setTextColor(0xFF666666);
                 }
@@ -3059,6 +3059,17 @@ d.show();
         @JavascriptInterface
         public String getReviewLang() { return reviewLang; }
         @JavascriptInterface
+        public void onLightDomCollected(final String json) {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    String preview = json == null ? "null" : (json.length() > 100 ? json.substring(0, 100) + "..." : json);
+                    android.util.Log.i("On.i.AI", "Light DOM received: " + (json == null ? 0 : json.length()) + " bytes");
+                    android.widget.Toast.makeText(MainActivity.this, "🤖 Light DOM: " + (json == null ? 0 : json.length()) + " символов", android.widget.Toast.LENGTH_LONG).show();
+                } catch (Exception ignored) {}
+            }});
+        }
+
+        @JavascriptInterface
         public void onExtracted(String desc, String specs, String url) {
             if (desc == null) desc = "";
             if (specs == null) specs = "";
@@ -3127,6 +3138,41 @@ d.show();
             }});
         }
     }
+
+    private static final String PRODUCT_LIGHT_DOM_JS =
+        "(function(){try{" +
+        "var result={url:location.href,title:document.title,tabs:[],buttons:[],blocks:[],images:[]};" +
+        "var seenTabs={};" +
+        "['li[data-tab]','[role=\"tab\"]','.tab','.tabs a','.nav-tabs a'].forEach(function(sel){" +
+        "document.querySelectorAll(sel).forEach(function(el){" +
+        "var text=(el.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "if(text&&text.length<50){var key=text.toLowerCase();if(!seenTabs[key]){seenTabs[key]=true;result.tabs.push({text:text,tag:el.tagName,cls:String(el.className).slice(0,60)});}}" +
+        "});});" +
+        "var words=['показать','развернуть','раскрыть','ещё','еще','подробнее','полностью','читать','далее','смотреть','все характеристики','все отзывы','show','more','expand','read','view','see','full','all','details'];" +
+        "var seenBtns={};" +
+        "document.querySelectorAll('button,a,span[role=\"button\"],div[role=\"button\"]').forEach(function(el){" +
+        "var text=(el.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "if(!text||text.length>50)return;" +
+        "var t=text.toLowerCase();var matched=words.some(function(w){return t.indexOf(w)!==-1;});" +
+        "if(matched){var key=text;if(!seenBtns[key]){seenBtns[key]=true;result.buttons.push({text:text,tag:el.tagName});}}" +
+        "});" +
+        "var seenBlocks={};" +
+        "document.querySelectorAll('div,section,article,p').forEach(function(el){" +
+        "if(el.children.length>5)return;" +
+        "var text=(el.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "if(text.length>200&&text.length<5000){" +
+        "var isDuplicate=false;for(var i=0;i<result.blocks.length;i++){if(result.blocks[i].text.indexOf(text)!==-1){isDuplicate=true;break;}}" +
+        "if(!isDuplicate){result.blocks=result.blocks.filter(function(b){return text.indexOf(b.text)===-1;});result.blocks.push({text:text.slice(0,500),cls:String(el.className).slice(0,60),tag:el.tagName});}" +
+        "}});" +
+        "result.blocks=result.blocks.slice(0,20);" +
+        "var seenImgs={};" +
+        "document.querySelectorAll('img').forEach(function(el){" +
+        "if(el.naturalWidth>300&&el.naturalHeight>300&&el.src&&el.src.indexOf('data:')!==0){" +
+        "if(!seenImgs[el.src]){seenImgs[el.src]=true;result.images.push({src:el.src,w:el.naturalWidth,h:el.naturalHeight});}}" +
+        "});" +
+        "result.images=result.images.slice(0,30);" +
+        "if(window.AndroidWV&&window.AndroidWV.onLightDomCollected){window.AndroidWV.onLightDomCollected(JSON.stringify(result));}" +
+        "}catch(e){if(window.AndroidWV&&window.AndroidWV.onLightDomCollected)window.AndroidWV.onLightDomCollected(JSON.stringify({error:e.message}));}})();";
 
     private static final String PRODUCT_MACRO_RECORDER_JS =
         "(function(){" +
