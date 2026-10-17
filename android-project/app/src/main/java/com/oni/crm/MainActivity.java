@@ -2264,7 +2264,7 @@ private void analyzeLightDom(final String lightDomJson) {
                 0, btnH, 0.55f
             );
             btnPhoto.setLayoutParams(bLpP);
-            bottomBar.addView(btnPhoto);
+            btnPhoto.setVisibility(android.view.View.GONE);bottomBar.addView(btnPhoto);
 
             container.addView(topBar);
             container.addView(statusBar);
@@ -3457,7 +3457,18 @@ private static String readAll(InputStream in) throws IOException {
         "if(whole.length>=50){whole=(function(s){var c=['window.BG3_DATA','this.gbar_','Откроется в новом окне','Действуют Условия использования','Политика конфиденциальности Google','Общайтесь с Gemini в приложении','Теперь в Google Play!','Gemini – это ИИ. Он может ошибаться.'];var m=s.length;for(var i=0;i<c.length;i++){var x=s.indexOf(c[i]);if(x>50&&x<m)m=x;}return s.slice(0,m).replace(/\\n{3,}/g,'\\n\\n').trim();})(whole).slice(0,8000);" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(whole,'',location.href);" +
         "return;}}" +
-        // 3. Kaspi и подобные — табы
+        // Fragrantica - full extraction into one field
+        "if(location.host.indexOf('fragrantica')>=0){" +
+        "var parts=[];" +
+        "var desc=document.querySelector('[itemprop=\"description\"]');" +
+        "if(desc){var dt=(desc.innerText||desc.textContent||'').trim();if(dt.length>20)parts.push(dt);}" +
+        "var pyr=document.querySelector('[class*=\"pyramid\"],[id*=\"pyramid\"],[class*=\"notes\"]');" +
+        "if(pyr){var pt=(pyr.innerText||'').replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim();if(pt.length>20)parts.push(pt);}" +
+        "if(parts.length<2){var ns=document.querySelectorAll('[class*=\"note\"]');if(ns.length){var nt=[];ns.forEach(function(n){var x=(n.innerText||'').trim();if(x&&x.length<40)nt.push(x);});if(nt.length)parts.push(nt.join(', '));}}" +
+        "var res=parts.join('\\n\\n').trim();" +
+        "if(!res)res=document.body?document.body.innerText.replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim().slice(0,5000):'';" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(res,'',location.href);" +
+        "return;}" +        // 3. Kaspi и подобные — табы
         "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
         "if(!tabs||!tabs.length){var c=[];" +
         "document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"],[class*=\"harakteristik\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim();if(t&&t.length>=60)c.push(t);});" +
