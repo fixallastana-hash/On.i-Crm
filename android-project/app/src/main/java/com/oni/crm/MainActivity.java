@@ -585,15 +585,6 @@ public class MainActivity extends Activity {
             });
         }
 
-private String readAll(InputStream in) throws IOException {
-    if (in == null) return "";
-    byte[] buf = new byte[8192];
-    int n;
-    StringBuilder sb = new StringBuilder();
-    while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
-    return sb.toString();
-}
-
 private String callGemini(String input) throws Exception {
     SharedPreferences sp = getSharedPreferences("oni_ai", MODE_PRIVATE);
     String key = sp.getString("geminiApiKey", "").trim();
@@ -1975,7 +1966,17 @@ private void postGuideResult(final String json) {
 
     }
 
+private String readAll(InputStream in) throws IOException {
+    if (in == null) return "";
+    byte[] buf = new byte[8192];
+    int n;
+    StringBuilder sb = new StringBuilder();
+    while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+    return sb.toString();
+}
+
     // ============ PRODUCT WEBVIEW OVERLAY ============
+
 
 private String callAiProxyAnalyze(String lightDomJson) throws Exception {
     if (aiIdToken == null || aiIdToken.isEmpty()) throw new IOException("Нет авторизации для AI");
