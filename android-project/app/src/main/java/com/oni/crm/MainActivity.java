@@ -3270,13 +3270,13 @@ private static String readAll(InputStream in) throws IOException {
         "var seenTabs={};" +
         "['li[data-tab]','[role=\"tab\"]','.tab','.tabs a','.nav-tabs a'].forEach(function(sel){" +
         "document.querySelectorAll(sel).forEach(function(el){" +
-        "var text=(el.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "var text=(el.innerText||'').trim().replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ');" +
         "if(text&&text.length<50){var key=text.toLowerCase();if(!seenTabs[key]){seenTabs[key]=true;result.tabs.push({text:text,tag:el.tagName,cls:String(el.className).slice(0,60)});}}" +
         "});});" +
         "var words=['показать','развернуть','раскрыть','ещё','еще','подробнее','полностью','читать','далее','смотреть','все характеристики','все отзывы','show','more','expand','read','view','see','full','all','details'];" +
         "var seenBtns={};" +
         "document.querySelectorAll('button,a,span[role=\"button\"],div[role=\"button\"]').forEach(function(el){" +
-        "var text=(el.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "var text=(el.innerText||'').trim().replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ');" +
         "if(!text||text.length>50)return;" +
         "var t=text.toLowerCase();var matched=words.some(function(w){return t.indexOf(w)!==-1;});" +
         "if(matched){var key=text;if(!seenBtns[key]){seenBtns[key]=true;result.buttons.push({text:text,tag:el.tagName});}}" +
@@ -3284,7 +3284,7 @@ private static String readAll(InputStream in) throws IOException {
         "var seenBlocks={};" +
         "document.querySelectorAll('div,section,article,p').forEach(function(el){" +
         "if(el.children.length>5)return;" +
-        "var text=(el.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "var text=(el.innerText||'').trim().replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ');" +
         "if(text.length>200&&text.length<5000){" +
         "var isDuplicate=false;for(var i=0;i<result.blocks.length;i++){if(result.blocks[i].text.indexOf(text)!==-1){isDuplicate=true;break;}}" +
         "if(!isDuplicate){result.blocks=result.blocks.filter(function(b){return text.indexOf(b.text)===-1;});result.blocks.push({text:text.slice(0,500),cls:String(el.className).slice(0,60),tag:el.tagName});}" +
@@ -3323,7 +3323,7 @@ private static String readAll(InputStream in) throws IOException {
         "if(!window.__oniMacroRecording)return;" +
         "var el=e.target;if(!el||el.nodeType!==1)return;" +
         "var sel=buildSelector(el);if(!sel)return;" +
-        "var txt=(el.innerText||el.textContent||'').slice(0,40).replace(/\\s+/g,' ');" +
+        "var txt=(el.innerText||el.textContent||'').slice(0,40).replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ');" +
         "var step={sel:sel,label:txt};" +
         "window.__oniMacroSteps.push(step);" +
         "try{if(window.AndroidWV&&window.AndroidWV.recordMacroStep)window.AndroidWV.recordMacroStep(JSON.stringify(step));}catch(_){}" +
@@ -3356,7 +3356,7 @@ private static String readAll(InputStream in) throws IOException {
         "var __st=document.createElement('style');__st.textContent='[class*=\"smart-banner\"],[class*=\"app-banner\"],[class*=\"appBanner\"],[class*=\"open-in-app\"],[class*=\"openInApp\"],[class*=\"deep-link\"],[class*=\"deeplink\"],[class*=\"install-banner\"],[class*=\"installApp\"],[class*=\"mobile-app\"],[id*=\"smartBanner\"],[id*=\"appBanner\"],a[href^=\"kaspi://\"],[data-test=\"smart-banner\"],[data-test=\"app-banner\"]{display:none !important;height:0 !important;max-height:0 !important;}';document.head&&document.head.appendChild(__st);" +
         "if(window.__oniExtractRunning)return;window.__oniExtractRunning=true;" +
         "var result={desc:'',specs:''};" +
-        "function cleanText(t){if(!t)return '';return String(t).replace(/\\s+/g,' ').trim();}" +
+        "function cleanText(t){if(!t)return '';return String(t).replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim();}" +
         "function tryExpandDescription(){" +
         "var expanded=false;" +
         "var btns=document.querySelectorAll('button,a,span,div[role=\"button\"]');" +
@@ -3432,7 +3432,7 @@ private static String readAll(InputStream in) throws IOException {
         // 1. Выделение юзера — берём его
         "var sel=window.getSelection?String(window.getSelection()).trim():'';" +
         "if(sel.length>=30){" +
-        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(sel.replace(/\\s+/g,' '),'',location.href);" +
+        "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(sel.replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' '),'',location.href);" +
         "return;}" +
         // 2. AI-чаты (Gemini / ChatGPT / Perplexity / Claude / DeepSeek)
         "var host=(location.hostname||'').toLowerCase();" +
@@ -3453,23 +3453,23 @@ private static String readAll(InputStream in) throws IOException {
         // Fallback: клон body, из которого выкинуты запросы и UI
         "var body=document.body.cloneNode(true);" +
         "body.querySelectorAll('user-query,[class*=\"user-query\"],[class*=\"user-message\"],[class*=\"query-text\"],textarea,input,button,nav,header,footer,[role=\"navigation\"],[role=\"banner\"]').forEach(function(e){e.remove();});" +
-        "var whole=String(body.innerText||'').trim().replace(/\\s+/g,' ');" +
+        "var whole=String(body.innerText||'').trim().replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ');" +
         "if(whole.length>=50){whole=(function(s){var c=['window.BG3_DATA','this.gbar_','Откроется в новом окне','Действуют Условия использования','Политика конфиденциальности Google','Общайтесь с Gemini в приложении','Теперь в Google Play!','Gemini – это ИИ. Он может ошибаться.'];var m=s.length;for(var i=0;i<c.length;i++){var x=s.indexOf(c[i]);if(x>50&&x<m)m=x;}return s.slice(0,m).replace(/\\n{3,}/g,'\\n\\n').trim();})(whole).slice(0,8000);" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(whole,'',location.href);" +
         "return;}}" +
         // 3. Kaspi и подобные — табы
         "var tabs=document.querySelectorAll('li.tabs-content__tab[data-tab=\"description\"],li.tabs-content__tab[data-tab=\"specifications\"]');" +
         "if(!tabs||!tabs.length){var c=[];" +
-        "document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"],[class*=\"harakteristik\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\s+/g,' ').trim();if(t&&t.length>=60)c.push(t);});" +
+        "document.querySelectorAll('[itemprop=\"description\"],[class*=\"description\"],[class*=\"harakteristik\"]').forEach(function(e){var t=(e.innerText||'').replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim();if(t&&t.length>=60)c.push(t);});" +
         "c.sort(function(a,b){return b.length-a.length;});" +
-        "var t=c.length?c[0]:(document.body?document.body.innerText.replace(/\\s+/g,' ').trim().slice(0,5000):'');" +
+        "var t=c.length?c[0]:(document.body?document.body.innerText.replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim().slice(0,5000):'');" +
         "if(window.AndroidWV&&window.AndroidWV.onExtracted)window.AndroidWV.onExtracted(t,'',location.href);return;}" +
         "var parts=[];var i=0;" +
         "function nextTab(){if(i>=tabs.length){var full=parts.join('\\n\\n');if(full.length>30&&window.AndroidWV)window.AndroidWV.onExtracted(full,'',location.href);return;}" +
         "try{tabs[i].click();}catch(e){}" +
         "setTimeout(function(){" +
         "try{var content=document.querySelector('#ItemView .item-content');if(!content)content=document.body;" +
-        "var text=(content.innerText||'').replace(/\\s+/g,' ').trim();" +
+        "var text=(content.innerText||'').replace(/\\n{3,}/g,'\\n\\n').replace(/[ \\t]+/g,' ').trim();" +
         "var name=String(tabs[i].getAttribute('data-tab')||'').toUpperCase();" +
         "if(text.length>30)parts.push('['+name+']\\n'+text);" +
         "}catch(e){}i++;nextTab();},1400);" +
