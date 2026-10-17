@@ -28,3 +28,5 @@ MainActivity.before_patch
 *_block.txt
 *_new.txt
 review_inject_new.txt
+
+cross_drawable.txt
