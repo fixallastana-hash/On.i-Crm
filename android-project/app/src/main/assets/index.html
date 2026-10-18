@@ -9181,7 +9181,7 @@ window.onAndroidBack=function(){
 
 
 
-window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('Scanner unavailable');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
+window.oniScanToSearch=function(){try{var A=window.Android;if(typeof showToast==='function'){var _h=!!A;var _f=_h&&typeof A.scanBarcode==='function';showToast('scan:'+(_h?(_f?'ok':'noFn'):'noA'));}if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('Scanner unavailable');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();if(typeof showToast==='function')showToast('called');}catch(e){if(typeof showToast==='function')showToast('err:'+((e&&e.message)||e));}};
 </script>
 </body>
 </html>
