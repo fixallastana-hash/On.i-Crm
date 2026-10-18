@@ -24,7 +24,7 @@
 
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
-            android:screenOrientation="landscape"
+            android:screenOrientation="portrait"
             tools:replace="android:screenOrientation" />
 
         <activity
