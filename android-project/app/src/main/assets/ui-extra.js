@@ -38,7 +38,8 @@
     scan.title = 'Scan';
     scan.innerHTML = SVG;
     scan.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;padding:0;cursor:pointer;line-height:1;z-index:2;';
-    scan.onclick = function(){ window.oniScanTo(inputId); };
+    scan.onclick = function(){ if(inputId === 'pp-search'){ var old=document.getElementById('pp-scan'); if(old && typeof old.onclick==='function'){ try{ old.onclick.call(old); return; }catch(e){} } scanAndPick(inputId); return; } window.oniScanTo(inputId); };
+    function scanAndPick(inputId){ var A=window.Android; if(!A || typeof A.scanBarcode !== 'function'){ if(typeof showToast==='function') showToast('Scanner unavailable'); return; } var prev=window.onBarcodeScanned; window.onBarcodeScanned=function(j){ try{ var d=typeof j==='string'?JSON.parse(j):j; var c=String((d&&(d.barcode||d.code||d.value))||'').trim(); if(c && typeof products !== 'undefined' && Array.isArray(products)){ var found=null; for(var k=0;k<products.length;k++){ var pp=products[k]; if(!pp.isCategoryPlaceholder && typeof productBarcodes==='function' && productBarcodes(pp).indexOf(c)>=0){ found=pp; break; } } if(found){ var ov=document.getElementById('pp-ov'); if(ov){ try{ var closeBtn=document.getElementById('pp-close'); if(closeBtn && typeof closeBtn.onclick==='function'){ closeBtn.onclick(); } else { ov.remove(); } }catch(e){} } if(window.__oniPickerOnSelect && typeof window.__oniPickerOnSelect==='function'){ try{ window.__oniPickerOnSelect(found.id); }catch(e){} } return; } else { if(typeof showToast==='function') showToast('Штрихкод не найден: '+c); } } }catch(e){} window.onBarcodeScanned=prev; }; A.scanBarcode(); }
     var clr = document.createElement('button');
     clr.type = 'button';
     clr.className = 'oni-clear-btn';
