@@ -2203,6 +2203,19 @@ private void analyzeLightDom(final String lightDomJson) {
                     return false;
                 }
                 @Override
+                public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                    super.onPageStarted(view, url, favicon);
+                    if (url == null) return;
+                    if (url.contains("://m.fragrantica.")) {
+                        long now = System.currentTimeMillis();
+                        long last = (view.getTag() instanceof Long) ? ((Long)view.getTag()).longValue() : 0L;
+                        if (now - last < 5000L) return;
+                        view.setTag(Long.valueOf(now));
+                        String www = url.replace("://m.fragrantica.", "://www.fragrantica.");
+                        view.loadUrl(www);
+                    }
+                }
+                @Override
                 public void onPageFinished(WebView view, String url) {
                     super.onPageFinished(view, url);
                     try {
