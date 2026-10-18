@@ -5491,7 +5491,7 @@ function viewProducts(){
     <button class="chip ${_af?'active':''}" id="pf-filters-btn" type="button">⚙️ Фильтры${_af ? ' · ' + _af : ''}</button>
     <button class="chip" id="pf-cats-btn" type="button">🏷️ Категории</button>
   </div>
-  <div class="search"><span class="search-icon">⌕</span><input id="product-search" placeholder="Поиск по товару, описанию, назначению…" value="${escapeHtml(productSearch)}"><button type="button" id="product-scan-btn" onclick="(function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('Scanner unavailable');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j===''string''?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||''').trim();if(c){var i=document.getElementById(''product-search'');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event(''input'',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}})()" style="background:none;border:0;font-size:20px;padding:0 6px;cursor:pointer;line-height:1;" title="Scan barcode">&#128247;</button></div>
+  <div class="search"><span class="search-icon">⌕</span><input id="product-search" placeholder="Поиск по товару, описанию, назначению…" value="${escapeHtml(productSearch)}"><button type="button" id="product-scan-btn" onclick="oniScanToSearch()" style="background:none;border:0;font-size:20px;padding:0 6px;cursor:pointer;line-height:1;" title="Scan">&#128247;</button></div>
   <div style="display:flex;gap:6px;margin-bottom:8px;"><button class="btn" id="pf-save-filter" type="button">💾 Сохранить</button><button class="btn" id="pf-open-filters" type="button">⭐ Мои фильтры</button></div>
   <div style="display:flex;gap:7px;margin-bottom:12px;">
     <div style="position:relative;flex:1;">
@@ -9180,6 +9180,8 @@ window.onAndroidBack=function(){
 };
 
 
+
+window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('Scanner unavailable');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
 </script>
 </body>
 </html>
