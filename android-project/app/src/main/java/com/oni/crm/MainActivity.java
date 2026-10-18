@@ -202,6 +202,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String getReviewLang() { return reviewLang; }
         @JavascriptInterface
+        public void scanBarcode() {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    new com.google.zxing.integration.android.IntentIntegrator(MainActivity.this).setPrompt("Scan").setBeepEnabled(false).setOrientationLocked(false).initiateScan();
+                } catch (Exception e) { android.util.Log.e("On.i.Scan", "scanBarcode failed", e); }
+            }});
+        }
+        @JavascriptInterface
         public void setReviewLang(String l) { if(l != null) reviewLang = l; }
         @JavascriptInterface
         public void toast(String m) { runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
@@ -3193,6 +3201,14 @@ private static String readAll(InputStream in) throws IOException {
         @JavascriptInterface
         public String getReviewLang() { return reviewLang; }
         @JavascriptInterface
+        public void scanBarcode() {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    new com.google.zxing.integration.android.IntentIntegrator(MainActivity.this).setPrompt("Scan").setBeepEnabled(false).setOrientationLocked(false).initiateScan();
+                } catch (Exception e) { android.util.Log.e("On.i.Scan", "scanBarcode failed", e); }
+            }});
+        }
+        @JavascriptInterface
         public void onLightDomCollected(final String json) {
             if (json == null || json.length() < 50) {
                 runOnUiThread(new Runnable() { public void run() {
@@ -3650,6 +3666,19 @@ private static String readAll(InputStream in) throws IOException {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode == com.google.zxing.integration.android.IntentIntegrator.REQUEST_CODE){
+            try{
+                if(data != null && resultCode == android.app.Activity.RESULT_OK){
+                    String _code = data.getStringExtra("SCAN_RESULT");
+                    if(_code != null && _code.length() > 0){
+                        String _js = "if(window.onBarcodeScanned){try{window.onBarcodeScanned({barcode:" + org.json.JSONObject.quote(_code) + "});}catch(e){}}";
+                        try{ if(webView != null) webView.evaluateJavascript(_js, null); }catch(Exception ignored){}
+                        try{ if(productWebView != null) productWebView.evaluateJavascript(_js, null); }catch(Exception ignored){}
+                    }
+                }
+            }catch(Exception ignored){}
+            return;
+        }
 
         if (requestCode == EXCEL_PICKER) {
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
