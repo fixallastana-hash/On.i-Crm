@@ -9184,5 +9184,6 @@ window.onAndroidBack=function(){
 
 window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('Scanner unavailable');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
 </script>
+<script src="ui-extra.js"></script>
 </body>
 </html>
