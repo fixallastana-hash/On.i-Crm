@@ -2166,7 +2166,7 @@ private void analyzeLightDom(final String lightDomJson) {
             ws.setDisplayZoomControls(false);
             String ua = ws.getUserAgentString();
             if (ua != null) {
-                ws.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+                ws.setUserAgentString(ua.replace("; wv", "").replaceAll("Version/\\d+\\.\\d+\\s*", ""));
             }
             CookieManager cm = CookieManager.getInstance();
             cm.setAcceptCookie(true);
