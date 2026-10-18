@@ -4872,7 +4872,7 @@ function smartProductSearch(text,query){
   });
 }
 function productSearchText(p){
-  return [p?.name,p?.sku,p?.category,p?.description,p?.purpose,
+  return [p?.name,p?.sku,p?.category,p?.description,p?.purpose,...productBarcodes(p),
     ...(Array.isArray(p?.keywords)?p.keywords:[]),p?.ocrText,...(Array.isArray(p?.photos)?p.photos:[])].filter(v=>typeof v==='string' && !/^data:image\//i.test(v)).join(' ');
 }
 function openProductInfoModal(id){
@@ -5151,8 +5151,8 @@ function ean13ToSvg(code,opts={}){
 function openBarcodesMenu(){
   if(activeUser?.role!=='admin'&&activeUser?.role!=='manager'&&activeUser?.role!=='storekeeper'){ showToast('Нет доступа'); return; }
   const root=document.getElementById('modal-root');
-  const withBc=products.filter(p=>!p.isCategoryPlaceholder && p.barcode);
-  const withoutBc=products.filter(p=>!p.isCategoryPlaceholder && !p.barcode);
+  const withBc=products.filter(p=>!p.isCategoryPlaceholder && productBarcodes(p).length>0);
+  const withoutBc=products.filter(p=>!p.isCategoryPlaceholder && productBarcodes(p).length===0);
   root.innerHTML=`<div class="sheet-overlay" id="bc-ov"><div class="sheet"><div class="sheet-handle"></div>
     <div class="sheet-head"><div class="sheet-title">Штрихкоды и этикетки</div><button class="sheet-close" id="bc-close">✕</button></div>
     <div class="sheet-body">
@@ -5160,7 +5160,7 @@ function openBarcodesMenu(){
       <button class="btn btn-primary btn-block" id="bc-generate-all" ${withoutBc.length?'':'disabled'}>Сгенерировать штрихкоды для ${withoutBc.length} товар(ов)</button>
       <button class="btn btn-block" id="bc-print-sheet" style="margin-top:8px;">🖨️ Печать этикеток</button>
       <div class="panel" style="margin-top:12px;"><div class="panel-head"><div class="panel-title">Товары</div></div>
-        ${products.filter(p=>!p.isCategoryPlaceholder).slice(0,100).map(p=>`<div class="list-row"><div class="row-icon cat">${escapeHtml(initials(p.name))}</div><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div><div class="row-sub">${escapeHtml(p.sku||'')} · ${p.barcode?escapeHtml(p.barcode):'<span style="color:var(--danger)">нет штрихкода</span>'}</div></div><div class="row-right"><button class="move-action" data-bc-one="${escapeHtml(p.id)}">${p.barcode?'✏️':'＋'}</button></div></div>`).join('')}
+        ${products.filter(p=>!p.isCategoryPlaceholder).slice(0,100).map(p=>`<div class="list-row"><div class="row-icon cat">${escapeHtml(initials(p.name))}</div><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div><div class="row-sub">${escapeHtml(p.sku||'')} · ${productBarcodes(p).length>0?escapeHtml(productBarcodes(p).join(', ')):'<span style="color:var(--danger)">нет штрихкода</span>'}</div></div><div class="row-right"><button class="move-action" data-bc-one="${escapeHtml(p.id)}">${p.barcode?'✏️':'＋'}</button></div></div>`).join('')}
       </div>
     </div>
   </div></div>`;
