@@ -8673,13 +8673,13 @@ function openPurchaseModal(presetSupplierId=null,presetProductId=null,presetLine
   if(!suppliers.length){showToast('Сначала добавьте поставщика');openSupplierModal();return;}
   if(!realProducts.length){showToast('Сначала добавьте товар');return;}
   const supplierOptions=suppliers.map(x=>`<option value="${escapeHtml(x.id)}" ${x.id===presetSupplierId?'selected':''}>${escapeHtml(x.name)}</option>`).join('');
-  const productOptions=realProducts.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===presetProductId?'selected':''}>${escapeHtml(p.name)} — ${escapeHtml(p.sku||'')}</option>`).join('');
+  const productOptions=realProducts.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===presetProductId?'selected':''} data-search="${escapeHtml((p.name||'')+' '+(p.sku||'')+' '+productBarcodes(p).join(' '))}">${escapeHtml(p.name)} — ${escapeHtml(p.sku||'')}</option>`).join('');
   root.innerHTML=`<div class="sheet-overlay" id="purchase-ov"><div class="sheet">
     <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Новая закупка</div><button class="sheet-close" id="purchase-close">✕</button></div>
     <div class="sheet-body">
       <div class="form-field"><label class="form-label">Поставщик</label><select class="form-select" id="pu-supplier">${supplierOptions}</select></div>
       <div class="purchase-items-head"><div class="panel-title">Товары в закупке</div><button class="btn" type="button" id="pu-add-row">＋ Товар</button><button class="btn" type="button" id="pu-add-new" style="margin-left:6px;">+ New</button></div>
-      <div id="pu-items"></div>
+      <div class="purchase-items-head" style="margin-top:8px;"><div class="search" style="flex:1;margin:0;"><span class="search-icon">&#8981;</span><input id="pu-search" placeholder="Search name / SKU / barcode..." style="width:100%;"></div><button class="btn" type="button" id="pu-scan" style="margin-left:6px;" title="Scan">&#128247;</button></div><div id="pu-items"></div>
       <div class="total-row"><span class="label">Итого закупка</span><span class="value" id="pu-total">${fmtMoney(0)}</span></div>
       <div class="form-grid2">
         <div class="form-field"><label class="form-label">Статус оплаты</label><select class="form-select" id="pu-payment"><option value="paid">Оплачено</option><option value="partial">Частично</option><option value="debt">Долг</option></select></div>
@@ -8718,6 +8718,8 @@ function openPurchaseModal(presetSupplierId=null,presetProductId=null,presetLine
   };
   if(Array.isArray(presetLines)&&presetLines.length){ presetLines.forEach(x=>addRow(x.productId||'')); const rows=[...itemsRoot.querySelectorAll('.purchase-line')]; presetLines.forEach((x,i)=>{ if(rows[i]){ rows[i].querySelector('.pu-qty').value=x.qty||1; if(x.cost!==undefined&&x.cost!==null)rows[i].querySelector('.pu-cost').value=x.cost; } }); updateTotal(); } else addRow(presetProductId||'');
   document.getElementById('pu-add-row').onclick=()=>addRow('');
+var _puSearch=document.getElementById('pu-search');if(_puSearch)_puSearch.oninput=function(){var q=this.value.trim().toLowerCase();itemsRoot.querySelectorAll('select.pu-product').forEach(function(sel){Array.from(sel.options).forEach(function(opt){if(!q){opt.hidden=false;return;}var hay=(opt.getAttribute('data-search')||opt.text||'').toLowerCase();opt.hidden=hay.indexOf(q)<0;});});};
+var _puScan=document.getElementById('pu-scan');if(_puScan)_puScan.onclick=function(){if(!(window.Android&&typeof Android.scanBarcode==='function')){showToast('Scanner unavailable');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(json){try{var d=typeof json==='string'?JSON.parse(json):json;var code=String((d&&(d.barcode||d.code||d.value))||'').trim();if(!code)return;var found=null;for(var i=0;i<realProducts.length;i++){var pp=realProducts[i];if(productBarcodes(pp).indexOf(code)>=0){found=pp;break;}}if(found){var existing=null;itemsRoot.querySelectorAll('.purchase-line').forEach(function(row){if(row.querySelector('.pu-product').value===found.id)existing=row;});if(existing){var q=Number(existing.querySelector('.pu-qty').value)||0;existing.querySelector('.pu-qty').value=q+1;}else{addRow(found.id);}updateTotal();showToast('Added: '+found.name);}else{showToast('Not found: '+code);}}catch(e){console.error('scan-purchase',e);}window.onBarcodeScanned=prev;};Android.scanBarcode();};
   document.getElementById('pu-payment').onchange=updateTotal;
     const close=()=>root.innerHTML='';
   document.getElementById('purchase-close').onclick=close;
