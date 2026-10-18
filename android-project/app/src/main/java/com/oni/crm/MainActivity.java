@@ -206,7 +206,7 @@ public class MainActivity extends Activity {
         public void scanBarcode() {
             runOnUiThread(new Runnable() { public void run() {
                 try {
-                    new com.google.zxing.integration.android.IntentIntegrator(MainActivity.this).setPrompt("Scan").setBeepEnabled(false).setOrientationLocked(false).initiateScan();
+                    new com.google.zxing.integration.android.IntentIntegrator(MainActivity.this).setPrompt("Scan").setBeepEnabled(false).setOrientationLocked(true).initiateScan();
                 } catch (Exception e) { android.util.Log.e("On.i.Scan", "scanBarcode failed", e); }
             }});
         }
@@ -3205,7 +3205,7 @@ private static String readAll(InputStream in) throws IOException {
         public void scanBarcode() {
             runOnUiThread(new Runnable() { public void run() {
                 try {
-                    new com.google.zxing.integration.android.IntentIntegrator(MainActivity.this).setPrompt("Scan").setBeepEnabled(false).setOrientationLocked(false).initiateScan();
+                    new com.google.zxing.integration.android.IntentIntegrator(MainActivity.this).setPrompt("Scan").setBeepEnabled(false).setOrientationLocked(true).initiateScan();
                 } catch (Exception e) { android.util.Log.e("On.i.Scan", "scanBarcode failed", e); }
             }});
         }
