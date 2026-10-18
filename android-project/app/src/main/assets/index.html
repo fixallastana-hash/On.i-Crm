@@ -5486,12 +5486,12 @@ function viewProducts(){
   const _af=_pfCount();
   const all=_pfApplySort(_pfApplyFilters(products.filter(p=>!p.isCategoryPlaceholder)));
   return `
-  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+  <div class="products-sticky-header" style="position:sticky;top:58px;z-index:40;background:var(--bg);padding:6px 0 4px 0;"><div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
     <button class="chip" id="pf-sort-btn" type="button">${_pfSortLabel()}</button>
     <button class="chip ${_af?'active':''}" id="pf-filters-btn" type="button">⚙️ Фильтры${_af ? ' · ' + _af : ''}</button>
     <button class="chip" id="pf-cats-btn" type="button">🏷️ Категории</button>
   </div>
-  <div class="search"><span class="search-icon">⌕</span><input id="product-search" placeholder="Поиск по товару, описанию, назначению…" value="${escapeHtml(productSearch)}"><button type="button" id="product-scan-btn" onclick="oniScanToSearch()" style="background:none;border:0;font-size:20px;padding:0 6px;cursor:pointer;line-height:1;" title="Scan">&#128247;</button></div>
+  <div class="search" style="position:relative;"><span class="search-icon">&#8981;</span><input id="product-search" style="padding-right:42px;" placeholder="Поиск по товару, описанию, назначению…" value="${escapeHtml(productSearch)}"><button type="button" id="product-scan-btn" onclick="oniScanToSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;padding:0;cursor:pointer;line-height:1;z-index:2;" title="Scan">&#128247;</button></div>
   <div style="display:flex;gap:6px;margin-bottom:8px;"><button class="btn" id="pf-save-filter" type="button">💾 Сохранить</button><button class="btn" id="pf-open-filters" type="button">⭐ Мои фильтры</button></div>
   <div style="display:flex;gap:7px;margin-bottom:12px;">
     <div style="position:relative;flex:1;">
@@ -5503,6 +5503,7 @@ function viewProducts(){
     </div>
     <input id="excel-file" type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,.xlsx,.xls,.csv" style="display:none;">
     <button class="btn" id="export-products" type="button" style="flex:1;">↑ Экспорт Excel</button>
+  </div>
   </div>
   <div class="panel">
     ${all.length?all.map(p=>`
