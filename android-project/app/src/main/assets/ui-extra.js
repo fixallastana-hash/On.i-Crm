@@ -1,6 +1,6 @@
 (function(){
   if(window.__oniUiExtraLoaded) return;
-  window.__oniUiExtraLoaded = true;
+  window.__oniUiExtraLoaded = true; try{var _hs=document.createElement('style');_hs.textContent='#product-scan-btn,#pos-scan-btn,#pp-scan{display:none!important}';var _t=document.head||document.documentElement;if(_t)_t.appendChild(_hs);}catch(e){}
   var SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="vertical-align:middle;display:inline-block;"><rect x="2" y="5" width="2" height="14"/><rect x="5" y="5" width="1" height="14"/><rect x="7" y="5" width="3" height="14"/><rect x="11" y="5" width="1" height="14"/><rect x="13" y="5" width="2" height="14"/><rect x="16" y="5" width="1" height="14"/><rect x="18" y="5" width="3" height="14"/><rect x="22" y="5" width="1" height="14"/></svg>';
   window.oniClearSearch = function(id){
     try{ var i=document.getElementById(id); if(!i) return; i.value=''; if(i.oninput){try{i.oninput();}catch(e){}} try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){} try{i.focus();}catch(e){} }catch(e){}
