@@ -40,6 +40,27 @@
     A.scanBarcode();
   }catch(e){}
 };
+function enrichExtraBarcodeInputs(){
+  document.querySelectorAll('input.f-extra-barcode').forEach(function(inp){
+    if(inp.dataset.oniScanEnhanced) return;
+    inp.dataset.oniScanEnhanced = '1';
+    var parent = inp.parentElement;
+    if(!parent) return;
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:relative;flex:1;min-width:0;';
+    parent.insertBefore(wrapper, inp);
+    wrapper.appendChild(inp);
+    inp.style.paddingRight = '44px';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'oni-scan-btn';
+    btn.title = 'Scan';
+    btn.innerHTML = SVG;
+    btn.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;padding:0;cursor:pointer;line-height:1;z-index:2;';
+    btn.onclick = function(){ window.oniScanToElement(inp); };
+    wrapper.appendChild(btn);
+  });
+}
 function enrichBarcodeInputs(){
   var mainBc = document.getElementById('f-barcode');
   if(mainBc && !mainBc.dataset.oniScanEnhanced){
@@ -89,7 +110,7 @@ function enrich(inputId){
     sync();
   }
   var ids = ['product-search','pos-search','pp-search'];
-  function enrichAll(){ for(var k=0;k<ids.length;k++){ try{ enrich(ids[k]); }catch(e){} } try{ enrichBarcodeInputs(); }catch(e){} }
+  function enrichAll(){ for(var k=0;k<ids.length;k++){ try{ enrich(ids[k]); }catch(e){} } try{ enrichBarcodeInputs(); }catch(e){} try{ enrichExtraBarcodeInputs(); }catch(e){} }
   function init(){
     enrichAll();
     if(!document.body) return;
