@@ -24,7 +24,42 @@
       A.scanBarcode();
     }catch(e){}
   };
-  function enrich(inputId){
+  window.oniScanToElement = function(inputEl){
+  try{
+    var A = window.Android;
+    if(!A || typeof A.scanBarcode !== 'function'){ if(typeof showToast === 'function') showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d'); return; }
+    var prev = window.onBarcodeScanned;
+    window.onBarcodeScanned = function(j){
+      try{
+        var d = typeof j === 'string' ? JSON.parse(j) : j;
+        var c = String((d && (d.barcode || d.code || d.value)) || '').trim();
+        if(c && inputEl){ inputEl.value = c; if(inputEl.oninput){try{inputEl.oninput();}catch(e){}} try{inputEl.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){} }
+      }catch(e){}
+      window.onBarcodeScanned = prev;
+    };
+    A.scanBarcode();
+  }catch(e){}
+};
+function enrichBarcodeInputs(){
+  var mainBc = document.getElementById('f-barcode');
+  if(mainBc && !mainBc.dataset.oniScanEnhanced){
+    mainBc.dataset.oniScanEnhanced = '1';
+    var wrap = mainBc.parentElement;
+    if(wrap){
+      wrap.style.position = 'relative';
+      mainBc.style.paddingRight = '44px';
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'oni-scan-btn';
+      btn.title = 'Scan';
+      btn.innerHTML = SVG;
+      btn.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;padding:0;cursor:pointer;line-height:1;z-index:2;';
+      btn.onclick = function(){ window.oniScanToElement(mainBc); };
+      wrap.appendChild(btn);
+    }
+  }
+}
+function enrich(inputId){
     var input = document.getElementById(inputId);
     if(!input) return;
     var wrap = input.parentElement;
@@ -54,7 +89,7 @@
     sync();
   }
   var ids = ['product-search','pos-search','pp-search'];
-  function enrichAll(){ for(var k=0;k<ids.length;k++){ try{ enrich(ids[k]); }catch(e){} } }
+  function enrichAll(){ for(var k=0;k<ids.length;k++){ try{ enrich(ids[k]); }catch(e){} } try{ enrichBarcodeInputs(); }catch(e){} }
   function init(){
     enrichAll();
     if(!document.body) return;
