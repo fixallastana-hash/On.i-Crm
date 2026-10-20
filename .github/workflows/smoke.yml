@@ -1,9 +1,9 @@
 name: Smoke test
 on:
   push:
-    branches: [main]
+    branches: [main, refactor/modularization]
   pull_request:
-    branches: [main]
+    branches: [main, refactor/modularization]
 
 jobs:
   smoke:
@@ -11,9 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Run smoke test
         shell: pwsh
         env:
           ONI_INDEX_PATH: ${{ github.workspace }}/android-project/app/src/main/assets/index.html
+          ONI_ASSETS_DIR: ${{ github.workspace }}/android-project/app/src/main/assets
         run: |
           ./scripts/smoke-test.ps1
