@@ -431,20 +431,8 @@ const defaultModulesConfig = {
 
 // Приводит любой объект modulesConfig к актуальной схеме:
 // выкидывает core-ключи, добивает отсутствующие модули дефолтом.
-function sanitizeModulesConfig(raw){
-  const src=(raw && typeof raw==='object' && !Array.isArray(raw))?raw:{};
-  const out={};
-  Object.keys(defaultModulesConfig).forEach(function(k){
-    if(CORE_MODULES.indexOf(k)>=0) return; // core не хранится
-    out[k]=Object.prototype.hasOwnProperty.call(src,k)
-      ? src[k]===true
-      : defaultModulesConfig[k]===true;
-  });
-  return out;
-}
 
 var modulesConfig = { ...defaultModulesConfig };
-function moduleOn(name){return !!(modulesConfig&&modulesConfig[name]===true);}
 // Универсальная карта: какой view / пункт меню привязан к какому модулю.
 var MODULE_BY_VIEW={
   suppliers:'suppliers',
@@ -461,25 +449,6 @@ var MODULE_BY_VIEW={
   employees:'employeesChat',
   analytics:'cashierAnalytics'
 };
-function isModOn(key){
-  try{
-    if(typeof moduleOn==='function') return !!moduleOn(key);
-  }catch(e){}
-  return true;
-}
-function viewAllowedByModules(view){
-  var mod=MODULE_BY_VIEW[view];
-  if(!mod) return true;
-  return isModOn(mod);
-}
-function roleNav(role){
-  var base=(ROLE_NAV&&ROLE_NAV[role])||['orders'];
-  return base.filter(function(v){ return viewAllowedByModules(v); });
-}
-function roleAccess(role){
-  var base=(ROLE_ACCESS&&ROLE_ACCESS[role])||['orders'];
-  return base.filter(function(v){ return viewAllowedByModules(v); });
-}
 function canDisableModule(name){
   if(!Object.prototype.hasOwnProperty.call(modulesConfig,name)) return {ok:false,reason:'Неизвестный модуль'};
   if(name==='debts'&&(debts||[]).some(d=>d&&d.status!=='paid'&&Number(d.remaining)>0)) return {ok:false,reason:'Нельзя отключить модуль «Долги»: есть непогашенные долги'};
@@ -492,9 +461,6 @@ var inventorySessions=[];
 var users=[], shifts=[], messages=[], activeUser=null, currentShiftId=null, adminReturnUser=null;
 var currentView='orders';
 // Restore the last opened section after browser refresh/reload.
-function saveUiState(){
-  try{ localStorage.setItem('sklad_crm_ui_state', JSON.stringify({currentView,ordersSubView})); }catch(e){}
-}
 function _pointKeyForUser(){
   try{ return (activeUser && activeUser.id) ? ('oni_point_' + activeUser.id) : null; }catch(e){ return null; }
 }
@@ -1937,12 +1903,6 @@ function showPosNotice(msg){
   text.textContent=msg; root.classList.add('show'); clearTimeout(posNoticeTimer);
   posNoticeTimer=setTimeout(()=>root.classList.remove('show'),1800);
 }
-function showToast(msg){
-  const root=document.getElementById('toast-root');
-  root.innerHTML='<div class="toast"></div>';
-  root.firstChild.textContent=String(msg);
-  setTimeout(()=>{ if(root.firstChild) root.innerHTML=''; },2200);
-}
 function productSalesQty(productId){
   let sold=0;
   orders.forEach(o=>{
@@ -2798,14 +2758,6 @@ const ROLE_NAV = {
   cashier:     ['orders']
 };
 
-function userRole(){ return (activeUser && activeUser.role) || 'cashier'; }
-function canAccess(view){
-  if(!activeUser) return false;
-  var views=roleAccess(userRole());
-  if(views.indexOf(view)<0) return false;
-  if(!viewAllowedByModules(view)) return false;
-  return true;
-}
 function defaultViewFor(role){
   return (ROLES[role] && ROLES[role].default) || 'orders';
 }
@@ -4071,11 +4023,6 @@ const VIEW_META={
   orders:{title:'Касса',sub:'Оформление продаж'},
   clients:{title:'Клиенты',sub:'Клиентская база и история покупок'},
 };
-function requireAccess(view){
-  if(canAccess(view)) return true;
-  showToast('Нет доступа к разделу');
-  return false;
-}
 function _oniPushIdToken(_tries){
   _tries = _tries || 0;
   try{
@@ -4283,40 +4230,9 @@ function bindDashboard(){
   if(apply) apply.onclick=()=>{const f=document.getElementById('dashboard-from')?.value||todayISO();const t=document.getElementById('dashboard-to')?.value||f;if(f>t){showToast('Дата «С» не может быть позже даты «По»');return;}dashboardFrom=f;dashboardTo=t;safeRender();};
 }
 
-function bindLiveSearch(inputId,rowSelector,normalize=s=>String(s||'').toLowerCase()){
-  const input=document.getElementById(inputId);
-  if(!input)return;
-  const stateSet={
-    'product-search':v=>productSearch=v,
-    'pos-search':v=>posSearch=v,
-    'debt-search':v=>debtSearch=v,
-    'consignment-search':v=>consignmentSearch=v,
-    'client-search':v=>clientSearch=v,
-    'supplier-search':v=>supplierSearch=v
-  };
-  const apply=()=>{
-    if(stateSet[inputId]) stateSet[inputId](input.value);
-    const q=normalize(input.value.trim());
-    let visible=0;
-    document.querySelectorAll(rowSelector).forEach(row=>{
-      const text=normalize(row.dataset.searchText||row.textContent||'');
-      const words=q.split(/\s+/).filter(Boolean);
-      const show=!q||words.every(w=>text.includes(w)||text.includes(w.replace(/ы$/,'')+'а')||text.includes(w.replace(/а$/,'')+'ы')||text.includes(w.replace(/и$/,'')+'а'));
-      row.style.display=show?'':'none';
-      if(show)visible++;
-    });
-    const empty=document.querySelector(`[data-live-empty=\"${inputId}\"]`);
-    if(empty)empty.style.display=visible?'none':'';
-  };
-  input.oninput=apply;
-  apply();
-}
 
 /* ===================== PRODUCTS ===================== */
 
-function normalizeSearchWord(value){
-  return String(value??'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/gi,' ').replace(/\s+/g,' ').trim();
-}
 const SEARCH_SYNONYMS={
   'почка':['почки','почечный','почечная','урология','мочевывод','мочевыводящий'],
   'почки':['почка','почечный','почечная','урология','мочевывод','мочевыводящий'],
@@ -4337,32 +4253,6 @@ const SEARCH_SYNONYMS={
   'боль':['обезболивающий','обезболивание','анальгетик'],
   'сон':['снотворный','успокоение','успокоительный','расслабление'],
 };
-function searchStem(word){
-  let w=normalizeSearchWord(word).replace(/\s+/g,'');
-  if(w.length<=3)return w;
-  const endings=['иями','ями','ами','ого','ему','ому','ыми','ими','ее','ие','ые','ое','ий','ый','ой','ем','ам','ям','ом','ов','ев','ах','ях','ы','и','а','я','о','е','у','ю'];
-  for(const end of endings){ if(w.endsWith(end) && w.length-end.length>=4){ w=w.slice(0,-end.length); break; } }
-  return w;
-}
-function searchVariants(token){
-  const base=normalizeSearchWord(token); if(!base)return [];
-  const out=new Set([base,searchStem(base)]);
-  Object.entries(SEARCH_SYNONYMS).forEach(([key,vals])=>{
-    const group=[key,...vals].map(normalizeSearchWord);
-    if(group.some(v=>v===base||searchStem(v)===searchStem(base))){ group.forEach(v=>{out.add(v);out.add(searchStem(v));}); }
-  });
-  return [...out].filter(Boolean);
-}
-function smartProductSearch(text,query){
-  const hay=normalizeSearchWord(text);
-  if(!query.trim())return true;
-  const hayWords=hay.split(' ').filter(Boolean);
-  const hayStems=new Set(hayWords.map(searchStem));
-  return normalizeSearchWord(query).split(' ').filter(Boolean).every(token=>{
-    const variants=searchVariants(token);
-    return variants.some(v=>hay.includes(v)||hayStems.has(searchStem(v)));
-  });
-}
 function productSearchText(p){
   return [p?.name,p?.sku,p?.category,p?.description,p?.purpose,...productBarcodes(p),
     ...(Array.isArray(p?.keywords)?p.keywords:[]),p?.ocrText,...(Array.isArray(p?.photos)?p.photos:[])].filter(v=>typeof v==='string' && !/^data:image\//i.test(v)).join(' ');
