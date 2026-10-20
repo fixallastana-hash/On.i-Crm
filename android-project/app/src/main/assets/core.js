@@ -459,3 +459,213 @@ function productSearchText(p){
   return [p?.name,p?.sku,p?.category,p?.description,p?.purpose,...productBarcodes(p),
     ...(Array.isArray(p?.keywords)?p.keywords:[]),p?.ocrText,...(Array.isArray(p?.photos)?p.photos:[])].filter(v=>typeof v==='string' && !/^data:image\//i.test(v)).join(' ');
 }
+
+
+// ===== Step 3b: product view/bind (list UI, selection mode) =====
+function enterProductSelection(initialId){
+  productSelectionMode = true;
+  productSelectionSet = new Set();
+  if(initialId) productSelectionSet.add(initialId);
+  productSearch='';
+  if(navigator.vibrate) try{navigator.vibrate(30);}catch(e){}
+  safeRender();
+}
+
+function exitProductSelection(){
+  productSelectionMode = false;
+  productSelectionSet = new Set();
+  safeRender();
+}
+
+function toggleProductSelection(id){
+  if(productSelectionSet.has(id)) productSelectionSet.delete(id);
+  else productSelectionSet.add(id);
+  try{
+    var scrollY = window.scrollY || 0;
+    safeRender();
+    window.scrollTo(0, scrollY);
+  }catch(e){}
+}
+
+function renderProductSelectionView(){
+  const all=products.filter(p=>!p.isCategoryPlaceholder);
+  const _q=String(productSearch||'').trim();
+  const filtered=_q?all.filter(p=>smartProductSearch(productSearchText(p),_q)):all;
+  const n=productSelectionSet.size;
+  filtered.sort(function(a,b){var _a=productSelectionSet.has(a.id)?0:1;var _b=productSelectionSet.has(b.id)?0:1;return _a-_b;});
+  return `
+    <div class="panel" style="position:sticky;top:58px;z-index:45;margin-bottom:10px;">
+      <div class="panel-body" style="display:flex;align-items:center;gap:8px;padding:10px 12px;">
+        <button type="button" class="btn" id="ps-cancel">Отмена</button>
+        <div style="flex:1;font-weight:700;font-size:13px;" data-ps-counter>Выбрано: ${n}</div>
+        <button type="button" class="btn" id="ps-select-all">Все</button>
+        <button type="button" class="btn btn-primary" id="ps-delete" ${n===0?'disabled':''}>Удалить</button>
+      </div>
+      <div style="padding:0 12px 10px;"><div class="search" style="margin:0;"><input id="ps-search" placeholder="Поиск по товару..." value="${escapeHtml(productSearch)}"></div><button type="button" id="ps-clear" style="margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Очистить поиск и показать все</button></div>
+    </div>
+    <div class="panel">
+      ${(filtered.length?filtered:[]).map(p=>{
+        const checked=productSelectionSet.has(p.id);
+        return `<div class="list-row" data-ps-row="${escapeHtml(p.id)}" style="cursor:pointer;">
+          <div style="width:22px;height:22px;border-radius:6px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;${checked?'background:var(--primary);border-color:var(--primary);color:#fff;':''}">${checked?'✓':''}</div>
+          <div class="product-card-photo">${productIcon(p,42)}</div>
+          <div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div><div class="row-sub">${escapeHtml(p.sku||'')} · ${fmtMoney(p.price)}</div></div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function viewProducts(){
+  if(productSelectionMode) return renderProductSelectionView();
+  const _af=_pfCount();
+  const all=_pfApplySort(_pfApplyFilters(products.filter(p=>!p.isCategoryPlaceholder)));
+  return `
+  <div class="products-sticky-header" style="position:sticky;top:58px;z-index:40;background:var(--bg);padding:6px 0 4px 0;"><div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+    <button class="chip" id="pf-sort-btn" type="button">${_pfSortLabel()}</button>
+    <button class="chip ${_af?'active':''}" id="pf-filters-btn" type="button">⚙️ Фильтры${_af ? ' · ' + _af : ''}</button>
+    <button class="chip" id="pf-cats-btn" type="button">🏷️ Категории</button>
+  </div>
+  <div class="search" style="position:relative;"><span class="search-icon">&#8981;</span><input id="product-search" style="padding-right:42px;" placeholder="Поиск по товару, описанию, назначению…" value="${escapeHtml(productSearch)}"><button type="button" id="product-scan-btn" onclick="oniScanToSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;padding:0;cursor:pointer;line-height:1;z-index:2;" title="Scan">&#128247;</button></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;"><button class="btn" id="pf-save-filter" type="button">💾 Сохранить</button><button class="btn" id="pf-open-filters" type="button">⭐ Мои фильтры</button></div>
+  <div style="display:flex;gap:7px;margin-bottom:12px;">
+    <div style="position:relative;flex:1;">
+      <button class="btn" id="import-products" style="width:100%;">↓ Импорт Excel</button>
+      <div id="excel-menu" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:70;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.12);padding:5px;">
+        <button id="choose-excel" style="width:100%;display:flex;align-items:center;gap:9px;padding:11px;border:0;background:none;border-radius:9px;color:var(--text);font-size:13px;text-align:left;">📥 <span>Выбрать Excel</span></button>
+        <button id="export-template" style="width:100%;display:flex;align-items:center;gap:9px;padding:11px;border:0;background:none;border-radius:9px;color:var(--text);font-size:13px;text-align:left;">📋 <span>Скачать шаблон</span></button>
+      </div>
+    </div>
+    <input id="excel-file" type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,.xlsx,.xls,.csv" style="display:none;">
+    <button class="btn" id="export-products" type="button" style="flex:1;">↑ Экспорт Excel</button>
+  </div>
+  </div>
+  <div class="panel">
+    ${all.length?all.map(p=>`
+      <div class="list-row live-search-row" data-search-text="${escapeHtml(productSearchText(p))}" style="position:relative;">
+        <button type="button" data-open="${escapeHtml(p.id)}" style="display:flex;align-items:center;gap:11px;flex:1;min-width:0;background:none;border:0;text-align:left;color:inherit;">
+          <div class="product-card-photo product-list-photo" data-product-photo="${escapeHtml(p.id)}" title="Нажмите, чтобы увеличить">${productIcon(p,42)}</div>
+          <div class="row-main"><div class="row-title"><span class="${salesTextColor(productSalesQty(p.id))}" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name)}</span></div><div class="row-sub">${escapeHtml(p.sku||'')} · ${fmtMoney(p.price)}${p.manufactureDate?' · изг. '+fmtDate(p.manufactureDate):''}</div><div class="row-note ${stockTextColor(p)}">Остаток: ${p.qty} ${escapeHtml(p.unit||'')}</div>${p.expiryDate?`<div class="row-note ${expiryInfo(p.expiryDate).cls}">${expiryInfo(p.expiryDate).text}</div>`:''}</div>
+        </button>
+        <div class="row-right" style="align-items:flex-end;gap:6px;"><button type="button" class="product-info-btn" data-product-info="${escapeHtml(p.id)}" aria-label="Информация о товаре">i</button><span class="badge ${p.minStock>0&&p.qty<=p.minStock?'badge-low':'badge-ok'}">${p.qty} ${escapeHtml(p.unit)}</span></div>
+      </div>`).join(''):'<div class="panel-body"><div class="empty">Товаров пока нет</div></div>'}
+    ${all.length?'<div class="panel-body" data-live-empty="product-search" style="display:none;"><div class="empty">Ничего не найдено</div></div>':''}
+  </div>`;
+}
+
+function bindProducts(){
+  if(productSelectionMode){
+    const _psi=document.getElementById('ps-search');
+    if(_psi){
+      _psi.oninput=function(){
+        productSearch=_psi.value;
+        const _q=String(productSearch||'').trim();
+        document.querySelectorAll('[data-ps-row]').forEach(function(row){
+          const _p=products.find(function(x){return x.id===row.dataset.psRow;});
+          if(!_p) return;
+          const _show=!_q||smartProductSearch(productSearchText(_p),_q);
+          row.style.display=_show?'':'none';
+        });
+      };
+    }
+    var _psc=document.getElementById('ps-clear');
+    if(_psc){ _psc.onclick=function(){
+      productSearch='';
+      var _pi=document.getElementById('ps-search'); if(_pi) _pi.value='';
+      document.querySelectorAll('[data-ps-row]').forEach(function(row){ row.style.display=''; });
+    }; }
+    const c=document.getElementById('ps-cancel'); if(c)c.onclick=exitProductSelection;
+    const sa=document.getElementById('ps-select-all');
+    if(sa)sa.onclick=()=>{
+      const all=products.filter(p=>!p.isCategoryPlaceholder);
+      if(productSelectionSet.size===all.length) productSelectionSet.clear();
+      else all.forEach(p=>productSelectionSet.add(p.id));
+      safeRender();
+    };
+    const dl=document.getElementById('ps-delete'); if(dl)dl.onclick=openMassDeleteConfirm;
+    document.querySelectorAll('[data-ps-row]').forEach(b=>{
+      b.onclick=()=>toggleProductSelection(b.dataset.psRow);
+    });
+    return;
+  }
+
+  bindLiveSearch('product-search','.live-search-row',v=>normalizeSearchWord(v));
+  var pfSave=document.getElementById('pf-save-filter'); if(pfSave)pfSave.onclick=function(){openSaveFilterDialog('products');};
+  var pfOpen=document.getElementById('pf-open-filters'); if(pfOpen)pfOpen.onclick=function(){openSavedFiltersDialog('products');};
+  var pfSortBtn=document.getElementById('pf-sort-btn'); if(pfSortBtn)pfSortBtn.onclick=openProductSortSheet;
+  var pfFiltersBtn=document.getElementById('pf-filters-btn'); if(pfFiltersBtn)pfFiltersBtn.onclick=openProductFiltersSheet;
+  var pfCatsBtn=document.getElementById('pf-cats-btn'); if(pfCatsBtn)pfCatsBtn.onclick=openCategoryManager;
+  const productInput=document.getElementById('product-search');
+  if(productInput){ productInput.oninput=()=>{ productSearch=productInput.value; let visible=0; document.querySelectorAll('.live-search-row[data-search-text]').forEach(row=>{ const show=smartProductSearch(row.dataset.searchText||'',productInput.value); row.style.display=show?'':'none'; if(show)visible++; }); const empty=document.querySelector('[data-live-empty="product-search"]'); if(empty)empty.style.display=visible?'none':''; }; productInput.oninput(); }
+  document.querySelectorAll('[data-open]').forEach(b=>{
+    let lpTimer=null, lpFired=false;
+    const cancel=()=>{ if(lpTimer){clearTimeout(lpTimer);lpTimer=null;} };
+    const fire=()=>{ lpFired=true; cancel(); if(typeof enterProductSelection==='function'){enterProductSelection(b.dataset.open);} };
+    b.addEventListener('pointerdown',e=>{
+      if(e.target.closest('[data-product-photo]')) return;
+      if(e.target.closest('[data-product-info]')) return;
+      lpFired=false; cancel();
+      lpTimer=setTimeout(fire,500);
+    });
+    b.addEventListener('pointerup',e=>{
+      cancel();
+      if(lpFired){e.preventDefault();e.stopPropagation();lpFired=false;}
+    });
+    b.addEventListener('pointercancel',cancel);
+    b.addEventListener('contextmenu',e=>{
+      if(e.target.closest('[data-product-photo]')) return;
+      if(e.target.closest('[data-product-info]')) return;
+      e.preventDefault(); cancel();
+      if(typeof enterProductSelection==='function'){enterProductSelection(b.dataset.open);}
+    });
+    b.addEventListener('click',e=>{
+      if(lpFired){e.preventDefault();e.stopPropagation();return;}
+      openProductModal(b.dataset.open);
+    });
+  });
+  document.querySelectorAll('[data-product-photo]').forEach(el=>el.onclick=e=>{
+    e.preventDefault(); e.stopPropagation();
+    const p=products.find(x=>x.id===el.dataset.productPhoto); if(!p)return;
+    const src=p.mainPhoto||p.photo||(Array.isArray(p.photos)?p.photos[0]:'');
+    if(src){const gallery=Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[src]);const idx=Math.max(0,gallery.indexOf(src));openProductPhotoLightbox(src,p.name||'Фото товара',gallery,idx);}
+  });
+  document.querySelectorAll('[data-product-info]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openProductInfoModal(b.dataset.productInfo);});
+
+  const importBtn=document.getElementById('import-products');
+  const excelMenu=document.getElementById('excel-menu');
+  const chooseExcel=document.getElementById('choose-excel');
+  const fileInput=document.getElementById('excel-file');
+  const closeExcelMenu=()=>{ if(excelMenu) excelMenu.style.display='none'; };
+  if(importBtn && excelMenu){
+    importBtn.onclick=()=>{
+      excelMenu.style.display=excelMenu.style.display==='none'?'block':'none';
+    };
+  }
+  if(chooseExcel && fileInput){
+    chooseExcel.onclick=()=>{
+      closeExcelMenu();
+      // В Android используем нативный выбор документов: камера здесь никогда не нужна.
+      if(window.Android && typeof window.Android.pickExcelFile==='function'){
+        window.Android.pickExcelFile();
+      }else{
+        fileInput.click();
+      }
+    };
+    fileInput.onchange=async(e)=>{
+      const file=e.target.files?.[0];
+      if(file) await importProductsFromExcel(file);
+      e.target.value='';
+    };
+  }
+  const templateBtn=document.getElementById('export-template');
+  if(templateBtn) templateBtn.onclick=()=>{ closeExcelMenu(); downloadExcelTemplate(); };
+  const exportBtn=document.getElementById('export-products');
+  if(exportBtn) exportBtn.onclick=()=>exportProductsToExcel();
+  if(_excelOutsideClickHandler) document.removeEventListener('click',_excelOutsideClickHandler);
+  _excelOutsideClickHandler=function(e){
+    const btn=document.getElementById('import-products');
+    const wrap=btn&&btn.parentElement;
+    if(wrap&&!wrap.contains(e.target)) closeExcelMenu();
+  };
+  document.addEventListener('click',_excelOutsideClickHandler);
+}
