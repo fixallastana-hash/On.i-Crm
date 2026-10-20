@@ -669,3 +669,160 @@ function bindProducts(){
   };
   document.addEventListener('click',_excelOutsideClickHandler);
 }
+
+
+// ===== Step 3c1: product sort/filter helpers + state =====
+/* ===================== PRODUCT SORT / FILTER ===================== */
+var productSort = {field:'createdAt', dir:'desc'};
+var productFilters = {categories:[], priceMin:null, priceMax:null, costMin:null, costMax:null, qtyMin:null, qtyMax:null, belowMin:false, noBarcode:false, noPhoto:false, showArchived:false};
+function _pfNum(v){ if(v===null||v===undefined||v==='')return null; var n=Number(v); return isFinite(n)?n:null; }
+function _pfSave(){ try{ localStorage.setItem('sklad_crm_product_sf', JSON.stringify({sort:productSort,filters:productFilters})); }catch(e){} }
+function _pfLoad(){ try{ var r=localStorage.getItem('sklad_crm_product_sf'); if(!r)return; var o=JSON.parse(r); if(o&&o.sort&&o.sort.field)productSort=o.sort; if(o&&o.filters&&typeof o.filters==='object')productFilters=Object.assign(productFilters,o.filters); }catch(e){} }
+_pfLoad();
+function _pfCount(){
+  var n=0, F=productFilters;
+  if(F.categories&&F.categories.length)n++;
+  if(_pfNum(F.priceMin)!==null||_pfNum(F.priceMax)!==null)n++;
+  if(_pfNum(F.costMin)!==null||_pfNum(F.costMax)!==null)n++;
+  if(_pfNum(F.qtyMin)!==null||_pfNum(F.qtyMax)!==null)n++;
+  if(F.belowMin)n++; if(F.noBarcode)n++; if(F.noPhoto)n++; if(F.showArchived)n++;
+  return n;
+}
+function _pfApplyFilters(list){
+  var F=productFilters;
+  return list.filter(function(p){
+    if(!p||!p.id)return false;
+    if(!F.showArchived&&p.archived)return false;
+    if(F.categories&&F.categories.length&&F.categories.indexOf(p.category||'')<0)return false;
+    var price=_pfNum(p.price)||0, cost=_pfNum(p.cost)||0, qty=_pfNum(p.qty)||0;
+    var a=_pfNum(F.priceMin); if(a!==null&&price<a)return false;
+    var b=_pfNum(F.priceMax); if(b!==null&&price>b)return false;
+    a=_pfNum(F.costMin); if(a!==null&&cost<a)return false;
+    b=_pfNum(F.costMax); if(b!==null&&cost>b)return false;
+    a=_pfNum(F.qtyMin); if(a!==null&&qty<a)return false;
+    b=_pfNum(F.qtyMax); if(b!==null&&qty>b)return false;
+    if(F.belowMin){ var ms=_pfNum(p.minStock)||0; if(ms<=0||qty>ms)return false; }
+    if(F.noBarcode){
+      var hb=!!(p.barcode&&String(p.barcode).trim());
+      if(!hb&&Array.isArray(p.barcodes)) hb=p.barcodes.some(function(x){return x&&String(x).trim();});
+      if(hb)return false;
+    }
+    if(F.noPhoto){
+      var hp=!!p.photo;
+      if(!hp&&Array.isArray(p.photos)&&p.photos.length)hp=true;
+      if(hp)return false;
+    }
+    return true;
+  });
+}
+function _pfApplySort(list){
+  var arr=list.slice(), s=productSort, f=s.field, d=s.dir==='asc'?1:-1;
+  function n(v){var x=Number(v);return isFinite(x)?x:0;}
+  arr.sort(function(a,b){
+    switch(f){
+      case 'createdAt': return ((Date.parse(a.createdAt||a.addedAt||a.updatedAt||0)||0)-(Date.parse(b.createdAt||b.addedAt||b.updatedAt||0)||0))*d;
+      case 'name': return String(a.name||'').toLowerCase().localeCompare(String(b.name||'').toLowerCase(),'ru')*d;
+      case 'category': return String(a.category||'').toLowerCase().localeCompare(String(b.category||'').toLowerCase(),'ru')*d;
+      case 'price': return (n(a.price)-n(b.price))*d;
+      case 'cost': return (n(a.cost)-n(b.cost))*d;
+      case 'margin': return ((n(a.price)-n(a.cost))-(n(b.price)-n(b.cost)))*d;
+      case 'qty': return (n(a.qty)-n(b.qty))*d;
+      default: return 0;
+    }
+  });
+  return arr;
+}
+function _pfSortLabel(){
+  var s=productSort;
+  var m={'createdAt_desc':'↓ Дата (новые)','createdAt_asc':'↑ Дата (старые)','name_asc':'А-Я Название','name_desc':'Я-А Название','category_asc':'А-Я Категория','category_desc':'Я-А Категория','price_asc':'↑ Цена','price_desc':'↓ Цена','cost_asc':'↑ Себестоимость','cost_desc':'↓ Себестоимость','margin_asc':'↑ Маржа','margin_desc':'↓ Маржа','qty_asc':'↑ Остаток','qty_desc':'↓ Остаток'};
+  return m[s.field+'_'+s.dir]||'↓ Дата (новые)';
+}
+function openProductSortSheet(){
+  var root=document.getElementById('modal-root'); if(!root)return;
+  var opts=[
+    ['createdAt','desc','↓ Дата добавления (новые)'],
+    ['createdAt','asc','↑ Дата добавления (старые)'],
+    ['name','asc','А-Я Название'],
+    ['name','desc','Я-А Название'],
+    ['category','asc','А-Я Категория'],
+    ['category','desc','Я-А Категория'],
+    ['price','asc','↑ Цена продажи'],
+    ['price','desc','↓ Цена продажи'],
+    ['cost','asc','↑ Себестоимость'],
+    ['cost','desc','↓ Себестоимость'],
+    ['margin','asc','↑ Маржа'],
+    ['margin','desc','↓ Маржа'],
+    ['qty','asc','↑ Остаток'],
+    ['qty','desc','↓ Остаток']
+  ];
+  var rows=opts.map(function(o){
+    var act=productSort.field===o[0]&&productSort.dir===o[1];
+    return '<button type="button" class="list-row" data-pf-sort="'+o[0]+'_'+o[1]+'" style="width:100%;text-align:left;border:none;background:'+(act?'var(--primary-soft,#eef5ff)':'#fff')+';cursor:pointer;"><div class="row-main"><div class="row-title">'+o[2]+'</div></div>'+(act?'<div class="row-right" style="color:var(--primary);font-weight:700;">✓</div>':'')+'</button>';
+  }).join('');
+  root.innerHTML='<div class="sheet-overlay" id="pf-sort-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Сортировка</div><button class="sheet-close" id="pf-sort-x">✕</button></div><div class="sheet-body"><div class="panel"><div class="panel-body" style="padding:0;">'+rows+'</div></div></div></div></div>';
+  var close=function(){root.innerHTML='';};
+  document.getElementById('pf-sort-x').onclick=close;
+  document.getElementById('pf-sort-ov').onclick=function(e){if(e.target.id==='pf-sort-ov')close();};
+  root.querySelectorAll('[data-pf-sort]').forEach(function(b){
+    b.onclick=function(){
+      var parts=b.dataset.pfSort.split('_');
+      productSort={field:parts[0],dir:parts[1]};
+      _pfSave(); close(); safeRender();
+    };
+  });
+}
+function openProductFiltersSheet(){
+  var root=document.getElementById('modal-root'); if(!root)return;
+  var cats=[...new Set(products.filter(function(p){return p&&!p.isCategoryPlaceholder&&p.category;}).map(function(p){return p.category;}))].sort(function(a,b){return a.localeCompare(b,'ru');});
+  var catChips=cats.map(function(c){
+    var on=productFilters.categories.indexOf(c)>=0;
+    return '<button type="button" class="chip '+(on?'active':'')+'" data-pf-cat="'+escapeHtml(c)+'">'+escapeHtml(c)+'</button>';
+  }).join('');
+  var F=productFilters;
+  var val=function(v){return v===null||v===undefined?'':String(v);};
+  root.innerHTML='<div class="sheet-overlay" id="pf-flt-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Фильтры</div><button class="sheet-close" id="pf-flt-x">✕</button></div><div class="sheet-body">'
+    +'<div class="contact-title">Категории</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'+catChips+'</div>'
+    +'<div class="contact-title">Цена продажи</div><div style="display:flex;gap:6px;margin-bottom:12px;"><input class="form-input" id="pf-price-min" type="number" placeholder="от" value="'+val(F.priceMin)+'"><input class="form-input" id="pf-price-max" type="number" placeholder="до" value="'+val(F.priceMax)+'"></div>'
+    +'<div class="contact-title">Себестоимость</div><div style="display:flex;gap:6px;margin-bottom:12px;"><input class="form-input" id="pf-cost-min" type="number" placeholder="от" value="'+val(F.costMin)+'"><input class="form-input" id="pf-cost-max" type="number" placeholder="до" value="'+val(F.costMax)+'"></div>'
+    +'<div class="contact-title">Остаток</div><div style="display:flex;gap:6px;margin-bottom:12px;"><input class="form-input" id="pf-qty-min" type="number" placeholder="от" value="'+val(F.qtyMin)+'"><input class="form-input" id="pf-qty-max" type="number" placeholder="до" value="'+val(F.qtyMax)+'"></div>'
+    +'<div class="panel" style="margin-bottom:12px;"><div class="panel-body" style="padding:0;">'
+    +'<button type="button" class="list-row" data-pf-tog="belowMin" style="width:100%;text-align:left;border:none;background:#fff;cursor:pointer;"><div class="row-main"><div class="row-title">Только ниже минимума</div></div><div class="row-right">'+(F.belowMin?'✓':'')+'</div></button>'
+    +'<button type="button" class="list-row" data-pf-tog="noBarcode" style="width:100%;text-align:left;border:none;background:#fff;cursor:pointer;"><div class="row-main"><div class="row-title">Только без штрихкода</div></div><div class="row-right">'+(F.noBarcode?'✓':'')+'</div></button>'
+    +'<button type="button" class="list-row" data-pf-tog="noPhoto" style="width:100%;text-align:left;border:none;background:#fff;cursor:pointer;"><div class="row-main"><div class="row-title">Только без фото</div></div><div class="row-right">'+(F.noPhoto?'✓':'')+'</div></button>'
+    +'<button type="button" class="list-row" data-pf-tog="showArchived" style="width:100%;text-align:left;border:none;background:#fff;cursor:pointer;"><div class="row-main"><div class="row-title">Показывать архив</div></div><div class="row-right">'+(F.showArchived?'✓':'')+'</div></button>'
+    +'</div></div>'
+    +'</div><div class="sheet-foot"><button class="btn" id="pf-flt-reset">Сбросить</button><button class="btn btn-primary" id="pf-flt-apply">Применить</button></div></div></div>';
+  var close=function(){root.innerHTML='';};
+  document.getElementById('pf-flt-x').onclick=close;
+  document.getElementById('pf-flt-ov').onclick=function(e){if(e.target.id==='pf-flt-ov')close();};
+  var tmp={categories:F.categories.slice(),belowMin:F.belowMin,noBarcode:F.noBarcode,noPhoto:F.noPhoto,showArchived:F.showArchived};
+  root.querySelectorAll('[data-pf-cat]').forEach(function(b){
+    b.onclick=function(){
+      var i=tmp.categories.indexOf(b.dataset.pfCat);
+      if(i>=0)tmp.categories.splice(i,1); else tmp.categories.push(b.dataset.pfCat);
+      b.classList.toggle('active');
+    };
+  });
+  root.querySelectorAll('[data-pf-tog]').forEach(function(b){
+    b.onclick=function(){
+      var k=b.dataset.pfTog; tmp[k]=!tmp[k];
+      var r=b.querySelector('.row-right'); if(r)r.textContent=tmp[k]?'✓':'';
+    };
+  });
+  document.getElementById('pf-flt-reset').onclick=function(){
+    productFilters={categories:[],priceMin:null,priceMax:null,costMin:null,costMax:null,qtyMin:null,qtyMax:null,belowMin:false,noBarcode:false,noPhoto:false,showArchived:false};
+    _pfSave(); close(); safeRender();
+  };
+  document.getElementById('pf-flt-apply').onclick=function(){
+    productFilters.categories=tmp.categories.slice();
+    productFilters.belowMin=tmp.belowMin;
+    productFilters.noBarcode=tmp.noBarcode;
+    productFilters.noPhoto=tmp.noPhoto;
+    productFilters.showArchived=tmp.showArchived;
+    var v=function(id){var el=document.getElementById(id);if(!el)return null;var x=_pfNum(el.value);return x;};
+    productFilters.priceMin=v('pf-price-min'); productFilters.priceMax=v('pf-price-max');
+    productFilters.costMin=v('pf-cost-min'); productFilters.costMax=v('pf-cost-max');
+    productFilters.qtyMin=v('pf-qty-min'); productFilters.qtyMax=v('pf-qty-max');
+    _pfSave(); close(); safeRender();
+  };
+}
