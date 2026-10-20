@@ -42,7 +42,8 @@ $movedFns = @(
   'viewProducts','bindProducts','renderProductSelectionView','enterProductSelection','exitProductSelection','toggleProductSelection',
   '_pfNum','_pfSave','_pfLoad','_pfCount','_pfApplyFilters','_pfApplySort','_pfSortLabel','openProductSortSheet','openProductFiltersSheet',
   'openProductModal','openProductInfoModal','openProductPhotoLightbox','initProductInfoSwipeClose','confirmProductInfo','openCategoryManager','deleteProduct',
-  'getSupplier','supplierName','purchaseProductName','supplierPurchaseRows','productPurchaseRows','requestStatusLabel','requestStatusClass','whatsappNumber','supplierContacts'
+  'getSupplier','supplierName','purchaseProductName','supplierPurchaseRows','productPurchaseRows','requestStatusLabel','requestStatusClass','whatsappNumber','supplierContacts',
+  'viewSuppliers','bindSuppliers','openPurchasesHub','openPurchaseHistoryScreen','openLowStockScreen','openProcurementRequestsScreen'
 )
 
 foreach($fn in $movedFns){

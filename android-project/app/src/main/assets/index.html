@@ -6695,67 +6695,7 @@ function openPointEditModal(id){
 }
 
 /* ===================== SUPPLIERS ===================== */
-function viewSuppliers(){
-  const total=purchases.reduce((sum,x)=>sum+(Number(x.qty)||0)*(Number(x.cost)||0),0);
-  const recent=[...purchases].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5);
-  return `
-    <div class="supplier-hero"><div><div class="supplier-hero-title">Поставщики и закупки</div><div class="supplier-hero-sub">Здесь добавляются поставщики и оформляется приход товара.</div></div></div>
-    <div class="info-grid supplier-stat">
-      <div class="info-card"><div class="info-label">Поставщиков</div><div class="info-value">${suppliers.length}</div></div>
-      <div class="info-card"><div class="info-label">Закупок</div><div class="info-value">${purchases.length}</div></div>
-      <div class="info-card"><div class="info-label">Закуплено всего</div><div class="info-value">${fmtMoney(total)}</div></div>
-    </div>
-    <div style="display:flex;gap:7px;margin-bottom:11px;"><div class="search" style="flex:1;margin:0;"><span class="search-icon">⌕</span><input id="supplier-search" placeholder="Поиск поставщика…" value="${escapeHtml(supplierSearch)}"></div><button class="btn btn-primary" id="supplier-add-inline">＋ Добавить</button></div>
-    <div class="panel">
-      <div class="panel-head"><div class="panel-title">Список поставщиков</div></div>
-      ${suppliers.length?suppliers.map(x=>{
-        const ps=supplierPurchaseRows(x.id), sum=ps.reduce((a,r)=>a+(Number(r.qty)||0)*(Number(r.cost)||0),0);
-        return `<button type="button" class="list-row live-search-row" data-search-text="${escapeHtml(`${x.name||''} ${x.phone||''} ${x.whatsapp||''} ${x.note||''}`)}" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;" data-supplier-open="${escapeHtml(x.id)}">
-          <div class="row-icon cat">${escapeHtml(initials(x.name||''))}</div><div class="row-main"><div class="row-title">${escapeHtml(x.name||'Без названия')}</div><div class="row-sub">${escapeHtml(x.phone||'Телефон не указан')}${x.whatsapp?' · WhatsApp: '+escapeHtml(x.whatsapp):''}</div><div class="purchase-meta">${ps.length} закупок · ${fmtMoney(sum)}</div></div><div class="row-right"><span class="badge badge-ok">Открыть</span></div>
-        </button>`;
-      }).join(''):'<div class="panel-body"><div class="empty">Поставщиков пока нет</div></div>'}
-      ${suppliers.length?'<div class="panel-body" data-live-empty="supplier-search" style="display:none;"><div class="empty">Поставщики не найдены</div></div>':''}
-    </div>
-    <div class="panel"><div class="panel-head"><div class="panel-title">Последние закупки</div></div>
-      ${recent.length?recent.map(r=>`<div class="list-row"><div class="row-icon in">IN</div><div class="row-main"><div class="row-title">${escapeHtml(purchaseProductName(r.productId))}</div><div class="row-sub">${escapeHtml(supplierName(r.supplierId))} · ${fmtDate(r.date)} · ${r.qty} ${escapeHtml(r.unit||'шт')}</div><div class="purchase-meta">${fmtMoney((Number(r.qty)||0)*(Number(r.cost)||0))}</div></div><div class="row-right"><div class="row-value">${fmtMoney(r.cost)} / ед.</div></div></div>`).join(''):'<div class="panel-body"><div class="empty">Закупок пока нет</div></div>'}
-    </div>`;
-}
-function bindSuppliers(){
-  bindLiveSearch('supplier-search','.live-search-row');
-  document.getElementById('supplier-add-inline')?.addEventListener('click',()=>openSupplierModal());
-  document.querySelectorAll('[data-supplier-open]').forEach(b=>b.onclick=()=>openSupplierDetail(b.dataset.supplierOpen));
-}
 
-function openPurchasesHub(){
-  if(!requireAccess('suppliers')) return;
-  const root=document.getElementById('modal-root');
-  root.innerHTML=`<div class="sheet-overlay" id="purchases-hub-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Закупки</div><button class="sheet-close" id="purchases-hub-close">✕</button></div><div class="sheet-body">
-    <div class="panel">
-      <button type="button" class="list-row" id="ph-low" style="width:100%;border:0;background:none;text-align:left;cursor:pointer;padding:13px 15px;">
-        <div class="row-icon out" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg></div>
-        <div class="row-main"><div class="row-title">Что нужно пополнить?</div><div class="row-sub">Товары ниже минимального остатка</div></div>
-        <div class="row-right" style="color:var(--dim);font-size:20px;line-height:1;">›</div>
-      </button>
-      <button type="button" class="list-row" id="ph-new" style="width:100%;border:0;background:none;text-align:left;cursor:pointer;padding:13px 15px;">
-        <div class="row-icon in" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
-        <div class="row-main"><div class="row-title">Новая закупка</div><div class="row-sub">Создать поступление товара</div></div>
-        <div class="row-right" style="color:var(--dim);font-size:20px;line-height:1;">›</div>
-      </button>
-      <button type="button" class="list-row" id="ph-req" style="width:100%;border:0;background:none;text-align:left;cursor:pointer;padding:13px 15px;">
-        <div class="row-icon sale" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></svg></div>
-        <div class="row-main"><div class="row-title">Закупки на заявку</div><div class="row-sub">Работа с заявками поставщикам</div></div>
-        <div class="row-right" style="color:var(--dim);font-size:20px;line-height:1;">›</div>
-      </button>
-      <button type="button" class="list-row" id="ph-history" style="width:100%;border:0;background:none;text-align:left;cursor:pointer;padding:13px 15px;">
-        <div class="row-icon cat" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M4 12H2.5"/></svg></div>
-        <div class="row-main"><div class="row-title">История закупок</div><div class="row-sub">Все прошлые закупки</div></div>
-        <div class="row-right" style="color:var(--dim);font-size:20px;line-height:1;">›</div>
-      </button>
-    </div>
-  </div></div></div>`;
-  const close=()=>root.innerHTML=''; document.getElementById('purchases-hub-close').onclick=close; document.getElementById('purchases-hub-ov').onclick=e=>{if(e.target.id==='purchases-hub-ov')close();};
-  document.getElementById('ph-low').onclick=()=>{close();openLowStockScreen();}; document.getElementById('ph-new').onclick=()=>{close();openPurchaseModal();}; document.getElementById('ph-req').onclick=()=>{close();openProcurementRequestsScreen();}; document.getElementById('ph-history').onclick=()=>{close();openPurchaseHistoryScreen();};
-}
 function openStoreSettings(){
   if(activeUser?.role!=='admin') return;
   const root=document.getElementById('modal-root');
@@ -6806,25 +6746,8 @@ async function softDeleteShop(){
 function lowStockProducts(){
   return products.filter(p=>!p.isCategoryPlaceholder && Number(p.minStock)>0 && Number(p.qty)<=Number(p.minStock));
 }
-function openLowStockScreen(){
-  const root=document.getElementById('modal-root'), low=lowStockProducts();
-  if(!suppliers.length){showToast('Сначала добавьте поставщика');openSupplierModal();return;}
-  const options=suppliers.map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
-  root.innerHTML=`<div class="sheet-overlay" id="low-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Что нужно пополнить</div><button class="sheet-close" id="low-close">✕</button></div><div class="sheet-body">
-    ${low.length?`<div class="form-hint">Выберите товары, количество и поставщика. Из выбранных позиций будет создана заявка.</div><div id="low-list">${low.map((p,i)=>`<div class="purchase-line low-line" data-product="${escapeHtml(p.id)}"><label style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;"><input type="checkbox" class="low-check" ${i<3?'checked':''}><span class="row-main"><span class="row-title">${escapeHtml(p.name)}</span><span class="row-sub">Остаток ${p.qty} ${escapeHtml(p.unit||'шт')} · минимум ${p.minStock}</span></span></label><input class="form-input low-qty" type="number" min="1" step="1" value="${Math.max(1,Number(p.minStock)-Number(p.qty))}" style="width:82px;"></div>`).join('')}</div>
-    <div class="form-field"><label class="form-label">Поставщик</label><select class="form-select" id="low-supplier">${options}</select></div>
-    <div class="form-field"><label class="form-label">Комментарий</label><textarea class="form-input" id="low-note" rows="2" placeholder="Например: срочно пополнить до конца недели"></textarea></div>`:`<div class="empty">Критически низких остатков нет.</div>`}
-  </div><div class="sheet-foot">${low.length?`<button class="btn btn-primary btn-block" id="low-create">Создать заявку</button>`:''}</div></div></div>`;
-  const close=()=>root.innerHTML=''; document.getElementById('low-close').onclick=close; document.getElementById('low-ov').onclick=e=>{if(e.target.id==='low-ov')close();};
-  const create=document.getElementById('low-create'); if(create) create.onclick=async()=>{ const supplierId=document.getElementById('low-supplier').value; const items=[]; document.querySelectorAll('.low-line').forEach(row=>{if(row.querySelector('.low-check')?.checked){const p=products.find(x=>x.id===row.dataset.product);const qty=Number(row.querySelector('.low-qty')?.value)||0;if(p&&qty>0)items.push({productId:p.id,productName:p.name,qty});}}); if(!items.length){showToast('Выберите хотя бы один товар');return;} const r={id:uid(),supplierId,items,status:'draft',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),note:document.getElementById('low-note').value.trim()}; procurementRequests.unshift(r); await persist('procurementRequests'); close(); openProcurementRequestDetail(r.id); };
-}
 function requestMessage(r){ const s=getSupplier(r.supplierId); const lines=(r.items||[]).map(x=>`• ${x.productName} — ${x.qty} шт.`).join('\n'); return `Здравствуйте! Заявка на пополнение товара:\n\n${lines}\n\nПожалуйста, подтвердите наличие и срок поставки.`+(r.note?`\n\nКомментарий: ${r.note}`:''); }
 function sendRequestWhatsApp(id){ const r=procurementRequests.find(x=>x.id===id); if(!r)return; const s=getSupplier(r.supplierId), num=whatsappNumber(s?.whatsapp||s?.phone||supplierContacts(r.supplierId)[0]?.whatsapp||supplierContacts(r.supplierId)[0]?.phone); if(!num){showToast('У поставщика нет номера WhatsApp');return;} r.status='sent'; r.sentAt=new Date().toISOString(); r.updatedAt=new Date().toISOString(); persist('procurementRequests'); const url=`https://wa.me/${num}?text=${encodeURIComponent(requestMessage(r))}`; window.open(url,'_blank'); openProcurementRequestDetail(id); }
-function openProcurementRequestsScreen(){
-  const root=document.getElementById('modal-root'); const rows=[...procurementRequests].sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
-  root.innerHTML=`<div class="sheet-overlay" id="reqs-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Заявки на закупку</div><button class="sheet-close" id="reqs-close">✕</button></div><div class="sheet-body">${rows.length?rows.map(r=>`<button type="button" class="list-row" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;" data-req-open="${escapeHtml(r.id)}"><div class="row-icon sale">RQ</div><div class="row-main"><div class="row-title">${escapeHtml(supplierName(r.supplierId))}</div><div class="row-sub">${(r.items||[]).length} поз. · ${fmtDate(r.createdAt)}</div></div><div class="row-right"><span class="badge ${requestStatusClass(r.status)}">${requestStatusLabel(r.status)}</span></div></button>`).join(''):`<div class="empty">Заявок пока нет. Создайте её через «Что нужно пополнить».</div>`}</div><div class="sheet-foot"><button class="btn btn-primary btn-block" id="reqs-new">＋ Создать заявку</button></div></div></div>`;
-  const close=()=>root.innerHTML=''; document.getElementById('reqs-close').onclick=close; document.getElementById('reqs-ov').onclick=e=>{if(e.target.id==='reqs-ov')close();}; document.querySelectorAll('[data-req-open]').forEach(b=>b.onclick=()=>openProcurementRequestDetail(b.dataset.reqOpen)); document.getElementById('reqs-new').onclick=()=>openLowStockScreen();
-}
 function openProcurementRequestDetail(id){
   const root=document.getElementById('modal-root'), r=procurementRequests.find(x=>x.id===id); if(!r)return; const s=getSupplier(r.supplierId);
   root.innerHTML=`<div class="sheet-overlay" id="req-detail-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Заявка · ${escapeHtml(s?.name||'')}</div><button class="sheet-close" id="req-detail-close">✕</button></div><div class="sheet-body"><div class="info-grid"><div class="info-card"><div class="info-label">Статус</div><div class="info-value">${requestStatusLabel(r.status)}</div></div><div class="info-card"><div class="info-label">Товаров</div><div class="info-value">${(r.items||[]).length}</div></div></div><div class="panel">${(r.items||[]).map(x=>`<div class="list-row"><div class="row-icon cat">${escapeHtml(initials(x.productName))}</div><div class="row-main"><div class="row-title">${escapeHtml(x.productName)}</div><div class="row-sub">Количество: ${x.qty} шт.</div></div></div>`).join('')}</div>${r.note?`<div class="contact-box"><div class="contact-title">Комментарий</div><div class="row-sub">${escapeHtml(r.note)}</div></div>`:''}</div><div class="sheet-foot"><button class="btn" id="req-send">💬 WhatsApp</button><button class="btn" id="req-status">Статус</button><button class="btn btn-primary" id="req-buy">В закупку</button></div></div></div>`;
@@ -6832,10 +6755,6 @@ function openProcurementRequestDetail(id){
 }
 function openRequestStatusPicker(id){ const r=procurementRequests.find(x=>x.id===id); if(!r)return; const statuses=[['draft','Черновик'],['sent','Отправлена'],['awaiting','Ждём подтверждение'],['confirmed','Подтверждена'],['completed','Выполнена'],['cancelled','Отменена']]; const root=document.getElementById('modal-root'); root.innerHTML=`<div class="sheet-overlay" id="rs-ov"><div class="sheet"><div class="sheet-head"><div class="sheet-title">Статус заявки</div><button class="sheet-close" id="rs-close">✕</button></div><div class="sheet-body">${statuses.map(x=>`<button class="list-row" style="width:100%;background:none;border:0;text-align:left;" data-status="${x[0]}"><span class="row-main">${x[1]}</span>${r.status===x[0]?'<span class="badge badge-ok">Текущий</span>':''}</button>`).join('')}</div></div></div>`; const close=()=>root.innerHTML=''; document.getElementById('rs-close').onclick=close; document.querySelectorAll('[data-status]').forEach(b=>b.onclick=async()=>{r.status=b.dataset.status;r.updatedAt=new Date().toISOString();await persist('procurementRequests');openProcurementRequestDetail(id);}); }
 function openPurchaseFromRequest(id){ const r=procurementRequests.find(x=>x.id===id); if(!r)return; const root=document.getElementById('modal-root'); root.innerHTML=''; openPurchaseModal(r.supplierId, r.items?.[0]?.productId||null, r.items||[] , id); }
-function openPurchaseHistoryScreen(){
-  const root=document.getElementById('modal-root'); const rows=[...purchases].sort((a,b)=>new Date(b.date)-new Date(a.date));
-  root.innerHTML=`<div class="sheet-overlay" id="ph-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">История закупок</div><button class="sheet-close" id="ph-close">✕</button></div><div class="sheet-body">${rows.length?rows.map(r=>`<div class="list-row"><div class="row-icon in">IN</div><div class="row-main"><div class="row-title">${escapeHtml(purchaseProductName(r.productId))}</div><div class="row-sub">${escapeHtml(supplierName(r.supplierId))} · ${fmtDate(r.date)} · ${r.qty} ${escapeHtml(r.unit||'шт')}</div></div><div class="row-right"><div class="row-value">${fmtMoney((Number(r.qty)||0)*(Number(r.cost)||0))}</div></div></div>`).join(''):`<div class="empty">История закупок пуста.</div>`}</div></div></div>`; document.getElementById('ph-close').onclick=()=>root.innerHTML=''; document.getElementById('ph-ov').onclick=e=>{if(e.target.id==='ph-ov')root.innerHTML='';};
-}
 
 function openSupplierModal(id){
   if(!requireAccess('suppliers')) return;
