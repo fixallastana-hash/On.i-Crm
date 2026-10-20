@@ -45,7 +45,8 @@ $movedFns = @(
   'getSupplier','supplierName','purchaseProductName','supplierPurchaseRows','productPurchaseRows','requestStatusLabel','requestStatusClass','whatsappNumber','supplierContacts',
   'viewSuppliers','bindSuppliers','openPurchasesHub','openPurchaseHistoryScreen','openLowStockScreen','openProcurementRequestsScreen',
   'openSupplierModal','openSupplierDetail','openSupplierContactModal',
-  'openProductPickerSheet','openPurchaseModal','deletePurchase','openProductPurchaseHistory'
+  'openProductPickerSheet','openPurchaseModal','deletePurchase','openProductPurchaseHistory',
+  'requestMessage','sendRequestWhatsApp','openProcurementRequestDetail','openRequestStatusPicker','openPurchaseFromRequest'
 )
 
 foreach($fn in $movedFns){
