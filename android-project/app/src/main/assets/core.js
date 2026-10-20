@@ -1536,3 +1536,138 @@ function openSupplierContactModal(supplierId, contactId=null){
     await persist('contacts'); close(); openSupplierDetail(supplierId); showToast(editing?'Контакт сохранён':'Контакт добавлен');
   };
 }
+
+
+// ===== Step 4d: picker + purchase form + delete + history =====
+function openProductPickerSheet(options){options=options||{};var root=document.getElementById('modal-root');var ov=document.createElement('div');ov.className='sheet-overlay';ov.id='pp-ov';ov.style.zIndex='110';ov.innerHTML='<div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0442\u043e\u0432\u0430\u0440</div><button class="sheet-close" id="pp-close">&#10005;</button></div><div class="sheet-body"><div class="search" style="margin:0;"><span class="search-icon">&#8981;</span><input id="pp-search" placeholder="\u041f\u043e\u0438\u0441\u043a: \u0438\u043c\u044f, SKU, \u0448\u0442\u0440\u0438\u0445\u043a\u043e\u0434"><button type="button" id="pp-scan" style="background:none;border:0;font-size:20px;padding:0 6px;cursor:pointer;">&#128247;</button></div><div id="pp-list" style="margin-top:8px;"></div></div></div>';root.appendChild(ov);function close(){ov.remove();}try{window.__oniPickerOnSelect=(typeof options.onSelect==='function'?options.onSelect:null);window.__oniPickerClose=close;}catch(e){}document.getElementById('pp-close').onclick=close;ov.onclick=function(e){if(e.target.id==='pp-ov')close();};var listRoot=document.getElementById('pp-list');var searchInput=document.getElementById('pp-search');function render(q){q=String(q||'').trim().toLowerCase();var all=products.filter(function(p){return !p.isCategoryPlaceholder;});var list=q?all.filter(function(p){var h=((p.name||'')+' '+(p.sku||'')+' '+productBarcodes(p).join(' ')).toLowerCase();return h.indexOf(q)>=0;}):all.slice(0,100);if(!list.length){listRoot.innerHTML='<div class="empty">\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e</div>';return;}listRoot.innerHTML=list.map(function(p){var bc=productBarcodes(p);var sub=[p.sku||'',bc.join(', ')].filter(Boolean).join(' \u00b7 ');return '<button type="button" class="list-row" data-pick="'+escapeHtml(p.id)+'" style="width:100%;background:none;border:0;text-align:left;cursor:pointer;"><div class="row-icon cat">'+escapeHtml(initials(p.name))+'</div><div class="row-main"><div class="row-title">'+escapeHtml(p.name)+'</div><div class="row-sub">'+escapeHtml(sub)+'</div></div><div class="row-right">+</div></button>';}).join('');listRoot.querySelectorAll('[data-pick]').forEach(function(b){b.onclick=function(){var pid=b.dataset.pick;close();if(typeof options.onSelect==='function'){options.onSelect(pid);}};});}searchInput.oninput=function(){render(searchInput.value);};render('');try{searchInput.focus();}catch(e){}document.getElementById('pp-scan').onclick=function(){if(!(window.Android&&typeof Android.scanBarcode==='function')){showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(json){try{var d=typeof json==='string'?JSON.parse(json):json;var code=String((d&&(d.barcode||d.code||d.value))||'').trim();if(code){var found=null;for(var i=0;i<products.length;i++){var pp=products[i];if(!pp.isCategoryPlaceholder&&productBarcodes(pp).indexOf(code)>=0){found=pp;break;}}if(found){close();if(typeof options.onSelect==='function'){options.onSelect(found.id);}}else{showToast('\u0428\u0442\u0440\u0438\u0445\u043a\u043e\u0434 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d: '+code);}}}catch(e){}window.onBarcodeScanned=prev;};Android.scanBarcode();};};function openPurchaseModal(presetSupplierId=null,presetProductId=null,presetLines=null,requestId=null,presetState=null){
+  if(!requireAccess('suppliers')) return;
+  const root=document.getElementById('modal-root');
+  const realProducts=products.filter(p=>!p.isCategoryPlaceholder);
+  if(!suppliers.length){showToast('Сначала добавьте поставщика');openSupplierModal();return;}
+  if(!realProducts.length){showToast('Сначала добавьте товар');return;}
+  const supplierOptions=suppliers.map(x=>`<option value="${escapeHtml(x.id)}" ${x.id===presetSupplierId?'selected':''}>${escapeHtml(x.name)}</option>`).join('');
+  const productOptions=realProducts.map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===presetProductId?'selected':''} data-search="${escapeHtml((p.name||'')+' '+(p.sku||'')+' '+productBarcodes(p).join(' '))}">${escapeHtml(p.name)} — ${escapeHtml(p.sku||'')}</option>`).join('');
+  root.innerHTML=`<div class="sheet-overlay" id="purchase-ov"><div class="sheet">
+    <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Новая закупка</div><button class="sheet-close" id="purchase-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="form-field"><label class="form-label">Поставщик</label><select class="form-select" id="pu-supplier">${supplierOptions}</select></div>
+      <div class="purchase-items-head"><div class="panel-title">Товары в закупке</div><button class="btn" type="button" id="pu-add-row">＋ Товар</button><button class="btn" type="button" id="pu-add-new" style="margin-left:6px;">+ New</button></div>
+      <div id="pu-items"></div>
+      <div class="total-row"><span class="label">Итого закупка</span><span class="value" id="pu-total">${fmtMoney(0)}</span></div>
+      <div class="form-grid2">
+        <div class="form-field"><label class="form-label">Статус оплаты</label><select class="form-select" id="pu-payment"><option value="paid">Оплачено</option><option value="partial">Частично</option><option value="debt">Долг</option></select></div>
+        <div class="form-field"><label class="form-label">Оплачено, ₸</label><input class="form-input" type="number" min="0" step="0.01" id="pu-paid" value="0"></div>
+      </div>
+      <div class="form-grid2">
+        <div class="form-field"><label class="form-label">Дата закупки</label><input class="form-input" type="date" id="pu-date" value="${todayISO()}"></div>
+        <div class="form-field"><label class="form-label">Номер накладной</label><input class="form-input" id="pu-invoice" placeholder="Необязательно"></div>
+      </div>
+      <div class="form-field"><label class="form-label">Комментарий</label><textarea class="form-input" id="pu-note" rows="2" placeholder="Партия, условия, примечание…"></textarea></div>
+      <div class="form-hint" style="color:var(--muted);">Все товары из этой формы будут приняты на склад одним приходом и привязаны к выбранному поставщику.</div>
+    </div>
+    <div class="sheet-foot"><button class="btn btn-primary btn-block" id="pu-save">Принять закупку</button></div>
+  </div></div>`;
+  const itemsRoot=document.getElementById('pu-items');
+  let rowSeq=0;
+  const addRow=(productId='')=>{
+    const id='pu-row-'+(++rowSeq);
+    const defaultProduct=productId || (realProducts.length?realProducts[0].id:'');
+    const row=document.createElement('div');
+    row.className='purchase-line'; row.dataset.row=id;
+    row.innerHTML=`<div class="purchase-line-product"><input type="hidden" class="pu-product" value=""><button type="button" class="form-input pu-product-btn" style="text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">\u0412\u044b\u0431\u0440\u0430\u0442\u044c</button></div><input class="form-input pu-qty" type="number" min="0.001" step="0.001" value="1" placeholder="Кол-во"><input class="form-input pu-cost" type="number" min="0" step="0.01" value="0" placeholder="Цена"><button type="button" class="move-action delete pu-remove" title="Удалить">✕</button>`;
+    itemsRoot.appendChild(row);
+    var _setProduct=function(pid){var _pp=products.find(function(x){return x.id===pid;});row.querySelector('.pu-product').value=pid||'';var _pb=row.querySelector('.pu-product-btn');if(_pb)_pb.textContent=_pp?_pp.name:'\u0412\u044b\u0431\u0440\u0430\u0442\u044c';updateTotal();};if(defaultProduct)_setProduct(defaultProduct);row.querySelector('.pu-product-btn').onclick=function(){if(typeof openProductPickerSheet==='function'){openProductPickerSheet({onSelect:_setProduct});}};
+    row.querySelectorAll('input,select').forEach(el=>el.oninput=updateTotal);
+    row.querySelector('.pu-remove').onclick=()=>{  row.remove(); updateTotal(); };
+    updateTotal();
+  };
+  const updateTotal=()=>{
+    let total=0;
+    itemsRoot.querySelectorAll('.purchase-line').forEach(row=>{ total+=(Number(row.querySelector('.pu-qty')?.value)||0)*(Number(row.querySelector('.pu-cost')?.value)||0); });
+    const el=document.getElementById('pu-total'); if(el)el.textContent=fmtMoney(total);
+    const payment=document.getElementById('pu-payment'), paid=document.getElementById('pu-paid');
+    if(payment&&paid){ if(payment.value==='paid') paid.value=total.toFixed(2); else if(payment.value==='debt') paid.value='0'; }
+    return total;
+  };
+  if(Array.isArray(presetLines)&&presetLines.length){ presetLines.forEach(x=>addRow(x.productId||'')); const rows=[...itemsRoot.querySelectorAll('.purchase-line')]; presetLines.forEach((x,i)=>{ if(rows[i]){ rows[i].querySelector('.pu-qty').value=x.qty||1; if(x.cost!==undefined&&x.cost!==null)rows[i].querySelector('.pu-cost').value=x.cost; } }); updateTotal(); } else if(presetProductId) addRow(presetProductId);
+  document.getElementById('pu-add-row').onclick=()=>{if(typeof openProductPickerSheet==='function'){openProductPickerSheet({onSelect:function(pid){addRow(pid);}});}else{addRow('');}};
+var _puSearch=document.getElementById('pu-search');if(_puSearch)_puSearch.oninput=function(){var q=this.value.trim().toLowerCase();itemsRoot.querySelectorAll('select.pu-product').forEach(function(sel){Array.from(sel.options).forEach(function(opt){if(!q){opt.hidden=false;return;}var hay=(opt.getAttribute('data-search')||opt.text||'').toLowerCase();opt.hidden=hay.indexOf(q)<0;});});};
+var _puScan=document.getElementById('pu-scan');if(_puScan)_puScan.onclick=function(){if(!(window.Android&&typeof Android.scanBarcode==='function')){showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(json){try{var d=typeof json==='string'?JSON.parse(json):json;var code=String((d&&(d.barcode||d.code||d.value))||'').trim();if(!code)return;var found=null;for(var i=0;i<realProducts.length;i++){var pp=realProducts[i];if(productBarcodes(pp).indexOf(code)>=0){found=pp;break;}}if(found){var existing=null;itemsRoot.querySelectorAll('.purchase-line').forEach(function(row){if(row.querySelector('.pu-product').value===found.id)existing=row;});if(existing){var q=Number(existing.querySelector('.pu-qty').value)||0;existing.querySelector('.pu-qty').value=q+1;}else{addRow(found.id);}updateTotal();showToast('\u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e: '+found.name);}else{showToast('\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e: '+code);}}catch(e){console.error('scan-purchase',e);}window.onBarcodeScanned=prev;};Android.scanBarcode();};
+  document.getElementById('pu-payment').onchange=updateTotal;
+    const close=()=>root.innerHTML='';
+  document.getElementById('purchase-close').onclick=close;
+  document.getElementById('purchase-ov').onclick=e=>{if(e.target.id==='purchase-ov')close();};
+  if(presetState){try{if(presetState.date)document.getElementById('pu-date').value=presetState.date;if(presetState.invoice)document.getElementById('pu-invoice').value=presetState.invoice;if(presetState.note)document.getElementById('pu-note').value=presetState.note;if(presetState.payment)document.getElementById('pu-payment').value=presetState.payment;if(presetState.paid!==undefined)document.getElementById('pu-paid').value=presetState.paid;}catch(e){}}
+  document.getElementById('pu-add-new').onclick=function(){try{var _stLines=[];itemsRoot.querySelectorAll('.purchase-line').forEach(function(r){_stLines.push({productId:r.querySelector('.pu-product').value,qty:Number(r.querySelector('.pu-qty').value)||0,cost:Number(r.querySelector('.pu-cost').value)||0});});var _st={supplierId:document.getElementById('pu-supplier').value,date:document.getElementById('pu-date').value||'',invoice:document.getElementById('pu-invoice').value.trim(),note:document.getElementById('pu-note').value.trim(),payment:document.getElementById('pu-payment').value,paid:Number(document.getElementById('pu-paid').value)||0,lines:_stLines};var _sc=_st.supplierId;close();openProductModal(null,{fromPurchase:true,onCreated:function(newId){try{var _lines=_st.lines.slice();_lines.push({productId:newId,qty:1,cost:0});openPurchaseModal(_sc,null,_lines,null,_st);}catch(e){console.error('purchase-new',e);}}});}catch(e){console.error(e);}};
+  document.getElementById('pu-save').onclick=async()=>{
+    const supplierId=document.getElementById('pu-supplier').value;
+    const date=document.getElementById('pu-date').value||todayISO();
+    const invoice=document.getElementById('pu-invoice').value.trim();
+    const note=document.getElementById('pu-note').value.trim();
+    const paymentStatus=document.getElementById('pu-payment').value;
+    const total=updateTotal();
+    let paid=Number(document.getElementById('pu-paid').value)||0;
+    paid=Math.max(0,Math.min(total,paid));
+    const lines=[];
+    itemsRoot.querySelectorAll('.purchase-line').forEach(row=>{
+      const productId=row.querySelector('.pu-product').value;
+      const qty=Number(row.querySelector('.pu-qty').value)||0;
+      const cost=Number(row.querySelector('.pu-cost').value)||0;
+      if(productId&&qty>0&&cost>=0) lines.push({productId,qty,cost});
+    });
+    if(!supplierId||!lines.length){showToast('Выберите поставщика и добавьте хотя бы один товар');return;}
+    if(lines.some(x=>!products.find(p=>p.id===x.productId))){showToast('Один из товаров больше не существует');return;}
+    const batchId=uid();
+    const batchTotal=lines.reduce((s,x)=>s+x.qty*x.cost,0);
+    if(paymentStatus==='paid') paid=batchTotal;
+    if(paymentStatus==='debt') paid=0;
+    if(paymentStatus==='partial' && (paid<=0 || paid>=batchTotal)){showToast('Для частичной оплаты укажите сумму меньше итога');return;}
+    const paymentLeft=Math.max(0,batchTotal-paid);
+    lines.forEach(line=>{
+      const p=products.find(x=>x.id===line.productId);
+      const purchase={id:uid(),batchId,supplierId,productId:p.id,productName:p.name,productSku:p.sku,unit:p.unit,qty:line.qty,cost:line.cost,date,note,invoice,paymentStatus,paidAmount:batchTotal?paid*(line.qty*line.cost/batchTotal):0,totalAmount:line.qty*line.cost,batchTotal,batchPaid:paid,batchDebt:paymentLeft};
+      purchases.push(purchase);
+      p.qty=(Number(p.qty)||0)+line.qty;p.stock={...(p.stock||{}),'wh-default':(Number((p.stock||{})['wh-default'])||0)+line.qty};p.updatedAt=nowISO();
+      movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'in',qty:line.qty,date,note:`Закупка · ${supplierName(supplierId)}${invoice?' · накладная '+invoice:''}${note?' · '+note:''}`,purchaseId:purchase.id,batchId});
+    });
+    await Promise.all([persist('products'),persist('movements'),persist('purchases')]);
+    if(requestId){ const rr=procurementRequests.find(x=>x.id===requestId); if(rr){ rr.status='completed'; rr.updatedAt=new Date().toISOString(); await persist('procurementRequests'); } }
+    close();safeRender();showToast(`Закупка принята: ${lines.length} товар(а), ${fmtMoney(batchTotal)}`);
+  };
+}
+
+async function deletePurchase(id){
+  if(!requireAccess('suppliers')) return;
+  const r=purchases.find(x=>x.id===id); if(!r)return;
+  if(!confirm(`Удалить закупку «${purchaseProductName(r.productId)}» (${r.qty} ${r.unit||''})? Остаток будет уменьшен.`))return;
+  const p=products.find(x=>x.id===r.productId);
+  if(p){
+    if((Number(p.qty)||0)<(Number(r.qty)||0)){showToast('Нельзя удалить: текущего остатка меньше количества этой закупки');return;}
+    p.qty-=Number(r.qty)||0;p.stock={...(p.stock||{}),'wh-default':Math.max(0,(Number((p.stock||{})['wh-default'])||0)-(Number(r.qty)||0))};p.updatedAt=nowISO();
+  }
+  purchases=purchases.filter(x=>x.id!==id);
+  const move=movements.find(x=>x.purchaseId===id);
+  if(move)movements=movements.filter(x=>x.id!==move.id);
+  await Promise.all([persist('products'),persist('movements'),persist('purchases')]);
+  safeRender();showToast('Закупка удалена');
+}
+
+function openProductPurchaseHistory(productId){
+  if(!requireAccess('products')) return;
+  const p=products.find(x=>x.id===productId); if(!p)return;
+  const rows=productPurchaseRows(productId);
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="sheet-overlay" id="pph-ov"><div class="sheet">
+    <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Закупки · ${escapeHtml(p.name||'')}</div><button class="sheet-close" id="pph-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="info-grid"><div class="info-card"><div class="info-label">Остаток</div><div class="info-value">${p.qty} ${escapeHtml(p.unit||'')}</div></div><div class="info-card"><div class="info-label">Закупок</div><div class="info-value">${rows.length}</div></div></div>
+      <div class="panel">${rows.length?rows.map(r=>`<div class="list-row"><div class="row-icon in">IN</div><div class="row-main"><div class="row-title">${escapeHtml(supplierName(r.supplierId)||'')}</div><div class="row-sub">${fmtDate(r.date)} · ${r.qty} ${escapeHtml(r.unit||p.unit||'')}</div><div class="purchase-meta">Цена закупки: ${fmtMoney(r.cost)}${r.note?' · '+escapeHtml(r.note||''):''}</div></div><div class="row-right"><div class="row-value">${fmtMoney((Number(r.qty)||0)*(Number(r.cost)||0))}</div></div></div>`).join(''):`<div class="panel-body"><div class="empty">Истории закупок нет</div></div>`}</div>
+    </div>
+    <div class="sheet-foot"><button class="btn btn-primary btn-block" id="pph-buy">+ Новая закупка</button></div>
+  </div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('pph-close').onclick=close;
+  document.getElementById('pph-ov').onclick=e=>{if(e.target.id==='pph-ov')close();};
+  document.getElementById('pph-buy').onclick=()=>{close();openPurchaseModal(null,productId);};
+}
+
