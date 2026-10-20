@@ -43,7 +43,8 @@ $movedFns = @(
   '_pfNum','_pfSave','_pfLoad','_pfCount','_pfApplyFilters','_pfApplySort','_pfSortLabel','openProductSortSheet','openProductFiltersSheet',
   'openProductModal','openProductInfoModal','openProductPhotoLightbox','initProductInfoSwipeClose','confirmProductInfo','openCategoryManager','deleteProduct',
   'getSupplier','supplierName','purchaseProductName','supplierPurchaseRows','productPurchaseRows','requestStatusLabel','requestStatusClass','whatsappNumber','supplierContacts',
-  'viewSuppliers','bindSuppliers','openPurchasesHub','openPurchaseHistoryScreen','openLowStockScreen','openProcurementRequestsScreen'
+  'viewSuppliers','bindSuppliers','openPurchasesHub','openPurchaseHistoryScreen','openLowStockScreen','openProcurementRequestsScreen',
+  'openSupplierModal','openSupplierDetail','openSupplierContactModal'
 )
 
 foreach($fn in $movedFns){

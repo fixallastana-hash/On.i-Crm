@@ -1416,3 +1416,123 @@ function openProcurementRequestsScreen(){
   root.innerHTML=`<div class="sheet-overlay" id="reqs-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Заявки на закупку</div><button class="sheet-close" id="reqs-close">✕</button></div><div class="sheet-body">${rows.length?rows.map(r=>`<button type="button" class="list-row" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;" data-req-open="${escapeHtml(r.id)}"><div class="row-icon sale">RQ</div><div class="row-main"><div class="row-title">${escapeHtml(supplierName(r.supplierId))}</div><div class="row-sub">${(r.items||[]).length} поз. · ${fmtDate(r.createdAt)}</div></div><div class="row-right"><span class="badge ${requestStatusClass(r.status)}">${requestStatusLabel(r.status)}</span></div></button>`).join(''):`<div class="empty">Заявок пока нет. Создайте её через «Что нужно пополнить».</div>`}</div><div class="sheet-foot"><button class="btn btn-primary btn-block" id="reqs-new">＋ Создать заявку</button></div></div></div>`;
   const close=()=>root.innerHTML=''; document.getElementById('reqs-close').onclick=close; document.getElementById('reqs-ov').onclick=e=>{if(e.target.id==='reqs-ov')close();}; document.querySelectorAll('[data-req-open]').forEach(b=>b.onclick=()=>openProcurementRequestDetail(b.dataset.reqOpen)); document.getElementById('reqs-new').onclick=()=>openLowStockScreen();
 }
+
+
+// ===== Step 4c: suppliers modal/detail/contact =====
+function openSupplierModal(id){
+  if(!requireAccess('suppliers')) return;
+  const root=document.getElementById('modal-root');
+  const editing=id?getSupplier(id):null;
+  root.innerHTML=`<div class="sheet-overlay" id="supplier-ov"><div class="sheet">
+    <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">${editing?'Изменить поставщика':'Новый поставщик'}</div><button class="sheet-close" id="supplier-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="form-field"><label class="form-label">Поставщик / компания</label><input class="form-input" id="s-name" value="${escapeHtml(editing?.name||'')}" placeholder="Название"></div>
+      <div class="form-grid2">
+        <div class="form-field"><label class="form-label">Телефон</label><input class="form-input" id="s-phone" value="${escapeHtml(editing?.phone||'')}" placeholder="+7"></div>
+        <div class="form-field"><label class="form-label">WhatsApp</label><input class="form-input" id="s-wa" value="${escapeHtml(editing?.whatsapp||'')}" placeholder="+7"></div>
+      </div>
+      <div class="form-field"><label class="form-label">Адрес</label><input class="form-input" id="s-address" value="${escapeHtml(editing?.address||'')}" placeholder="Адрес поставщика"></div>
+      <div class="form-field"><label class="form-label">Комментарий</label><input class="form-input" id="s-note" value="${escapeHtml(editing?.note||'')}" placeholder="Условия, контакты…"></div>
+    </div>
+    <div class="sheet-foot">${editing?'<button class="btn btn-danger-text" id="s-del">Удалить</button>':''}<button class="btn btn-primary" id="s-save" style="flex:1;">${editing?'Сохранить':'Добавить'}</button></div>
+  </div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('supplier-close').onclick=close;
+  document.getElementById('supplier-ov').onclick=e=>{if(e.target.id==='supplier-ov')close();};
+  if(editing) document.getElementById('s-del').onclick=async()=>{
+    if(purchases.some(p=>p.supplierId===editing.id)){showToast('Нельзя удалить: у поставщика есть история закупок');return;}
+    if(!confirm(`Удалить поставщика «${editing.name}»?`))return;
+    suppliers=suppliers.filter(x=>x.id!==editing.id); contacts=contacts.filter(c=>!(c.type==='supplier' && c.supplierId===editing.id)); await Promise.all([persist('suppliers'),persist('contacts')]); close(); safeRender();
+  };
+  document.getElementById('s-save').onclick=async()=>{
+    const name=document.getElementById('s-name').value.trim();
+    const phone=document.getElementById('s-phone').value.trim();
+    const whatsapp=document.getElementById('s-wa').value.trim()||phone;
+    const address=document.getElementById('s-address').value.trim();
+    const note=document.getElementById('s-note').value.trim();
+    if(!name){showToast('Укажите поставщика');return;}
+    if(editing) Object.assign(editing,{name,phone,whatsapp,address,note});
+    else suppliers.push({id:uid(),name,phone,whatsapp,address,note});
+    await persist('suppliers');close();safeRender();showToast(editing?'Поставщик сохранён':'Поставщик добавлен');
+  };
+}
+
+function openSupplierDetail(id){
+  if(!requireAccess('suppliers')) return;
+  const root=document.getElementById('modal-root'), s=getSupplier(id);
+  if(!s)return;
+  const rows=supplierPurchaseRows(id);
+  const total=rows.reduce((a,r)=>a+(Number(r.qty)||0)*(Number(r.cost)||0),0);
+  const sc=supplierContacts(id);
+  root.innerHTML=`<div class="sheet-overlay" id="supplier-detail-ov"><div class="sheet">
+    <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">${escapeHtml(s.name)}</div><button class="sheet-close" id="supplier-detail-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="info-grid">
+        <div class="info-card"><div class="info-label">Телефон</div><div class="info-value">${escapeHtml(s.phone||'—')}</div></div>
+        <div class="info-card"><div class="info-label">WhatsApp</div><div class="info-value">${escapeHtml(s.whatsapp||'—')}</div></div>
+        <div class="info-card"><div class="info-label">Адрес</div><div class="info-value">${escapeHtml(s.address||'—')}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Контакты</div><button class="btn" id="supplier-contact-add">+ Контакт</button></div>
+        ${sc.length?sc.map(c=>`<div class="list-row">
+          <div class="row-icon cat">${initials(c.name||'К')}</div><div class="row-main"><div class="row-title">${escapeHtml(c.name||'Без имени')}</div><div class="row-sub">${escapeHtml(c.role||'Контакт')} · ${escapeHtml(c.phone||c.whatsapp||'Телефон не указан')}</div>${c.note?`<div class="purchase-meta">${escapeHtml(c.note)}</div>`:''}</div>
+          <div class="row-right"><button class="move-action" data-sc-edit="${c.id}">Изменить</button></div>
+        </div>`).join(''):`<div class="panel-body"><div class="empty">Контактов пока нет</div></div>`}
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Закупки</div><div class="purchase-total">${fmtMoney(total)}</div></div>
+        ${rows.length?rows.map(r=>`<div class="list-row">
+          <div class="row-icon in">IN</div><div class="row-main"><div class="row-title">${escapeHtml(purchaseProductName(r.productId))}</div><div class="row-sub">${fmtDate(r.date)} · ${r.qty} ${escapeHtml(r.unit||products.find(p=>p.id===r.productId)?.unit||'шт')} · ${fmtMoney(r.cost)} за ед.</div>${r.note?`<div class="purchase-meta">${escapeHtml(r.note)}</div>`:''}</div>
+          <div class="row-right"><div class="row-value">${fmtMoney((Number(r.qty)||0)*(Number(r.cost)||0))}</div><button class="move-action delete" data-purchase-detail-del="${r.id}">Удалить</button></div>
+        </div>`).join(''):`<div class="panel-body"><div class="empty">Закупок пока нет</div></div>`}
+      </div>
+      ${s.note?`<div class="contact-box"><div class="contact-title">Комментарий</div><div class="row-sub">${escapeHtml(s.note)}</div></div>`:''}
+    </div>
+    <div class="sheet-foot"><button class="btn" id="supplier-edit" style="flex:1;">Изменить</button><button class="btn btn-primary" id="supplier-buy" style="flex:1;">+ Закупка</button></div>
+  </div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('supplier-detail-close').onclick=close;
+  document.getElementById('supplier-detail-ov').onclick=e=>{if(e.target.id==='supplier-detail-ov')close();};
+  document.getElementById('supplier-contact-add').onclick=()=>openSupplierContactModal(id);
+  document.querySelectorAll('[data-sc-edit]').forEach(b=>b.onclick=()=>openSupplierContactModal(id,b.dataset.scEdit));
+  document.querySelectorAll('[data-purchase-detail-del]').forEach(b=>b.onclick=async()=>{await deletePurchase(b.dataset.purchaseDetailDel); if(getSupplier(id)) openSupplierDetail(id);});
+  document.getElementById('supplier-edit').onclick=()=>{close();openSupplierModal(id);};
+  document.getElementById('supplier-buy').onclick=()=>{close();openPurchaseModal(null,id);};
+}
+
+function openSupplierContactModal(supplierId, contactId=null){
+  if(!requireAccess('suppliers')) return;
+  const root=document.getElementById('modal-root');
+  const editing=contacts.find(c=>c.id===contactId && c.type==='supplier');
+  root.innerHTML=`<div class="sheet-overlay" id="sc-ov"><div class="sheet">
+    <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">${editing?'Изменить контакт':'Новый контакт'}</div><button class="sheet-close" id="sc-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="form-field"><label class="form-label">Имя</label><input class="form-input" id="sc-name" value="${escapeHtml(editing?.name||'').replace(/"/g,'&quot;')}" placeholder="Имя контакта"></div>
+      <div class="form-grid2">
+        <div class="form-field"><label class="form-label">Должность</label><input class="form-input" id="sc-role" value="${escapeHtml(editing?.role||'').replace(/"/g,'&quot;')}" placeholder="Менеджер"></div>
+        <div class="form-field"><label class="form-label">Телефон</label><input class="form-input" id="sc-phone" value="${escapeHtml(editing?.phone||'').replace(/"/g,'&quot;')}" placeholder="+7"></div>
+      </div>
+      <div class="form-field"><label class="form-label">WhatsApp</label><input class="form-input" id="sc-wa" value="${escapeHtml(editing?.whatsapp||'').replace(/"/g,'&quot;')}" placeholder="+7"></div>
+      <div class="form-field"><label class="form-label">Комментарий</label><input class="form-input" id="sc-note" value="${escapeHtml(editing?.note||'').replace(/"/g,'&quot;')}" placeholder="Дополнительная информация"></div>
+    </div>
+    <div class="sheet-foot">${editing?'<button class="btn btn-danger-text" id="sc-del">Удалить</button>':''}<button class="btn btn-primary" id="sc-save" style="flex:1;">${editing?'Сохранить':'Добавить'}</button></div>
+  </div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('sc-close').onclick=close;
+  document.getElementById('sc-ov').onclick=e=>{if(e.target.id==='sc-ov')close();};
+  if(editing) document.getElementById('sc-del').onclick=async()=>{
+    if(!confirm(`Удалить контакт «${editing.name||'Без имени'}»?`))return;
+    contacts=contacts.filter(c=>c.id!==editing.id); await persist('contacts'); close(); openSupplierDetail(supplierId);
+  };
+  document.getElementById('sc-save').onclick=async()=>{
+    const name=document.getElementById('sc-name').value.trim();
+    const role=document.getElementById('sc-role').value.trim();
+    const phone=document.getElementById('sc-phone').value.trim();
+    const whatsapp=document.getElementById('sc-wa').value.trim()||phone;
+    const note=document.getElementById('sc-note').value.trim();
+    if(!name){showToast('Укажите имя контакта');return;}
+    if(editing) Object.assign(editing,{name,role,phone,whatsapp,note,supplierId,type:'supplier'});
+    else contacts.push({id:uid(),name,role,phone,whatsapp,note,supplierId,type:'supplier'});
+    await persist('contacts'); close(); openSupplierDetail(supplierId); showToast(editing?'Контакт сохранён':'Контакт добавлен');
+  };
+}
