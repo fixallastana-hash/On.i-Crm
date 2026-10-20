@@ -250,3 +250,114 @@ async function storageSet(key,value){
   try{ if(await idbSet(key,text)) saved=true; }catch(e){}
   return saved;
 }
+
+
+// ===== Step 2c2: persist + full backup / restore =====
+function makeFullBackup(){
+  return JSON.stringify({
+    version:CRM_BACKUP_VERSION, savedAt:new Date().toISOString(),
+    products,movements,orders,debts,consignments,contacts,suppliers,purchases,procurementRequests,giftCards,warehouses,points,meta,cashSettings,kaspiSettings,fiscalSettings,shopSettings,visualSettings,users,shifts,messages,sessions,inventorySessions,reminders,modulesConfig:sanitizeModulesConfig(modulesConfig),userPreferences,actionHistory
+  });
+}
+
+async function saveFullBackupNow(){
+      /* Phone B fix: IndexedDB в этом WebView отключён патчем в <head>.
+         Без IDB полный бэкап хранить негде — тихо выходим, не шумим 
+         ложным тостом о свободном месте. */
+      if(!window.indexedDB){
+        return false;
+      }
+      if(_saveBusy){ _backupQueued=true; return false; }
+      _saveBusy=true;
+      let ok=false;
+      try{
+        const data=makeFullBackup();
+        const ts=String(Date.now());
+        try{ if(await idbSet(BACKUP_KEY,data)) ok=true; }catch(e){}
+        try{ await idbSet(BACKUP_TS_KEY,ts); }catch(e){}
+        if(ok){
+          _backupFailCount=0;
+        }else{
+          _backupFailCount++;
+        }
+        return ok;
+      }catch(e){
+        _backupFailCount++;
+        return false;
+      }finally{
+        _saveBusy=false;
+        if(_backupQueued){ _backupQueued=false; setTimeout(()=>saveFullBackupNow().catch(()=>{}),0); }
+      }
+    }
+
+function queueFullBackup(){
+  // Если бэкап уже сохраняется прямо сейчас — просто помечаем, что нужно повторить
+  // после его завершения (это уже делает saveFullBackupNow/_backupQueued), и НЕ
+  // трогаем debounce-таймер: иначе при частых persist() подряд (например, во время
+  // импорта Excel) таймер бесконечно рестартуется и первый вызов сохранения отодвигается.
+  if(_saveBusy){ _backupQueued=true; return; }
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(()=>saveFullBackupNow().catch(()=>{}),350);
+}
+
+async function getFullBackup(){
+    try{ const v=await idbGet(BACKUP_KEY); if(v) return v; }catch(e){}
+    return null;
+  }
+
+function downloadBackup(){
+  const blob=new Blob([makeFullBackup()],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='sklad-crm-backup-'+todayISO()+'.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  showToast('Резервная копия сохранена');
+}
+
+function restoreFromText(text){
+  const d=JSON.parse(text);
+  if(!d || !Array.isArray(d.products) || !Array.isArray(d.movements) || !Array.isArray(d.orders)) throw new Error('Неверная резервная копия');
+  const backupVersion=Number(d.version)||1;
+  if(backupVersion>CRM_BACKUP_VERSION) throw new Error('Бэкап создан более новой версией CRM. Обновите приложение.');
+  products=d.products||[]; movements=d.movements||[]; orders=d.orders||[]; debts=d.debts||[]; consignments=d.consignments||[]; contacts=d.contacts||[]; suppliers=d.suppliers||[]; purchases=d.purchases||[]; procurementRequests=d.procurementRequests||[]; giftCards=Array.isArray(d.giftCards)?d.giftCards:[]; warehouses=Array.isArray(d.warehouses)?d.warehouses:[]; points=Array.isArray(d.points)?d.points:[]; meta=d.meta||{orderSeq:orders.length+1}; inventorySessions=Array.isArray(d.inventorySessions)?d.inventorySessions:[]; cashSettings=Object.assign({taxRate:4,kaspiPayRate:13,kaspiRedRate:0,cashDifferenceLimit:0,sessionLockEnabled:false,sessionLockMinutes:15,sessionLogoutMinutes:120,shiftAutoCloseHours:24,bonusEnabled:false,bonusPercent:1,bonusMaxPayPercent:50},d.cashSettings||{}); kaspiSettings={...kaspiSettings,...(d.kaspiSettings||{})}; fiscalSettings={...fiscalSettings,...(d.fiscalSettings||{})}; shopSettings=d.shopSettings||shopSettings; visualSettings=d.visualSettings||visualSettings; users=Array.isArray(d.users)?d.users:users; shifts=Array.isArray(d.shifts)?d.shifts:shifts; messages=Array.isArray(d.messages)?d.messages:messages; sessions=Array.isArray(d.sessions)?d.sessions:sessions; reminders=Array.isArray(d.reminders)?d.reminders:[]; if(d.modulesConfig&&typeof d.modulesConfig==='object'&&!Array.isArray(d.modulesConfig)) modulesConfig=sanitizeModulesConfig({...modulesConfig,...d.modulesConfig}); if(d.userPreferences&&typeof d.userPreferences==='object'&&!Array.isArray(d.userPreferences)) userPreferences=d.userPreferences; migrateUserPreferences(); if(activeUser)loadUserPrefs(activeUser.id); if(Array.isArray(d.actionHistory)) actionHistory=normalizeActionHistory(d.actionHistory); ensureDefaultAdmin();
+  return Promise.all(['products','movements','orders','debts','consignments','contacts','suppliers','purchases','procurementRequests','giftCards','meta','cashSettings','kaspiSettings','fiscalSettings','shopSettings','visualSettings','users','shifts','messages','sessions','inventorySessions','modulesConfig','userPreferences','actionHistory','reminders','warehouses','points'].map(persist));
+}
+
+function openBackupFile(){
+  const input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
+  input.onchange=()=>{ const file=input.files&&input.files[0]; if(!file) return; const r=new FileReader(); r.onload=async()=>{ try{ await restoreFromText(String(r.result)); await saveFullBackupNow(); safeRender(); showToast('База восстановлена'); }catch(e){ alert('Не удалось восстановить базу: '+e.message); } }; r.readAsText(file,'utf-8'); };
+  input.click();
+}
+
+async function persist(which){
+  _lastPersistAt = Date.now();
+  try{
+  var _ok=false;
+  if(which=='products'){ _ok=await storageSet('products',JSON.stringify(products)); queueFullBackup(); }
+  else if(which=='movements'){ _ok=await storageSet('movements',JSON.stringify(movements)); queueFullBackup(); }
+  else if(which=='orders'){ _ok=await storageSet('orders',JSON.stringify(orders)); queueFullBackup(); }
+  else if(which=='debts'){ _ok=await storageSet('debts',JSON.stringify(debts)); queueFullBackup(); }
+  else if(which=='consignments'){ _ok=await storageSet('consignments',JSON.stringify(consignments)); queueFullBackup(); }
+  else if(which=='contacts'){ _ok=await storageSet('contacts',JSON.stringify(contacts)); queueFullBackup(); }
+  else if(which=='suppliers'){ _ok=await storageSet('suppliers',JSON.stringify(suppliers)); queueFullBackup(); }
+  else if(which=='purchases'){ _ok=await storageSet('purchases',JSON.stringify(purchases)); queueFullBackup(); }
+  else if(which=='procurementRequests'){ _ok=await storageSet('procurementRequests',JSON.stringify(procurementRequests)); queueFullBackup(); }
+  else if(which=='giftCards'){ _ok=await storageSet('giftCards',JSON.stringify(giftCards)); queueFullBackup(); }
+  else if(which=='cashSettings'){ _ok=await storageSet('cashSettings',JSON.stringify(cashSettings)); queueFullBackup(); }
+  else if(which=='kaspiSettings'){ _ok=await storageSet('kaspiSettings',JSON.stringify(kaspiSettings)); queueFullBackup(); }
+  else if(which=='fiscalSettings'){ _ok=await storageSet('fiscalSettings',JSON.stringify(fiscalSettings)); queueFullBackup(); }
+  else if(which=='visualSettings'){ _ok=await storageSet('visualSettings',JSON.stringify(visualSettings)); queueFullBackup(); }
+  else if(which=='shopSettings'){ _ok=await storageSet('shopSettings',JSON.stringify(shopSettings)); queueFullBackup(); }
+  else if(which=='meta'){ _ok=await storageSet('meta',JSON.stringify(meta)); queueFullBackup(); }
+  else if(which=='users'){ _ok=await storageSet('users',JSON.stringify(users)); queueFullBackup(); }
+  else if(which=='shifts'){ _ok=await storageSet('shifts',JSON.stringify(shifts)); queueFullBackup(); }
+  else if(which=='messages'){ _ok=await storageSet('messages',JSON.stringify(messages)); queueFullBackup(); }
+  else if(which=='inventorySessions'){ _ok=await storageSet('inventorySessions',JSON.stringify(inventorySessions)); queueFullBackup(); }
+  else if(which=='sessions'){ _ok=await storageSet('sessions',JSON.stringify(sessions)); }
+  else if(which=='userPreferences'){ _ok=await storageSet('userPreferences',JSON.stringify(userPreferences)); queueFullBackup(); }
+  else if(which=='modulesConfig'){ _ok=await storageSet('modulesConfig',JSON.stringify(modulesConfig)); queueFullBackup(); }
+  else if(which=='actionHistory'){ _ok=await storageSet('actionHistory',JSON.stringify(actionHistory)); queueFullBackup(); }
+  else if(which=='reminders'){ _ok=await storageSet('reminders',JSON.stringify(reminders)); queueFullBackup(); }
+  else if(which=='warehouses'){ _ok=await storageSet('warehouses',JSON.stringify(warehouses)); queueFullBackup(); }
+  else if(which=='points'){ _ok=await storageSet('points',JSON.stringify(points)); queueFullBackup(); }
+  try{ _fbScheduleSync(which); }catch(e){}
+  return _ok;
+  }finally{_dataVersion++;}
+}
