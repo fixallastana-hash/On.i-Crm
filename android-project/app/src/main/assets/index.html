@@ -202,6 +202,7 @@ html, body { touch-action: pan-x pan-y; -ms-touch-action: pan-x pan-y; }
 <div id="modal-root"></div>
 <div id="toast-root"></div>
 
+<script src="core.js"></script>
 <script>
   // ===== FIREBASE INIT =====
   const firebaseConfig = {
@@ -753,8 +754,6 @@ function openSavedFiltersDialog(section){
 async function persistUserPreferences(){return persist('userPreferences');}
 var visualSettings={salesYellow:10,salesOrange:30,salesRed:50,stockYellow:10,stockRed:5};
 
-function fmtMoney(n){ return (Math.round(n*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:0,maximumFractionDigits:0})+' ₸'; }
-function fmtDate(d){ const dt=new Date(d); return dt.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'}); }
 async function testFirebaseConnection(){
     var root=document.getElementById('modal-root');
     if(!root) return;
@@ -1798,23 +1797,6 @@ async function loginViaFirebase(login, password){
     btn.onclick=function(){root.innerHTML='';};
     if(logEl && logEl.parentNode) logEl.parentNode.appendChild(btn);
   }
-function fmtDateTime(value){
-  if(!value) return '';
-  const s=String(value);
-  if(s.length<=10){
-    return fmtDate(s);
-  }
-  const d=new Date(s);
-  if(!Number.isFinite(d.getTime())) return s;
-  const day=String(d.getDate()).padStart(2,'0');
-  const mon=String(d.getMonth()+1).padStart(2,'0');
-  const yr=String(d.getFullYear()).slice(-2);
-  const hh=String(d.getHours()).padStart(2,'0');
-  const mm=String(d.getMinutes()).padStart(2,'0');
-  return day+'.'+mon+'.'+yr+', '+hh+':'+mm;
-}
-function todayISO(){ const d=new Date(); const pad=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function escapeHtml(value){ return String(value??'').replace(/[&<>\"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch])); }
 function getProductPhotos(p){
   if(!p) return [];
   if(Array.isArray(p.photos) && p.photos.length) return p.photos;
@@ -1925,7 +1907,6 @@ function productIcon(p, size){
   return '<span class="product-icon-fallback" style="display:flex;width:'+size+'px;height:'+size+'px;align-items:center;justify-content:center;">'+escapeHtml(initials(p&&(p.name||p.category)||''))+'</span>';
 }
 function clientOrders(id){ return orders.filter(o=>o.contactId===id || (!o.contactId && contacts.find(c=>c.id===id && (c.name||'').trim().toLowerCase()===(o.customer||'').trim().toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date)); }
-function uid(){ return (crypto.randomUUID?crypto.randomUUID():'id-'+Math.random().toString(36).slice(2)+Date.now()); }
 function generateUniqueSKU(){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let sku='';
@@ -1962,7 +1943,6 @@ function showToast(msg){
   root.firstChild.textContent=String(msg);
   setTimeout(()=>{ if(root.firstChild) root.innerHTML=''; },2200);
 }
-function initials(name){ return (name||'').trim().slice(0,2).toUpperCase(); }
 function productSalesQty(productId){
   let sold=0;
   orders.forEach(o=>{
@@ -2069,8 +2049,6 @@ function migratePointWarehouse(){
   return changed;
 }
 
-function nowISO(){return new Date().toISOString();}
-function localDateTime(iso){return new Date(iso).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function openCashierShift(user){
   if(!user||user.role!=='cashier') return null;
   let sh=shifts.find(x=>x.userId===user.id&&x.status==='open');
