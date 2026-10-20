@@ -1298,3 +1298,32 @@ window.__oniAddExternalPhotos = function(list0){
     var _cid=(!editing&&window.__oniNewProductId)?window.__oniNewProductId:null;try{delete window.__oniNewProductId;}catch(e){}await persist('products');close();safeRender();if(_cid&&typeof options.onCreated==='function'){try{options.onCreated(_cid);}catch(e){}}updateMessagesBadge();showToast(quickMode?'Быстрый товар добавлен в чек':(editing?'Товар сохранён':'Товар добавлен'));
   };
 }
+
+
+// ===== Step 4a: purchases/suppliers utilities =====
+function getSupplier(id){ return suppliers.find(s=>s.id===id); }
+
+function supplierName(id){ return getSupplier(id)?.name || 'Поставщик не указан'; }
+
+function purchaseProductName(id){
+  const p=products.find(x=>x.id===id);
+  return p?.name || 'Товар удалён';
+}
+
+function supplierPurchaseRows(supplierId){
+  return purchases.filter(x=>x.supplierId===supplierId).sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+
+function productPurchaseRows(productId){
+  return purchases.filter(x=>x.productId===productId).sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+
+function requestStatusLabel(st){ return ({draft:'Черновик',sent:'Отправлена',awaiting:'Ждём подтверждение',confirmed:'Подтверждена',completed:'Выполнена',cancelled:'Отменена'}[st]||st||'Черновик'); }
+
+function requestStatusClass(st){ return st==='completed'||st==='confirmed'?'badge-ok':st==='cancelled'?'badge-low':'badge-card'; }
+
+function whatsappNumber(v){ return String(v||'').replace(/[^\d]/g,''); }
+
+function supplierContacts(supplierId){
+  return contacts.filter(c=>c.type==='supplier' && c.supplierId===supplierId);
+}
