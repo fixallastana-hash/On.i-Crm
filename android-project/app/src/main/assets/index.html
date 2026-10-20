@@ -214,8 +214,8 @@ html, body { touch-action: pan-x pan-y; -ms-touch-action: pan-x pan-y; }
   };
   /* Фаза 2: shopId для записи в Firestore. Пока один магазин. */
   let FB_SHOP_ID = 'shop-default';
-let _shopDeletedChecked = false;
-let _employeeCheckedOnce = false;
+var _shopDeletedChecked = false;
+var _employeeCheckedOnce = false;
   let fbApp=null, fbDb=null, fbAuth=null;
   try{
     if(window.firebase && typeof firebase.initializeApp==='function'){
@@ -250,12 +250,12 @@ const IDB_NAME='sklad_crm_db_v3';
 const IDB_STORE='kv';
 const BACKUP_KEY='__full_backup__';
 const BACKUP_TS_KEY='__backup_ts__';
-let _idbPromise=null;
-let _saveTimer=null;
-let _saveBusy=false;
-let _excelOutsideClickHandler=null;
-let _backupFailCount=0;
-let _backupQueued=false;
+var _idbPromise=null;
+var _saveTimer=null;
+var _saveBusy=false;
+var _excelOutsideClickHandler=null;
+var _backupFailCount=0;
+var _backupQueued=false;
 
 function withTimeout(promise,ms=700){
   return Promise.race([promise,new Promise(resolve=>setTimeout(()=>resolve(null),ms))]);
@@ -411,10 +411,10 @@ window.addEventListener('pagehide',()=>{ try{ saveUiState(); }catch(e){} });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'){ try{ saveUiState(); }catch(e){} } });
 
 /* ===================== STATE ===================== */
-let products=[], movements=[], orders=[], debts=[], consignments=[], contacts=[], suppliers=[], purchases=[], procurementRequests=[], meta={orderSeq:1}, sessions=[], warehouses=[], points=[];
-let _photoCache = {};
-let reminders=[];
-let actionHistory=[];
+var products=[], movements=[], orders=[], debts=[], consignments=[], contacts=[], suppliers=[], purchases=[], procurementRequests=[], meta={orderSeq:1}, sessions=[], warehouses=[], points=[];
+var _photoCache = {};
+var reminders=[];
+var actionHistory=[];
 // ===== НОВОЕ: модульная архитектура =====
 // Базовые разделы. Не входят в modulesConfig, не выключаются,
 // не участвуют в пресетах. Всегда доступны.
@@ -442,7 +442,7 @@ function sanitizeModulesConfig(raw){
   return out;
 }
 
-let modulesConfig = { ...defaultModulesConfig };
+var modulesConfig = { ...defaultModulesConfig };
 function moduleOn(name){return !!(modulesConfig&&modulesConfig[name]===true);}
 // Универсальная карта: какой view / пункт меню привязан к какому модулю.
 var MODULE_BY_VIEW={
@@ -487,9 +487,9 @@ function canDisableModule(name){
   if(name==='purchases'&&(procurementRequests||[]).some(r=>r&&(r.status==='sent'||r.status==='awaiting'))) return {ok:false,reason:'Нельзя отключить модуль «Закупки»: есть отправленные или ожидающие заявки'};
   return {ok:true,reason:''};
 }
-let inventorySessions=[];
-let users=[], shifts=[], messages=[], activeUser=null, currentShiftId=null, adminReturnUser=null;
-let currentView='orders';
+var inventorySessions=[];
+var users=[], shifts=[], messages=[], activeUser=null, currentShiftId=null, adminReturnUser=null;
+var currentView='orders';
 // Restore the last opened section after browser refresh/reload.
 function saveUiState(){
   try{ localStorage.setItem('sklad_crm_ui_state', JSON.stringify({currentView,ordersSubView})); }catch(e){}
@@ -550,9 +550,9 @@ function safeRender(){
 }
 window.addEventListener('error',e=>{ try{ localStorage.setItem('sklad_crm_last_error',JSON.stringify({message:String(e?.message||'Ошибка'),view:currentView,time:new Date().toISOString()})); }catch(_){} });
 window.addEventListener('unhandledrejection',e=>{ try{ localStorage.setItem('sklad_crm_last_error',JSON.stringify({message:String(e?.reason?.message||e?.reason||'Ошибка'),view:currentView,time:new Date().toISOString()})); }catch(_){} });
-let productSelectionMode = false;
-let productSelectionSet = new Set();
-let posSearch=''; let posCategory='Частые'; let posCategoryOpen=false; let payMethod='cash'; let giftRestMethod='cash'; let ordersSubView='pos'; let saleComment=''; let currentPointId=null;
+var productSelectionMode = false;
+var productSelectionSet = new Set();
+var posSearch=''; var posCategory='Частые'; var posCategoryOpen=false; var payMethod='cash'; var giftRestMethod='cash'; var ordersSubView='pos'; var saleComment=''; var currentPointId=null;
 
 /* ===================== MULTI-CART ===================== */
 var _carts=[];
@@ -638,18 +638,18 @@ document.addEventListener('click', function(e){
   var newEl = e.target.closest('[data-cart-new]');
   if(newEl){ e.preventDefault(); newCart(); return; }
 });
-let productSearch=''; let debtSearch=''; let consignmentSearch=''; let receiptSearch=''; let clientSearch=''; let supplierSearch='';
-let saleDiscountType='percent'; let saleDiscountValue=0;
-let cashSettings={taxRate:4,kaspiPayRate:13,kaspiRedRate:0,cashDifferenceLimit:0,sessionLockEnabled:false,sessionLockMinutes:15,sessionLogoutMinutes:120,shiftAutoCloseHours:24,bonusEnabled:false,bonusPercent:1,bonusMaxPayPercent:50};
-let kaspiSettings={host:'',port:8080,cashierName:'On.i CRM',terminalId:'',verifyCertificate:true};
-let fiscalSettings={enabled:false,provider:'ekassa',apiKey:'',kassaId:''};
-let pendingKaspiSale=null;
-let giftCards=[];
-let shopSettings={name:'On.i Store',address:'',phone:'',whatsapp:'',note:''};
+var productSearch=''; var debtSearch=''; var consignmentSearch=''; var receiptSearch=''; var clientSearch=''; var supplierSearch='';
+var saleDiscountType='percent'; var saleDiscountValue=0;
+var cashSettings={taxRate:4,kaspiPayRate:13,kaspiRedRate:0,cashDifferenceLimit:0,sessionLockEnabled:false,sessionLockMinutes:15,sessionLogoutMinutes:120,shiftAutoCloseHours:24,bonusEnabled:false,bonusPercent:1,bonusMaxPayPercent:50};
+var kaspiSettings={host:'',port:8080,cashierName:'On.i CRM',terminalId:'',verifyCertificate:true};
+var fiscalSettings={enabled:false,provider:'ekassa',apiKey:'',kassaId:''};
+var pendingKaspiSale=null;
+var giftCards=[];
+var shopSettings={name:'On.i Store',address:'',phone:'',whatsapp:'',note:''};
 const AUTH_SESSION_KEY='oni_crm_auth_session';
-let activeSession=null;
-let sessionTimer=null;
-let sessionLocked=false;
+var activeSession=null;
+var sessionTimer=null;
+var sessionLocked=false;
 function saveAuthSession(){ try{ if(activeUser){ activeSession={ id:(activeSession&&activeSession.id)||uid(), userId:activeUser.id, loginAt:(activeSession&&activeSession.loginAt)||nowISO(), lastActivityAt:nowISO(), shiftId:currentShiftId||null, device:(navigator.userAgent||'').slice(0,120) }; localStorage.setItem(AUTH_SESSION_KEY,JSON.stringify(activeSession)); } }catch(e){} }
 function touchAuthSession(){ try{ if(activeSession){ activeSession.lastActivityAt=nowISO(); activeSession.shiftId=currentShiftId||activeSession.shiftId||null; localStorage.setItem(AUTH_SESSION_KEY,JSON.stringify(activeSession)); } }catch(e){} }
 function clearAuthSession(){ try{ activeSession=null; localStorage.removeItem(AUTH_SESSION_KEY); try{ if(window.Android && typeof window.Android.setIdToken === 'function'){ window.Android.setIdToken(''); } }catch(_){} }catch(e){} }
@@ -658,8 +658,8 @@ function stopSessionTimer(){ if(sessionTimer){ clearInterval(sessionTimer); sess
 function startSessionTimer(){ stopSessionTimer(); if(!cashSettings.sessionLockEnabled){ stopSessionTimer(); return; } const lockMin=Math.max(0,Number(cashSettings.sessionLockMinutes)||0), logoutMin=Math.max(lockMin,Number(cashSettings.sessionLogoutMinutes)||0); if(!lockMin&&!logoutMin)return; sessionTimer=setInterval(function(){ if(!activeUser||!activeSession){ stopSessionTimer(); return; } const last=new Date(activeSession.lastActivityAt||activeSession.loginAt).getTime(); const mins=(Date.now()-last)/60000; if(logoutMin&&mins>=logoutMin){ stopSessionTimer(); showToast('Сессия завершена по таймауту'); logoutAccount(true); return; } if(lockMin&&mins>=lockMin&&!sessionLocked){ sessionLocked=true; lockSessionScreen(); } },30000); }
 function lockSessionScreen(){ const root=document.getElementById('modal-root'); if(!root)return; root.innerHTML='<div class="sheet-overlay" id="lock-ov" style="z-index:99999"><div class="sheet" style="max-width:340px;align-self:center;"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">🔒 Сессия заблокирована</div></div><div class="sheet-body"><div class="form-field"><label class="form-label">Пароль</label><input class="form-input" id="lock-pass" type="password" placeholder="Введите пароль"></div><div id="lock-error" class="form-hint" style="color:var(--danger);min-height:14px;"></div></div><div class="sheet-foot"><button class="btn btn-primary btn-block" id="lock-unlock">Разблокировать</button></div></div></div>'; const unlock=function(){ const p=document.getElementById('lock-pass').value; if(p===activeUser.password){ sessionLocked=false; touchAuthSession(); root.innerHTML=''; startSessionTimer(); } else { document.getElementById('lock-error').textContent='Неверный пароль'; } }; document.getElementById('lock-unlock').onclick=unlock; document.getElementById('lock-pass').onkeydown=function(e){ if(e.key==='Enter')unlock(); }; setTimeout(function(){ var el=document.getElementById('lock-pass'); if(el)el.focus(); },50); }
 function restoreAuthSession(){ try{ const raw=localStorage.getItem(AUTH_SESSION_KEY); if(!raw)return false; const st=JSON.parse(raw)||{}; const u=users.find(function(x){return x&&x.active!==false&&x.id===st.userId;}); if(!u){ try{ localStorage.removeItem(AUTH_SESSION_KEY); }catch(e){} return false; } activeUser=Object.assign({},u); if(activeUser.role==='owner') activeUser.role='admin'; loadUserPrefs(activeUser.id); try{ if(fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid){ _fbLoadActiveShop(fbAuth.currentUser.uid).catch(function(){}); } }catch(e){} activeSession=Object.assign({},st,{userId:u.id}); if(activeUser.role==='cashier'){ const autoHours=Math.max(1,Number(cashSettings.shiftAutoCloseHours)||24); const stale=shifts.find(function(x){return x.userId===u.id&&x.status==='open'&&((Date.now()-new Date(x.openedAt).getTime())/3600000)>=autoHours;}); if(stale){ stale.closedAt=nowISO(); stale.status='closed'; stale.autoClosed=true; persist('shifts').catch(function(){}); } openCashierShift(activeUser); } currentView=defaultViewFor(activeUser.role); if(currentView==='orders')ordersSubView='pos'; if(activeSession){ activeSession.lastActivityAt=nowISO(); localStorage.setItem(AUTH_SESSION_KEY,JSON.stringify(activeSession)); } startSessionTimer(); return true; }catch(e){ return false; } }
-let userPreferences={accentColor:'#14A05A',sound:'beep1',volume:70,vibration:true,vibrationStrength:'normal',fontSize:'normal',density:'normal',savedFilters:{},favorites:{frequent:[],problematic:[]},menuOrder:[],hideButtons:[],quickActions:[],themeMode:'light'};
-let currentPrefs=userPreferences;
+var userPreferences={accentColor:'#14A05A',sound:'beep1',volume:70,vibration:true,vibrationStrength:'normal',fontSize:'normal',density:'normal',savedFilters:{},favorites:{frequent:[],problematic:[]},menuOrder:[],hideButtons:[],quickActions:[],themeMode:'light'};
+var currentPrefs=userPreferences;
 function getDefaultPrefs(){return {themeMode:'light',accentColor:'#14A05A',backgroundId:'neutral',soundType:'beep1',sound:'beep1',soundVolume:70,volume:70,vibration:true,vibrationStrength:'normal',fontSize:'normal',density:'normal',favorites:{frequent:[],problematic:[]},savedFilters:{products:{},orders:{},clients:{}},menuOrder:[],hideButtons:[],quickActions:[]};}
 function loadUserPrefs(userId){
   if(!userId){currentPrefs=getDefaultPrefs();return;}
@@ -751,7 +751,7 @@ function openSavedFiltersDialog(section){
   root.querySelectorAll('[data-del]').forEach(function(b){b.onclick=function(){deleteSavedFilter(section,b.dataset.del);openSavedFiltersDialog(section);};});
 }
 async function persistUserPreferences(){return persist('userPreferences');}
-let visualSettings={salesYellow:10,salesOrange:30,salesRed:50,stockYellow:10,stockRed:5};
+var visualSettings={salesYellow:10,salesOrange:30,salesRed:50,stockYellow:10,stockRed:5};
 
 function fmtMoney(n){ return (Math.round(n*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:0,maximumFractionDigits:0})+' ₸'; }
 function fmtDate(d){ const dt=new Date(d); return dt.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'}); }
@@ -1949,7 +1949,7 @@ function closeTopbarMenu(){
   const m=document.getElementById('topbar-menu'); if(m)m.classList.remove('open');
 }
 
-let posNoticeTimer=null;
+var posNoticeTimer=null;
 function showPosNotice(msg){
   const root=document.getElementById('pos-notice'); const text=document.getElementById('pos-notice-text');
   if(!root||!text){showToast(msg);return;}
@@ -3489,10 +3489,10 @@ function showInviteCode(code, email, role){
 
 
 /* ===================== PAGE SLIDER ===================== */
-let _psActive=false, _psLocked=false, _psStartX=0, _psStartY=0;
+var _psActive=false, _psLocked=false, _psStartX=0, _psStartY=0;
 
-let _psStartTime=0, _psDX=0, _psPrevView=null, _psNextView=null;
-let _psPrevEl=null, _psNextEl=null, _psDir=0;
+var _psStartTime=0, _psDX=0, _psPrevView=null, _psNextView=null;
+var _psPrevEl=null, _psNextEl=null, _psDir=0;
 
 function initPageSlider(){
   const main=document.getElementById('main');
@@ -4017,7 +4017,7 @@ async function init(){
   }catch(e){}
 }
 
-let _dataVersion=0; // Инкрементируется после каждой попытки persist для инвалидирования производных кэшей.
+var _dataVersion=0; // Инкрементируется после каждой попытки persist для инвалидирования производных кэшей.
 var _lastPersistAt = 0;
 async function persist(which){
   _lastPersistAt = Date.now();
@@ -4080,7 +4080,7 @@ async function undoAction(id){const r=findHistoryRecord(id);if(!r){showToast('З
 async function redoAction(id){const r=findHistoryRecord(id);if(!r||!r.undone){showToast('Это действие нельзя повторить');return false;}if(r.redoExpiresAt&&Date.now()>Date.parse(r.redoExpiresAt)){showToast('Срок повторения истёк');return false;}const h=HISTORY_HANDLERS[r.actionType];if(!h||typeof h.redo!=='function'){showToast('Для этого действия ещё не подключён Redo');return false;}try{await h.redo(r);r.undone=false;r.undoneAt=null;r.undoneBy=null;r.redoExpiresAt=null;if(!(await persistActionHistory())){r.undone=true;showToast('Не удалось сохранить повтор');return false;}setupRoleMenu();safeRender();showToast('Действие повторено');return true;}catch(e){console.error('REDO failed',e);showToast('Не удалось повторить действие');return false;}}
 function historyCategory(t){t=String(t||'');if(t.includes('module'))return'module';if(t.includes('delete'))return'deletes';if(t.includes('sale')||t.includes('receipt'))return'sales';if(t.includes('refund')||t.includes('return'))return'returns';if(t.includes('settings')||t.includes('role'))return'settings';if(t.includes('shift')||t.includes('cash'))return'shift';return'other';}
 function historyStatus(r){if(r.undone)return'Отменено';if(!r.undoable)return'Необратимо';if(!isUndoAvailable(r))return'Срок Undo истёк';return'Доступно';}
-let activeUndoToast=null;
+var activeUndoToast=null;
 function showUndoToast(message,id,seconds=ACTION_UNDO_SECONDS){if(activeUndoToast){clearTimeout(activeUndoToast.timer);activeUndoToast.el.remove();activeUndoToast=null;}const el=document.createElement('div');el.className='undo-toast';const msg=document.createElement('div');msg.className='undo-toast-message';msg.textContent='✓ '+String(message);const actions=document.createElement('div');actions.className='undo-toast-actions';const btn=document.createElement('button');btn.className='undo-toast-button';btn.type='button';let busy=false,deadline=Date.now()+Math.max(1,Number(seconds)||30)*1000;const paint=()=>{btn.textContent=`Отменить (${Math.max(0,Math.ceil((deadline-Date.now())/1000))})`;};paint();btn.onclick=async()=>{if(busy)return;busy=true;btn.disabled=true;confirmBtn.disabled=true;clearTimeout(activeUndoToast?.timer);const ok=await undoAction(id);if(el.parentNode)el.remove();activeUndoToast=null;if(!ok)showToast('Не удалось отменить действие');};const confirmBtn=document.createElement('button');confirmBtn.className='undo-toast-button undo-toast-confirm';confirmBtn.type='button';confirmBtn.textContent='Подтвердить';confirmBtn.onclick=()=>{if(busy)return;clearTimeout(activeUndoToast?.timer);if(el.parentNode)el.remove();activeUndoToast=null;};actions.append(btn,confirmBtn);el.append(msg,actions);document.body.appendChild(el);const tick=()=>{if(!activeUndoToast)return;if(Date.now()>=deadline){el.remove();activeUndoToast=null;return;}paint();activeUndoToast.timer=setTimeout(tick,250);};activeUndoToast={el,timer:setTimeout(tick,250),historyId:id};return el;}
 function openActionHistory(){if(!activeUser)return;const root=document.getElementById('modal-root');if(!root)return;let filter='all';const render=()=>{const rows=normalizeActionHistory(actionHistory||[]).slice().reverse().filter(r=>filter==='all'||(filter==='mine'?r.userId===activeUser.id:historyCategory(r.actionType)===filter));const chips=[['all','Все'],['mine','Мои'],['deletes','Удаления'],['settings','Настройки'],['sales','Продажи'],['returns','Возвраты'],['module','Модули'],['shift','Смена']];root.innerHTML=`<div class="sheet-overlay" id="action-history-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">История действий</div><button class="sheet-close" id="action-history-close">✕</button></div><div class="sheet-body"><div class="chip-row" style="display:flex;gap:6px;overflow:auto;margin-bottom:10px;">${chips.map(([k,n])=>`<button type="button" class="chip ${filter===k?'active':''}" data-history-filter="${k}">${n}</button>`).join('')}</div>${rows.length?`<div class="panel">${rows.map(r=>{const u=isUndoAvailable(r)&&HISTORY_HANDLERS[r.actionType]?.undo,rd=r.undone&&HISTORY_HANDLERS[r.actionType]?.redo;return `<div class="list-row"><div class="row-icon ${r.undone?'out':historyCategory(r.actionType)==='sales'?'sale':'cat'}">${r.undone?'↶':r.actionType.includes('delete')?'−':r.actionType.includes('sale')?'₸':'•'}</div><div class="row-main"><div class="row-title">${escapeHtml(r.description)}</div><div class="row-sub">${escapeHtml(r.userName||'Пользователь')} · ${escapeHtml(localDateTime(r.timestamp))}</div><div class="row-sub">${escapeHtml(historyStatus(r))}</div></div><div class="row-right" style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">${u?`<button type="button" class="move-action" data-history-undo="${escapeHtml(r.id)}">Отменить</button>`:''}${rd?`<button type="button" class="move-action" data-history-redo="${escapeHtml(r.id)}">Повторить</button>`:''}<button type="button" class="move-action" data-history-details="${escapeHtml(r.id)}">Детали</button></div></div>`;}).join('')}</div>`:'<div class="empty">История действий пока пуста</div>'}</div></div></div>`;document.getElementById('action-history-close').onclick=()=>root.innerHTML='';document.getElementById('action-history-ov').onclick=e=>{if(e.target.id==='action-history-ov')root.innerHTML='';};document.querySelectorAll('[data-history-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.historyFilter;render();});document.querySelectorAll('[data-history-undo]').forEach(b=>b.onclick=async()=>{b.disabled=true;await undoAction(b.dataset.historyUndo);render();});document.querySelectorAll('[data-history-redo]').forEach(b=>b.onclick=async()=>{b.disabled=true;await redoAction(b.dataset.historyRedo);render();});document.querySelectorAll('[data-history-details]').forEach(b=>b.onclick=()=>{const r=findHistoryRecord(b.dataset.historyDetails);if(r)alert(`${r.description}\n\nБыло:\n${JSON.stringify(r.beforeState,null,2)}\n\nСтало:\n${JSON.stringify(r.afterState,null,2)}`);});};render();}
 
@@ -4225,8 +4225,8 @@ function render(){
 
 
 /* ===================== DASHBOARD ===================== */
-let dashboardFrom=todayISO();
-let dashboardTo=todayISO();
+var dashboardFrom=todayISO();
+var dashboardTo=todayISO();
 
 function dashboardDateLabel(from,to){
   const f=new Date(from+'T00:00:00'), t=new Date(to+'T00:00:00');
@@ -5529,9 +5529,9 @@ function buildProductDescriptionFromLookup(data){
   return out.filter(Boolean).join('\n');
 }
 
-let _lookupCategoryAuto=false;
-let _lookupDescriptionAuto=false;
-let _lookupCandidateData=null;
+var _lookupCategoryAuto=false;
+var _lookupDescriptionAuto=false;
+var _lookupCandidateData=null;
 
 window.onProductOcrResult=function(json){try{const d=typeof json==='string'?JSON.parse(json):json||{};const v=d.vision||{};const name=document.getElementById('f-name');const cat=document.getElementById('f-category');const desc=document.getElementById('f-description');const st=document.getElementById('name-lookup-status');if(v.productName&&name&&!name.value.trim())name.value=v.productName;/* ИИ-OCR больше не пишет категорию */if(v.description&&desc&&!desc.value.trim())desc.value=v.description;window._lastProductOcrResult=d;if(st)st.textContent=d.visionUsed?'✓ Фото распознано ИИ + OCR':'✓ Текст с фото распознан';}catch(e){console.error(e);}};
 
@@ -7192,7 +7192,7 @@ async function markConsignmentSettled(id){
   await persist('consignments');safeRender();showToast(`Расчёт: ${fmtMoney(amount)}`);
 }
 
-let analyticsFrom=null, analyticsTo=null;
+var analyticsFrom=null, analyticsTo=null;
 function openCashierAnalytics(){
   if(!(activeUser?.role==='admin'||activeUser?.role==='manager')){ showToast('Нет доступа'); return; }
   if(!analyticsFrom){ const d=new Date(); const f=new Date(d.getFullYear(),d.getMonth(),1); analyticsFrom=f.toISOString().slice(0,10); analyticsTo=todayISO(); }
@@ -7235,8 +7235,8 @@ function openCashierAnalytics(){
 }
 
 /* ===================== REPORTS ===================== */
-let reportsState={from:null,to:null,tab:'summary'};
-let reportsTurnoverFilter='all';
+var reportsState={from:null,to:null,tab:'summary'};
+var reportsTurnoverFilter='all';
 function reportsDefaultPeriod(){ const d=new Date(); const f=new Date(d.getFullYear(),d.getMonth(),1); return {from:f.toISOString().slice(0,10),to:todayISO()}; }
 function reportsFilteredOrders(){ const {from,to}=reportsState; return orders.filter(o=>{ const d=String(o.date||'').slice(0,10); return d>=from&&d<=to; }); }
 function statusLabel(s){
@@ -7248,7 +7248,7 @@ function statusLabelShort(s){
 function statusLabelColor(s){
   return {dead:'var(--danger)',slow:'#B84A00',normal:'var(--primary-dark)',fast:'var(--blue)'}[s]||'var(--muted)';
 }
-let _turnoverCache=null;
+var _turnoverCache=null;
 function reportsTurnover(){
   const {from,to}=reportsState;
   const cacheKey=`${from}|${to}|${_dataVersion}`;
@@ -8696,7 +8696,8 @@ window.onAndroidBack=function(){
 
 
 
-window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
+window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
+try{ window.CORE_MODULES=CORE_MODULES; window.defaultModulesConfig=defaultModulesConfig; window.ROLE_ACCESS=ROLE_ACCESS; window.ROLE_NAV=ROLE_NAV; window.SEARCH_SYNONYMS=SEARCH_SYNONYMS; }catch(e){}
 </script>
 <script src="ui-extra.js"></script>
 </body>
