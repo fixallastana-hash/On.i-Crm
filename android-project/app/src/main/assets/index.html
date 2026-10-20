@@ -1618,20 +1618,7 @@ async function loginViaFirebase(login, password){
     btn.onclick=function(){root.innerHTML='';};
     if(logEl && logEl.parentNode) logEl.parentNode.appendChild(btn);
   }
-function getProductPhotos(p){
-  if(!p) return [];
-  if(Array.isArray(p.photos) && p.photos.length) return p.photos;
-  if(p.photo) return [p.photo];
-  return [];
-}
 
-function getProductMainPhoto(p){
-  if(!p) return '';
-  const photos=getProductPhotos(p);
-  if(!photos.length) return '';
-  const idx=Number.isInteger(p.mainPhotoIndex)?p.mainPhotoIndex:0;
-  return photos[Math.min(Math.max(0,idx),photos.length-1)]||photos[0];
-}
 
 async function loadProductPhotos(productId){
   if(_photoCache[productId]) return _photoCache[productId];
@@ -1718,15 +1705,6 @@ async function deleteProductPhotos(productId){
   delete _photoCache[productId];
 }
 
-function productIcon(p, size){
-  size=size||36;
-  const src=getProductMainPhoto(p);
-  if(src){
-    return '<img class="product-photo-list" style="width:'+size+'px;height:'+size+'px;border-radius:10px;object-fit:cover;" src="'+escapeHtml(src)+'" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
-      +'<span class="product-icon-fallback" style="display:none;width:'+size+'px;height:'+size+'px;align-items:center;justify-content:center;">'+escapeHtml(initials(p&&(p.name||p.category)||''))+'</span>';
-  }
-  return '<span class="product-icon-fallback" style="display:flex;width:'+size+'px;height:'+size+'px;align-items:center;justify-content:center;">'+escapeHtml(initials(p&&(p.name||p.category)||''))+'</span>';
-}
 function clientOrders(id){ return orders.filter(o=>o.contactId===id || (!o.contactId && contacts.find(c=>c.id===id && (c.name||'').trim().toLowerCase()===(o.customer||'').trim().toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date)); }
 function generateUniqueSKU(){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1758,63 +1736,7 @@ function showPosNotice(msg){
   text.textContent=msg; root.classList.add('show'); clearTimeout(posNoticeTimer);
   posNoticeTimer=setTimeout(()=>root.classList.remove('show'),1800);
 }
-function productSalesQty(productId){
-  let sold=0;
-  orders.forEach(o=>{
-    (o.items||[]).forEach(it=>{if(it.productId===productId)sold+=Number(it.qty)||0;});
-  });
-  movements.filter(m=>m.type==='return'&&m.productId===productId).forEach(m=>{sold-=Number(m.qty)||0;});
-  return Math.max(0,sold);
-}
-function productAvailable(p){
-  if(!p) return 0;
-  return Math.max(0, (Number(p.qty)||0) - (Number(p.reserved)||0));
-}
-function productVatRate(p){
-  if(p && p.vatRate!=null && Number.isFinite(Number(p.vatRate))){
-    return Number(p.vatRate);
-  }
-  return Number(cashSettings&&cashSettings.taxRate)||0;
-}
-function productBarcodes(p){
-  if(!p) return [];
-  const arr = [];
-  if(p.barcode) arr.push(String(p.barcode).trim());
-  if(Array.isArray(p.barcodes)){
-    p.barcodes.forEach(b=>{
-      const v = String(b||'').trim();
-      if(v && arr.indexOf(v)<0) arr.push(v);
-    });
-  }
-  return arr;
-}
-function renderBarcodeList(barcodes){
-  return (Array.isArray(barcodes)?barcodes:[]).map((b,i)=>`<div class="product-extra-row"><input class="form-input f-extra-barcode" data-index="${i}" value="${escapeHtml(b||'')}" inputmode="numeric" maxlength="13" placeholder="Дополнительный штрихкод"><button type="button" class="btn btn-danger-text f-remove-barcode" data-index="${i}">Удалить</button></div>`).join('');
-}
-function renderPackagingList(packaging){
-  return (Array.isArray(packaging)?packaging:[]).map((x,i)=>{const item=x&&typeof x==='object'?x:{name:String(x||''),qty:1,unit:'шт'};return `<div class="product-extra-row packaging-row"><input class="form-input f-pack-name" data-index="${i}" value="${escapeHtml(item.name||'')}" placeholder="Название упаковки"><input class="form-input f-pack-qty" data-index="${i}" type="number" min="0" step="0.001" value="${Number(item.qty)||0}" placeholder="Кол-во"><input class="form-input f-pack-unit" data-index="${i}" value="${escapeHtml(item.unit||'шт')}" placeholder="Ед."><button type="button" class="btn btn-danger-text f-remove-packaging" data-index="${i}">Удалить</button></div>`;}).join('');
-}
-function salesLevel(qty){
-  qty=Number(qty)||0;
-  if(qty>=Number(visualSettings.salesRed)||0)return 'red';
-  if(qty>=Number(visualSettings.salesOrange)||0)return 'orange';
-  if(qty>=Number(visualSettings.salesYellow)||0)return 'yellow';
-  return 'green';
-}
-function stockLevel(p){
-  const qty=Number(p.qty)||0;
-  const min=Math.max(0,Number(p.minStock)||0);
-  if(qty<=0)return 'zero';
-  const red=Math.max(0,Number(visualSettings.stockRed)||0);
-  const yellow=Math.max(red+1,Number(visualSettings.stockYellow)||0);
-  if(qty<=red)return 'red';
-  if(qty<=yellow)return 'yellow';
-  if(min>0 && qty<=min)return 'yellow';
-  return 'green';
-}
 function productIndicators(p){ return ''; }
-function salesTextColor(qty){ return `sales-text-${salesLevel(qty)}`; }
-function stockTextColor(p){ return `stock-text-${stockLevel(p)}`; }
 
 /* ===================== AUTH / CASHIERS ===================== */
 const ADMIN_RECOVERY_CODE='ONI-RECOVERY-2026';
@@ -4073,10 +3995,6 @@ const SEARCH_SYNONYMS={
   'боль':['обезболивающий','обезболивание','анальгетик'],
   'сон':['снотворный','успокоение','успокоительный','расслабление'],
 };
-function productSearchText(p){
-  return [p?.name,p?.sku,p?.category,p?.description,p?.purpose,...productBarcodes(p),
-    ...(Array.isArray(p?.keywords)?p.keywords:[]),p?.ocrText,...(Array.isArray(p?.photos)?p.photos:[])].filter(v=>typeof v==='string' && !/^data:image\//i.test(v)).join(' ');
-}
 function openProductInfoModal(id){
   if(!requireAccess('products')) return;
   const p=products.find(x=>x.id===id); if(!p)return;
