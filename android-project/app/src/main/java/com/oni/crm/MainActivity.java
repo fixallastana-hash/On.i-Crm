@@ -599,6 +599,7 @@ public class MainActivity extends Activity {
             kaspiExecutor.execute(() -> {try{
 
                 SharedPreferences sp=getSharedPreferences("kaspi_smart_pos",MODE_PRIVATE);String token=sp.getString("accessToken","");if(token.isEmpty()){sendKaspiRefundResult("{\"status\":\"fail\",\"message\":\"Kaspi Smart POS не зарегистрирован\"}");return;}
+                String h=host==null?"":host.trim();int p=parsePort(port);int a=Math.max(0,(int)Math.round(Double.parseDouble(String.valueOf(amount).replace((char)44,(char)46))));if(a<=0)throw new IllegalArgumentException("Сумма возврата должна быть больше нуля");
                 String origTid=originalTransactionId==null?"":originalTransactionId.trim();if(origTid.isEmpty()){sendKaspiRefundResult("{\"status\":\"fail\",\"message\":\"Не найден transactionId исходной оплаты\"}");return;}
                 String path="/v2/payment?amount="+a+"&refund=true&owncheque=false&transactionId="+enc(origTid);
                 Log.i("OniKaspi","startKaspiRefund URL: https://"+h+":"+p+path);
