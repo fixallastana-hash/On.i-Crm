@@ -35,6 +35,8 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.net.URL;
+import java.net.Socket;
+import java.net.InetSocketAddress;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -449,6 +451,41 @@ public class MainActivity extends Activity {
 
 
 
+        @JavascriptInterface
+        public void testHalykConnection(String host, String port) {
+            final String h = host == null ? "" : host.trim();
+            final int p;
+            try {
+                p = Integer.parseInt(port == null || port.trim().isEmpty() ? "8080" : port.trim());
+                if (h.isEmpty() || p < 1 || p > 65535) {
+                    throw new IllegalArgumentException("invalid host or port");
+                }
+            } catch (Exception e) {
+                final String msg = e.getMessage() == null ? "invalid input" : e.getMessage();
+                runOnUiThread(() -> webView.evaluateJavascript(
+                    "window.onHalykConnectionResult&&window.onHalykConnectionResult(" +
+                    JSONObject.quote("{\"status\":\"error\",\"message\":" + JSONObject.quote(msg) + "}") + ")",
+                    null));
+                return;
+            }
+
+            new Thread(() -> {
+                long start = System.currentTimeMillis();
+                String result;
+                try (Socket socket = new Socket()) {
+                    socket.connect(new InetSocketAddress(h, p), 3000);
+                    long ms = System.currentTimeMillis() - start;
+                    result = "{\"status\":\"success\",\"host\":" + JSONObject.quote(h) + ",\"port\":" + p + ",\"ms\":" + ms + "}";
+                } catch (Exception e) {
+                    String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    result = "{\"status\":\"error\",\"message\":" + JSONObject.quote(msg) + "}";
+                }
+                final String r = result;
+                runOnUiThread(() -> webView.evaluateJavascript(
+                    "window.onHalykConnectionResult&&window.onHalykConnectionResult(" + JSONObject.quote(r) + ")",
+                    null));
+            }, "HalykTcpTest").start();
+        }
         @JavascriptInterface
         public void registerKaspiCashier(String host, String port, String cashierName, boolean verifyCertificate) {
             kaspiExecutor.execute(() -> { try {
