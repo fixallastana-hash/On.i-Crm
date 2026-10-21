@@ -2399,3 +2399,141 @@ function openProblematicScreen(){
   document.getElementById('problematic-ov').onclick=e=>{if(e.target.id==='problematic-ov')close();};
   document.querySelectorAll('[data-problematic-remove]').forEach(b=>b.onclick=()=>{toggleProblematicProduct(b.dataset.problematicRemove);openProblematicScreen();});
 }
+
+
+// ===== Step 6: clients =====
+function getClient(id){ return contacts.find(c=>c.id===id && c.type==='client'); }
+
+function viewClients(){
+  const rows=getClientContacts();
+  const totalSpent=rows.reduce((s,c)=>s+clientOrders(c.id).reduce((a,o)=>a+(Number(o.total)||0),0),0);
+  return `<div class="info-grid" style="margin-bottom:12px;">
+    <div class="info-card"><div class="info-label">Клиентов</div><div class="info-value">${getClientContacts().length}</div></div>
+    <div class="info-card"><div class="info-label">Продажи по базе</div><div class="info-value">${fmtMoney(totalSpent)}</div></div>
+  </div>
+  <div style="display:flex;gap:7px;margin-bottom:11px;">
+    <div class="search" style="flex:1;margin:0;"><span class="search-icon">⌕</span><input id="client-search" placeholder="Поиск клиента: имя, телефон, WhatsApp…" value="${escapeHtml(clientSearch)}"></div>
+    <button class="btn btn-primary" id="add-client">+ Клиент</button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;"><button class="btn" id="cf-save-filter" type="button">💾 Сохранить</button><button class="btn" id="cf-open-filters" type="button">⭐ Мои фильтры</button></div>
+  <div class="panel">
+    ${getClientContacts().length?getClientContacts().map(c=>{
+      const os=clientOrders(c.id), sum=os.reduce((a,o)=>a+(Number(o.total)||0),0);
+      return `<div class="list-row live-search-row" data-search-text="${escapeHtml(`${c.name||''} ${c.phone||''} ${c.whatsapp||''} ${c.company||''} ${c.note||''}`)}" data-client-open="${escapeHtml(c.id)}" style="cursor:pointer;">
+        <div class="row-icon cat">${escapeHtml(initials(c.name||c.company||''))}</div>
+        <div class="row-main"><div class="row-title">${escapeHtml(c.name||'Без имени')}</div><div class="row-sub">${escapeHtml(c.phone||c.whatsapp||'Контакт не указан')}${c.company?' · '+escapeHtml(c.company):''}</div><div class="row-note">${os.length} продаж · ${fmtMoney(sum)}</div></div>
+        <div class="row-right"><span class="badge badge-ok">${os.length}</span></div>
+      </div>`;
+    }).join(''):`<div class="panel-body"><div class="empty">Клиентов пока нет</div></div>`}
+    ${getClientContacts().length?'<div class="panel-body" data-live-empty="client-search" style="display:none;"><div class="empty">Клиенты не найдены</div></div>':''}
+  </div>`;
+}
+
+function bindClients(){
+  var cfSave=document.getElementById('cf-save-filter'); if(cfSave)cfSave.onclick=function(){openSaveFilterDialog('clients');};
+  var cfOpen=document.getElementById('cf-open-filters'); if(cfOpen)cfOpen.onclick=function(){openSavedFiltersDialog('clients');};
+  const input=document.getElementById('client-search');
+  bindLiveSearch('client-search','.live-search-row');
+  const add=document.getElementById('add-client'); if(add)add.onclick=()=>openClientModal();
+  document.querySelectorAll('[data-client-open]').forEach(b=>b.onclick=()=>openClientDetail(b.dataset.clientOpen));
+}
+
+function openClientModal(id){
+  if(!requireAccess('clients')) return;
+  const root=document.getElementById('modal-root'), editing=id?getClient(id):null;
+  if(id&&!editing)return;
+  const val=k=>escapeHtml(editing?.[k]||'').replace(/"/g,'&quot;');
+  root.innerHTML=`<div class="sheet-overlay" id="client-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">${editing?'Изменить клиента':'Новый клиент'}</div><button class="sheet-close" id="client-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="form-field"><label class="form-label">Имя / название</label><input class="form-input" id="cl-name" value="${val('name')}" placeholder="Например: Иван Петров"></div>
+      <div class="form-grid2"><div class="form-field"><label class="form-label">Телефон</label><input class="form-input" id="cl-phone" value="${val('phone')}" placeholder="+7 777 123 45 67"></div><div class="form-field"><label class="form-label">WhatsApp</label><input class="form-input" id="cl-wa" value="${val('whatsapp')}" placeholder="+7 777 123 45 67"></div></div>
+      <div class="form-field"><label class="form-label">Компания</label><input class="form-input" id="cl-company" value="${val('company')}" placeholder="Необязательно"></div>
+      <div class="form-field"><label class="form-label">Комментарий</label><textarea class="form-input" id="cl-note" rows="3" placeholder="Примечание">${escapeHtml(editing?.note||'')}</textarea></div>
+    </div>
+    <div class="sheet-foot">${editing?'<button class="btn btn-danger-text" id="cl-del">Удалить</button>':''}<button class="btn btn-primary" id="cl-save" style="flex:1;">${editing?'Сохранить':'Добавить'}</button></div>
+  </div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('client-close').onclick=close;
+  document.getElementById('client-ov').onclick=e=>{if(e.target.id==='client-ov')close();};
+  if(editing)document.getElementById('cl-del').onclick=async()=>{ if(clientOrders(editing.id).length){showToast('Нельзя удалить клиента: у него есть история продаж');return;} if(!confirm(`Удалить клиента «${editing.name||'Без имени'}»?`))return; contacts=contacts.filter(c=>c.id!==editing.id); await persist('contacts');close();safeRender(); };
+  document.getElementById('cl-save').onclick=async()=>{
+    const name=document.getElementById('cl-name').value.trim(),phone=document.getElementById('cl-phone').value.trim(),whatsapp=document.getElementById('cl-wa').value.trim()||phone,company=document.getElementById('cl-company').value.trim(),note=document.getElementById('cl-note').value.trim();
+    if(!name&&!phone&&!whatsapp){showToast('Укажите имя или телефон клиента');return;}
+    const normalized=normalizeWhatsApp(phone||whatsapp);
+    const duplicate=contacts.find(c=>c.type==='client'&&c.id!==(editing?.id||'')&&normalized&&normalizeWhatsApp(c.phone||c.whatsapp)===normalized);
+    if(duplicate){showToast('Клиент с таким номером уже есть');return;}
+    if(editing)Object.assign(editing,{name,phone,whatsapp,company,note}); else contacts.push({id:uid(),name,phone,whatsapp,type:'client',company,note});
+    await persist('contacts');close();safeRender();showToast(editing?'Клиент сохранён':'Клиент добавлен');
+  };
+}
+
+function openClientDetail(id){
+  if(!requireAccess('clients')) return;
+  const root=document.getElementById('modal-root'), c=getClient(id); if(!c)return;
+  const rows=clientOrders(id), sum=rows.reduce((a,o)=>a+(Number(o.total)||0),0);
+  root.innerHTML=`<div class="sheet-overlay" id="client-detail-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">${escapeHtml(c.name||'Клиент')}</div><button class="sheet-close" id="client-detail-close">✕</button></div>
+    <div class="sheet-body">
+      <div class="info-grid"><div class="info-card"><div class="info-label">Телефон</div><div class="info-value">${escapeHtml(c.phone||'—')}</div></div><div class="info-card"><div class="info-label">WhatsApp</div><div class="info-value">${escapeHtml(c.whatsapp||c.phone||'—')}</div></div></div>
+      <div class="info-grid" style="margin-top:8px;"><div class="info-card"><div class="info-label">Покупок</div><div class="info-value">${rows.length}</div></div><div class="info-card"><div class="info-label">Сумма</div><div class="info-value">${fmtMoney(sum)}</div></div></div>
+      <div class="info-grid" style="margin-top:8px;"><div class="info-card"><div class="info-label">Бонусов начислено</div><div class="info-value" style="color:#8B6914;">${Math.round((c.bonusBalance||0)*100)/100}</div></div><div class="info-card"><div class="info-label">Списано бонусов</div><div class="info-value">${(c.bonusHistory||[]).filter(x=>x.type==='out').reduce((s,x)=>s+Number(x.amount||0),0).toFixed(0)}</div></div></div>
+      ${c.company?`<div class="contact-box"><div class="contact-title">Компания</div><div class="row-sub">${escapeHtml(c.company)}</div></div>`:''}
+      ${c.note?`<div class="contact-box"><div class="contact-title">Комментарий</div><div class="row-sub">${escapeHtml(c.note)}</div></div>`:''}
+      <div class="panel"><div class="panel-head"><div class="panel-title">История покупок</div></div>
+        ${rows.length?rows.map(o=>`<button class="list-row" data-client-order="${escapeHtml(o.id)}" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;"><div class="row-icon sale">ЧК</div><div class="row-main"><div class="row-title">${escapeHtml(o.number)} · ${escapeHtml(o.customer||c.name)}</div><div class="row-sub">${fmtDateTime(o.date)} · ${o.items?.length||0} поз. · ${escapeHtml(paymentLabel(o.paymentMethod))}</div></div><div class="row-right"><div class="row-value">${fmtMoney(o.total)}</div></div></button>`).join(''):`<div class="panel-body"><div class="empty">Покупок пока нет</div></div>`}
+      </div>
+    </div>
+    <div class="sheet-foot"><button class="btn" id="client-edit" style="flex:1;">Изменить</button>${cashSettings.bonusEnabled?'<button class="btn" id="client-bonus" style="flex:1;">🎁 Бонусы</button>':''}<button class="btn btn-primary" id="client-sale" style="flex:1;">Продажа</button>${rows.length&&normalizeWhatsApp(c.whatsapp||c.phone)?'<button class="btn" id="client-last">📱 Чек</button>':''}</div>
+  </div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('client-detail-close').onclick=close;
+  document.getElementById('client-detail-ov').onclick=e=>{if(e.target.id==='client-detail-ov')close();};
+  document.getElementById('client-edit').onclick=()=>{close();openClientModal(id);};
+  document.getElementById('client-sale').onclick=()=>{close();currentView='orders';ordersSubView='pos';safeRender();};
+  const last=document.getElementById('client-last'); if(last)last.onclick=()=>openReceiptWhatsApp(rows[0]);
+  const cb=document.getElementById('client-bonus'); if(cb) cb.onclick=()=>openClientBonusManager(id);
+  document.querySelectorAll('[data-client-order]').forEach(b=>b.onclick=()=>openReceiptModal(orders.find(o=>o.id===b.dataset.clientOrder)));
+}
+
+function openClientBonusManager(id){
+  const c=getClient(id); if(!c)return;
+  const root=document.getElementById('modal-root'); const hist=(c.bonusHistory||[]).slice().reverse();
+  root.innerHTML=`<div class="sheet-overlay" id="cbm-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Бонусы · ${escapeHtml(c.name||'Клиент')}</div><button class="sheet-close" id="cbm-close">✕</button></div><div class="sheet-body">
+      <div class="info-grid"><div class="info-card"><div class="info-label">Баланс</div><div class="info-value" style="color:#8B6914;">${Math.round((c.bonusBalance||0)*100)/100}</div></div><div class="info-card"><div class="info-label">Операций</div><div class="info-value">${hist.length}</div></div></div>
+      <div class="form-grid2"><div class="form-field"><label class="form-label">Сумма</label><input class="form-input" type="number" min="0" step="1" id="cbm-amount" value="0"></div><div class="form-field"><label class="form-label">Действие</label><select class="form-select" id="cbm-type"><option value="in">Начислить</option><option value="out">Списать</option></select></div></div>
+      <div class="form-field"><label class="form-label">Комментарий</label><input class="form-input" id="cbm-note" placeholder="Причина"></div><button class="btn btn-primary btn-block" id="cbm-apply">Применить</button>
+      <div class="panel" style="margin-top:12px;"><div class="panel-head"><div class="panel-title">История</div></div>${hist.length?hist.slice(0,50).map(x=>`<div class="list-row"><div class="row-icon ${x.type==='in'?'in':'out'}">${x.type==='in'?'+':'−'}</div><div class="row-main"><div class="row-title">${x.type==='in'?'Начисление':'Списание'}</div><div class="row-sub">${localDateTime(x.date||todayISO())} · ${escapeHtml(x.note||'—')}</div></div><div class="row-right"><div class="row-value ${x.type==='in'?'pos':'neg'}">${Number(x.amount||0).toFixed(0)}</div></div></div>`).join(''):'<div class="panel-body"><div class="empty">История пуста</div></div>'}</div>
+    </div></div></div>`;
+  const close=()=>root.innerHTML=''; document.getElementById('cbm-close').onclick=close; document.getElementById('cbm-ov').onclick=e=>{if(e.target.id==='cbm-ov')close();}; document.getElementById('cbm-apply').onclick=async()=>{const amount=Math.max(0,Number(document.getElementById('cbm-amount').value)||0);const type=document.getElementById('cbm-type').value;const note=document.getElementById('cbm-note').value.trim()||'Ручное изменение';if(!amount){showToast('Введите сумму');return;}if(type==='out'&&amount>(c.bonusBalance||0)){showToast('Недостаточно бонусов');return;}if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];c.bonusBalance=(Number(c.bonusBalance)||0)+(type==='in'?amount:-amount);c.bonusHistory.push({id:uid(),type,amount,date:todayISO(),note});await persist('contacts');openClientBonusManager(id);showToast(type==='in'?'Начислено':'Списано');};
+}
+
+function clientOrders(id){ return orders.filter(o=>o.contactId===id || (!o.contactId && contacts.find(c=>c.id===id && (c.name||'').trim().toLowerCase()===(o.customer||'').trim().toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date)); }
+
+function getClientContacts(){
+  return contacts.filter(c=>c.type==='client' && (c.name||c.whatsapp||c.phone)).sort((a,b)=>String(a.name||a.company||'').localeCompare(String(b.name||b.company||''),'ru',{sensitivity:'base'}));
+}
+
+function findOrCreateContact(d){
+  const phone=(d.phone||'').replace(/\D/g,'');
+  let c=phone?contacts.find(x=>x.type===d.type&&(x.phone||'').replace(/\D/g,'')===phone):null;
+  if(c){Object.assign(c,d);return c;}
+  c={id:uid(),name:d.name||'',phone:d.phone||'',whatsapp:d.whatsapp||'',type:d.type||'client',company:d.company||'',note:d.note||'',bonusBalance:0,bonusHistory:[]};
+  contacts.push(c);return c;
+}
+
+function normalizeWhatsApp(value){
+  let n=String(value||'').replace(/\D/g,'');
+  if(n.startsWith('8') && n.length===11) n='7'+n.slice(1);
+  return n;
+}
+
+function openReceiptWhatsApp(order){
+  const linked=order.contactId?contacts.find(c=>c.id===order.contactId):null;
+  const number=normalizeWhatsApp(order.whatsapp||linked?.whatsapp||linked?.phone);
+  if(!number){showToast('У клиента не указан WhatsApp');return;}
+  window.open('https://wa.me/'+number+'?text='+encodeURIComponent(receiptWhatsAppText(order)),'_blank');
+}
+
+function receiptWhatsAppText(order){
+  const lines=(order.items||[]).map(it=>`${it.name} ×${it.qty} — ${fmtMoney(it.price*it.qty)}`);
+  return [`ЧЕК №${order.number}`,`Дата: ${fmtDate(order.date)}`,`Клиент: ${order.customer}`,'',...lines,'',`Итого: ${fmtMoney(order.total)}`,...(order.paymentMethod==='transfer'?[]:[`Оплата: ${paymentLabel(order.paymentMethod)}`]),...(order.comment?[`Комментарий: ${order.comment}`]:[]),'','Спасибо за покупку!'].join('\n');
+}

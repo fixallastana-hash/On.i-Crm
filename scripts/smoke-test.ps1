@@ -47,7 +47,7 @@ $movedFns = @(
   'openSupplierModal','openSupplierDetail','openSupplierContactModal',
   'openProductPickerSheet','openPurchaseModal','deletePurchase','openProductPurchaseHistory',
   'requestMessage','sendRequestWhatsApp','openProcurementRequestDetail','openRequestStatusPicker','openPurchaseFromRequest',
-  '_newCartObject','_renumberCarts','_saveCarts','_loadCarts','_resetCarts','newCart','switchCart','closeCart','calcDiscount','cartSubtotal','calcSale','showPosNotice','viewOrders','viewPOS','viewOrdersHistory','bindOrders','renderCartTabs','renderCartBar','openCartSheet','renderCartSheetContent','checkoutCart','finalizePreparedSale','openFavContextMenu','getProblematicProductIds','saveProblematicProductIds','isProblematicProduct','toggleProblematicProduct','openProblematicScreen'
+  '_newCartObject','_renumberCarts','_saveCarts','_loadCarts','_resetCarts','newCart','switchCart','closeCart','calcDiscount','cartSubtotal','calcSale','showPosNotice','viewOrders','viewPOS','viewOrdersHistory','bindOrders','renderCartTabs','renderCartBar','openCartSheet','renderCartSheetContent','checkoutCart','finalizePreparedSale','openFavContextMenu','getProblematicProductIds','saveProblematicProductIds','isProblematicProduct','toggleProblematicProduct','openProblematicScreen','getClient','viewClients','bindClients','openClientModal','openClientDetail','openClientBonusManager','clientOrders','getClientContacts','findOrCreateContact','normalizeWhatsApp','openReceiptWhatsApp','receiptWhatsAppText'
 )
 
 foreach($fn in $movedFns){
