@@ -2088,7 +2088,7 @@ function renderCartSheetContent(root){
           <button class="pay-btn ${payMethod==='kaspi'?'active':''}" data-pay="kaspi">Kaspi Pay</button>
           <button class="pay-btn ${payMethod==='red'?'active':''}" data-pay="red">Kaspi Red</button>
           <button class="pay-btn ${payMethod==='transfer'?'active':''}" data-pay="transfer">Перевод</button>
-          <button class="pay-btn ${payMethod==='halyk'?'active':''}'" data-pay="halyk">Halyk POS</button>
+          <button class="pay-btn ${payMethod==='halyk'?'active':''}" data-pay="halyk">Halyk POS</button>
           ${isModOn('giftcards') ? `<button class="pay-btn ${payMethod==='gift'?'active':''}" data-pay="gift">🎁 Сертификат</button>` : ''}
           ${isModOn('debts') ? `<button class="pay-btn ${payMethod==='debt'?'active':''}" data-pay="debt">Долг</button>` : ''}
         </div>
