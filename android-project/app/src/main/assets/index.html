@@ -5732,6 +5732,7 @@ function openReturnModal(order){
             <button type="button" class="pay-btn active" data-return-method="cash">Наличные</button>
             <button type="button" class="pay-btn" data-return-method="kaspi">Kaspi</button>
             <button type="button" class="pay-btn" data-return-method="red">Kaspi Red</button>
+            <button type="button" class="pay-btn" data-return-method="halyk">Halyk POS</button>
             ${isModOn('bonuses') ? '<button type="button" class="pay-btn" data-return-method="bonus">На бонусы</button>' : ''}
             <button type="button" class="pay-btn" data-return-method="gift">На сертификат</button>
             <button type="button" class="pay-btn" data-return-method="exchange">Обмен</button>
@@ -5807,6 +5808,7 @@ function openReturnModal(order){
       return;
     }
 
+    if(returnMethod==='halyk' && !(window.Android&&typeof window.Android.refundHalyk==='function')){ showToast('Halyk return dostupen tolko v Android-prilozhenii'); return; }
     const returnSnapshot={
       products:JSON.parse(JSON.stringify(products)),
       movements:JSON.parse(JSON.stringify(movements)),
@@ -5851,6 +5853,7 @@ function openReturnModal(order){
       total,
       method:returnMethod,
       needsKaspiRefund:returnMethod==='kaspi'||returnMethod==='red',
+      needsHalykRefund:returnMethod==='halyk',
       items:selected.map(({it,qty})=>({
         productId:it.productId,
         name:it.name,
@@ -5900,6 +5903,7 @@ function openReturnModal(order){
 
     close();
     safeRender();
+        if(returnMethod==='halyk' && window.Android && typeof window.Android.refundHalyk==='function'){ try{ window.Android.refundHalyk(String(halykSettings.host||''),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId||'')); }catch(e){ showToast('Halyk refund: '+(e.message||e)); } }
     showToast(`Возврат оформлен: ${fmtMoney(total)}`);
   };
 }
