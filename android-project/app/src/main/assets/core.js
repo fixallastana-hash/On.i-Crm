@@ -1683,3 +1683,90 @@ function openProcurementRequestDetail(id){
 }
 function openRequestStatusPicker(id){ const r=procurementRequests.find(x=>x.id===id); if(!r)return; const statuses=[['draft','Черновик'],['sent','Отправлена'],['awaiting','Ждём подтверждение'],['confirmed','Подтверждена'],['completed','Выполнена'],['cancelled','Отменена']]; const root=document.getElementById('modal-root'); root.innerHTML=`<div class="sheet-overlay" id="rs-ov"><div class="sheet"><div class="sheet-head"><div class="sheet-title">Статус заявки</div><button class="sheet-close" id="rs-close">✕</button></div><div class="sheet-body">${statuses.map(x=>`<button class="list-row" style="width:100%;background:none;border:0;text-align:left;" data-status="${x[0]}"><span class="row-main">${x[1]}</span>${r.status===x[0]?'<span class="badge badge-ok">Текущий</span>':''}</button>`).join('')}</div></div></div>`; const close=()=>root.innerHTML=''; document.getElementById('rs-close').onclick=close; document.querySelectorAll('[data-status]').forEach(b=>b.onclick=async()=>{r.status=b.dataset.status;r.updatedAt=new Date().toISOString();await persist('procurementRequests');openProcurementRequestDetail(id);}); }
 function openPurchaseFromRequest(id){ const r=procurementRequests.find(x=>x.id===id); if(!r)return; const root=document.getElementById('modal-root'); root.innerHTML=''; openPurchaseModal(r.supplierId, r.items?.[0]?.productId||null, r.items||[] , id); }
+
+
+// ===== Step 5a: cart infrastructure + calculations =====
+function _newCartObject(){
+  _cartSeq++;
+  return { id:'cart-'+Date.now()+'-'+_cartSeq, name:'Чек '+_cartSeq, items:[], createdAt:(typeof nowISO==='function'?nowISO():new Date().toISOString()) };
+}
+function _renumberCarts(){
+  var _n=1;
+  for(var _i=0;_i<_carts.length;_i++){
+    if(/^Чек \d+$/.test(_carts[_i].name)) _carts[_i].name='Чек '+(_n++);
+  }
+}
+function _saveCarts(){
+  _renumberCarts();
+  try{ localStorage.setItem('oni_carts', JSON.stringify({carts:_carts,active:_activeCartId,seq:_cartSeq})); }catch(e){}
+}
+function _loadCarts(){
+  try{
+    var raw=localStorage.getItem('oni_carts');
+    if(raw){
+      var o=JSON.parse(raw);
+      if(o && Array.isArray(o.carts) && o.carts.length){
+        _carts=o.carts; _activeCartId=o.active; _cartSeq=o.seq||o.carts.length;
+        if(!_carts.some(function(c){return c.id===_activeCartId;})) _activeCartId=_carts[0].id;
+        return true;
+      }
+    }
+  }catch(e){}
+  return false;
+}
+function _resetCarts(){
+  _carts=[]; _cartSeq=0;
+  var c=_newCartObject();
+  _carts.push(c);
+  _activeCartId=c.id;
+  _saveCarts();
+}
+
+function newCart(){
+  var c=_newCartObject();
+  _carts.push(c);
+  _activeCartId=c.id;
+  _saveCarts();
+  if(typeof safeRender==='function') safeRender();
+}
+function switchCart(id){
+  if(!_carts.some(function(c){return c.id===id;})) return;
+  _activeCartId=id;
+  _saveCarts();
+  if(typeof renderCartBar==='function') renderCartBar();
+  if(typeof safeRender==='function') safeRender();
+}
+function closeCart(id){
+  if(_carts.length<=1) return;
+  var c=_carts.find(function(x){return x.id===id;});
+  if(!c) return;
+  if(c.items.length>0 && !confirm('В чеке есть товары. Закрыть без продажи?')) return;
+  _carts=_carts.filter(function(x){return x.id!==id;});
+  if(_activeCartId===id) _activeCartId=_carts[0].id;
+  _saveCarts();
+  if(typeof renderCartBar==='function') renderCartBar();
+  if(typeof safeRender==='function') safeRender();
+}
+
+function calcDiscount(subtotal){
+  const v=Math.max(0,Number(saleDiscountValue)||0);
+  if(saleDiscountType==='amount') return Math.min(subtotal,v);
+  return Math.min(subtotal,subtotal*v/100);
+}
+function cartSubtotal(){
+  return cart.reduce((s,c)=>{
+    const p=products.find(x=>x.id===c.productId);
+    return s+(p?(c.price??p.price)*c.qty:0);
+  },0);
+}
+function calcSale(total){
+  const discount=calcDiscount(total);
+  const afterDiscount=Math.max(0,total-discount);
+  const tax=Math.max(0,afterDiscount*(Number(cashSettings.taxRate)||0)/100);
+  let commission=0, commissionRate=0;
+  if(payMethod==='kaspi'){commissionRate=Number(cashSettings.kaspiPayRate)||0;}
+  if(payMethod==='red'){commissionRate=Number(cashSettings.kaspiRedRate)||0;}
+  commission=afterDiscount*commissionRate/100;
+  const net=afterDiscount-tax-commission;
+  return {subtotal:total,discount,afterDiscount,tax,commission,commissionRate,net};
+}
