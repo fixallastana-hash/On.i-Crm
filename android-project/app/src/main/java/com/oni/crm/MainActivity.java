@@ -593,6 +593,24 @@ public class MainActivity extends Activity {
             }catch(Exception e){Log.e("OniKaspi","startKaspiPayment failed: "+safeMessage(e),e);
         sendKaspiResult("{\"status\":\"fail\",\"message\":"+JSONObject.quote(safeMessage(e))+"}");}});
         }
+
+        @JavascriptInterface
+        public void startKaspiRefund(String amount,String requestedMethod,String host,String port,String terminalId,String cashierName,String originalTransactionId){
+            kaspiExecutor.execute(() -> {try{
+
+                SharedPreferences sp=getSharedPreferences("kaspi_smart_pos",MODE_PRIVATE);String token=sp.getString("accessToken","");if(token.isEmpty()){sendKaspiRefundResult("{\"status\":\"fail\",\"message\":\"Kaspi Smart POS не зарегистрирован\"}");return;}
+                String origTid=originalTransactionId==null?"":originalTransactionId.trim();if(origTid.isEmpty()){sendKaspiRefundResult("{\"status\":\"fail\",\"message\":\"Не найден transactionId исходной оплаты\"}");return;}
+                String path="/v2/payment?amount="+a+"&refund=true&owncheque=false&transactionId="+enc(origTid);
+                Log.i("OniKaspi","startKaspiRefund URL: https://"+h+":"+p+path);
+                JSONObject start=kaspiRequest(h,p,path,token,verifyCertificate);if(start.optInt("statusCode",-1)!=0||start.optJSONObject("data")==null){sendKaspiRefundResult(errorJson(start));return;}String pid=start.getJSONObject("data").optString("processId","");if(pid.isEmpty())throw new IllegalStateException("Smart POS не вернул processId возврата");
+                long t=System.currentTimeMillis();while(System.currentTimeMillis()-t<245000L){JSONObject st=kaspiRequest(h,p,"/v2/status?processId="+enc(pid),token,verifyCertificate,"terminalId",terminalId==null?"":terminalId.trim());JSONObject d=st.optJSONObject("data");if(d==null){if(st.optInt("statusCode",-1)!=0){sendKaspiRefundResult(errorJson(st));return;}Thread.sleep(1000);continue;}String s=d.optString("status","");sendKaspiRefundProgress(s,d.optString("subStatus",""));if("success".equalsIgnoreCase(s)){JSONObject out=new JSONObject();out.put("status","success");out.put("processId",d.optString("processId",pid));out.put("transactionId",d.optString("transactionId",""));out.put("chequeInfo",d.optJSONObject("chequeInfo")==null?new JSONObject():d.getJSONObject("chequeInfo"));sendKaspiRefundResult(out.toString());return;}if("fail".equalsIgnoreCase(s)){JSONObject out=new JSONObject();out.put("status","fail");out.put("processId",d.optString("processId",pid));out.put("message",d.optString("message","Возврат не выполнен"));sendKaspiRefundResult(out.toString());return;}Thread.sleep(1000);}
+                sendKaspiRefundResult("{\"status\":\"unknown\",\"message\":\"Время ожидания возврата истекло\"}");
+            }catch(Exception e){Log.e("OniKaspi","startKaspiRefund failed: "+safeMessage(e),e);
+        sendKaspiRefundResult("{\"status\":\"fail\",\"message\":"+JSONObject.quote(safeMessage(e))+"}");}});
+        }
+
+        private void sendKaspiRefundProgress(String s,String sub){String js="window.onKaspiRefundProgress&&window.onKaspiRefundProgress("+JSONObject.quote(s==null?"":s)+","+JSONObject.quote(sub==null?"":sub)+")";runOnUiThread(()->webView.evaluateJavascript(js,null));}
+        private void sendKaspiRefundResult(String json){String js="window.onKaspiRefundResult&&window.onKaspiRefundResult("+JSONObject.quote(json)+")";runOnUiThread(()->webView.evaluateJavascript(js,null));}
         private String runOfflineOcr(Bitmap bitmap, String languages) throws Exception {
             File base = new File(getFilesDir(), "oni_ocr");
             File tessdata = new File(base, "tessdata");

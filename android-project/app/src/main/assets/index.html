@@ -408,6 +408,7 @@ var kaspiSettings={host:'',port:8080,cashierName:'On.i CRM',terminalId:'',verify
 var halykSettings={host:'',port:8080,terminalId:'61698734'};
 var fiscalSettings={enabled:false,provider:'ekassa',apiKey:'',kassaId:''};
 var pendingKaspiSale=null;
+var pendingKaspiReturn=null;
 var pendingHalykSale=null;
 var giftCards=[];
 var shopSettings={name:'On.i Store',address:'',phone:'',whatsapp:'',note:''};
@@ -5687,6 +5688,52 @@ function getOrderReturnTotal(order){
   },0);
 }
 
+window.onKaspiRefundResult=async function(raw){
+  let result={};try{result=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){result={status:'fail',message:String(e)};}
+  const pending=pendingKaspiReturn;if(!pending)return;
+  const ov=document.getElementById('kaspi-refund-wait-ov');
+  if(result.status!=='success'){
+    if(ov)ov.remove();
+    showToast('Kaspi возврат: '+(result.status==='unknown'?'статус неизвестен' : (result.message||result.errorText||'не выполнен')));
+    pendingKaspiReturn=null;return;
+  }
+  const {order,selected,total,reason,returnMethod,snapshot,close}=pending;
+  pendingKaspiReturn=null;
+  for(const {it,qty} of selected){
+    const p=products.find(x=>x.id===it.productId);
+    if(!p)continue;
+    var _retWhId=(order&&order.warehouseId)||'wh-default';
+    var _st={...(p.stock||{})};
+    _st[_retWhId]=(Number(_st[_retWhId])||0)+qty;
+    p.stock=_st;
+    p.qty=Object.keys(_st).reduce(function(s,k){return s+(Number(_st[k])||0);},0);
+    p.updatedAt=nowISO();
+    movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'return',qty,date:todayISO(),note:'Возврат '+order.number+(reason?' · '+reason:''),orderId:order.id});
+  }
+  if(!order.returns)order.returns=[];
+  order.returns.push({id:uid(),date:todayISO(),reason,total,method:returnMethod,needsKaspiRefund:false,kaspiTransactionId:result.transactionId||'',items:selected.map(({it,qty})=>({productId:it.productId,name:it.name,sku:it.sku,qty,price:it.price}))});
+  const returnedTotal=getOrderReturnTotal(order);
+  if(returnedTotal>=order.total)order.status='Возврат';
+  const saveResults=await Promise.all([persist('products'),persist('movements'),persist('orders')]);
+  if(saveResults.some(r=>r===false)){
+    products=snapshot.products;movements=snapshot.movements;orders=snapshot.orders;
+    if(ov)ov.remove();
+    showToast('Ошибка сохранения возврата. Данные CRM восстановлены.');return;
+  }
+  if(ov)ov.remove();
+  if(typeof close==='function')close();
+  safeRender();
+  showToast('Возврат оформлен: '+fmtMoney(total));
+};
+
+
+function showKaspiRefundWaiting(total,method){
+  const root=document.getElementById('modal-root');
+  root.innerHTML='<div class="sheet-overlay" id="kaspi-refund-wait-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Возврат Kaspi</div><button class="sheet-close" id="kaspi-refund-wait-close">X</button></div><div class="sheet-body"><div class="form-hint">Следуйте инструкциям на терминале...</div><div class="form-hint" style="margin-top:8px;">Сумма возврата: '+fmtMoney(total)+'</div><div class="form-hint" id="kaspi-refund-wait-status" style="margin-top:8px;"></div></div></div></div>';
+  document.getElementById('kaspi-refund-wait-close').onclick=()=>{ pendingKaspiReturn=null; root.innerHTML=''; };
+}
+
+window.onKaspiRefundProgress=function(status,subStatus){const el=document.getElementById('kaspi-refund-wait-status');if(el)el.textContent=subStatus||status||'Ожидание...';};
 function openReturnModal(order){
   const root=document.getElementById('modal-root');
   const availableItems=(order.items||[]).map((it,index)=>{
@@ -5817,6 +5864,12 @@ function openReturnModal(order){
       giftCards:JSON.parse(JSON.stringify(giftCards))
     };
 
+    if((returnMethod==='kaspi'||returnMethod==='red') && window.Android && typeof window.Android.startKaspiRefund==='function'){
+      pendingKaspiReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
+      showKaspiRefundWaiting(total,returnMethod);
+      window.Android.startKaspiRefund(String(total),String(returnMethod),String(kaspiSettings.host||''),String(kaspiSettings.port||8080),String(kaspiSettings.terminalId||''),String(kaspiSettings.cashierName||'On.i CRM'),String(order.kaspiTransactionId||''));
+      return;
+    }
     // Проверяем и восстанавливаем остаток товара.
     for(const {it,qty} of selected){
       const p=products.find(x=>x.id===it.productId);
