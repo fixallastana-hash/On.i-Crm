@@ -36,6 +36,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.net.URL;
 import java.net.Socket;
+import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -451,6 +452,92 @@ public class MainActivity extends Activity {
 
 
 
+        private String halykHttpPost(String host, int port, String json, int timeoutMs) throws Exception {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 10000);
+                socket.setSoTimeout(timeoutMs);
+                OutputStream out = socket.getOutputStream();
+                byte[] body = json.getBytes(StandardCharsets.UTF_8);
+                String req = "POST / HTTP/1.0\r\nHost: " + host + ":" + port
+                        + "\r\nContent-Type: application/json\r\nContent-Length: " + body.length
+                        + "\r\nConnection: close\r\n\r\n";
+                out.write(req.getBytes(StandardCharsets.US_ASCII));
+                out.write(body);
+                out.flush();
+                InputStream in = socket.getInputStream();
+                ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                byte[] tmp = new byte[8192];
+                int n;
+                while ((n = in.read(tmp)) > 0) buf.write(tmp, 0, n);
+                String full = buf.toString("UTF-8");
+                int idx = full.indexOf("\r\n\r\n");
+                return idx < 0 ? full : full.substring(idx + 4);
+            }
+        }
+
+        private void halykRunAsync(String action, String host, int port, String json, int timeoutMs) {
+            new Thread(() -> {
+                String result;
+                try {
+                    String body = halykHttpPost(host, port, json, timeoutMs);
+                    result = "{\"action\":\"" + action + "\",\"ok\":true,\"body\":" + JSONObject.quote(body) + "}";
+                } catch (Exception e) {
+                    String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    result = "{\"action\":\"" + action + "\",\"ok\":false,\"message\":" + JSONObject.quote(msg) + "}";
+                }
+                final String r = result;
+                runOnUiThread(() -> webView.evaluateJavascript(
+                    "window.onHalykResult&&window.onHalykResult(" + JSONObject.quote(r) + ")", null));
+            }, "Halyk-" + action).start();
+        }
+
+        @JavascriptInterface
+        public void echoHalyk(String host, String port) {
+            try {
+                int p = Integer.parseInt(port);
+                halykRunAsync("echo", host, p, "{\"task\":\"echo\"}", 15000);
+            } catch (Exception e) {
+                final String msg = e.getMessage() == null ? "invalid port" : e.getMessage();
+                runOnUiThread(() -> webView.evaluateJavascript(
+                    "window.onHalykResult&&window.onHalykResult(" + JSONObject.quote("{\"action\":\"echo\",\"ok\":false,\"message\":" + JSONObject.quote(msg) + "}") + ")", null));
+            }
+        }
+
+        @JavascriptInterface
+        public void startHalykPayment(String host, String port, String amount, String terminalId) {
+            try {
+                int p = Integer.parseInt(port);
+                String json = "{\"task\":\"purchase\",\"data\":{\"amount\":" + JSONObject.quote(amount) + ",\"terminalId\":" + JSONObject.quote(terminalId) + "}}";
+                halykRunAsync("purchase", host, p, json, 260000);
+            } catch (Exception e) { }
+        }
+
+        @JavascriptInterface
+        public void refundHalyk(String host, String port, String amount, String terminalId) {
+            try {
+                int p = Integer.parseInt(port);
+                String json = "{\"task\":\"refund\",\"data\":{\"amount\":" + JSONObject.quote(amount) + ",\"terminalId\":" + JSONObject.quote(terminalId) + "}}";
+                halykRunAsync("refund", host, p, json, 260000);
+            } catch (Exception e) { }
+        }
+
+        @JavascriptInterface
+        public void reversalHalyk(String host, String port, String amount, String terminalId) {
+            try {
+                int p = Integer.parseInt(port);
+                String json = "{\"task\":\"reversal\",\"data\":{\"amount\":" + JSONObject.quote(amount) + ",\"terminalId\":" + JSONObject.quote(terminalId) + "}}";
+                halykRunAsync("reversal", host, p, json, 260000);
+            } catch (Exception e) { }
+        }
+
+        @JavascriptInterface
+        public void settleHalyk(String host, String port, boolean printFirstReceipt) {
+            try {
+                int p = Integer.parseInt(port);
+                String json = "{\"task\":\"settle\",\"data\":{\"printFirstReceipt\":\"" + (printFirstReceipt ? "true" : "false") + "\"}}";
+                halykRunAsync("settle", host, p, json, 60000);
+            } catch (Exception e) { }
+        }
         @JavascriptInterface
         public void testHalykConnection(String host, String port) {
             final String h = host == null ? "" : host.trim();
