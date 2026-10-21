@@ -2359,3 +2359,43 @@ async function finalizePreparedSale(order){
 
   _carts=_carts.filter(function(x){return x.id!==_activeCartId;});if(_carts.length===0){_resetCarts();}else{_activeCartId=_carts[0].id;_saveCarts();}saleDiscountValue=0;saleComment='';payMethod='cash';pendingKaspiSale=null;saveUiState();safeRender();updateMessagesBadge();playCashVibration();openReceiptModal(order);return true;
 }
+
+
+// ===== Step 5c: favorites + problematic products =====
+function openFavContextMenu(id){
+  if(!requireAccess('orders'))return;
+  const p=products.find(x=>x.id===id);if(!p)return;
+  const root=document.getElementById('modal-root'),marked=isProblematicProduct(id);
+  root.innerHTML=`<div class="sheet-overlay" id="fav-context-ov"><div class="sheet" style="max-width:420px;"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">${escapeHtml(p.name)}</div><button class="sheet-close" id="fav-context-close">✕</button></div><div class="sheet-body"><button class="btn btn-block" id="problematic-toggle">${marked?'✓ Убрать из проблемных':'⚠️ Добавить в проблемные'}</button></div></div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('fav-context-close').onclick=close;
+  document.getElementById('problematic-toggle').onclick=()=>{const now=toggleProblematicProduct(id);close();showPosNotice(now?'Добавлено в проблемные':'Убрано из проблемных');safeRender();};
+  document.getElementById('fav-context-ov').onclick=e=>{if(e.target.id==='fav-context-ov')close();};
+}
+
+function getProblematicProductIds(){
+  try{const key='oni_problematic_products_'+String(activeUser?.id||'_default');const v=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(v)?v.filter(Boolean):[];}catch(e){return [];}
+}
+
+function saveProblematicProductIds(ids){
+  try{const key='oni_problematic_products_'+String(activeUser?.id||'_default');localStorage.setItem(key,JSON.stringify([...new Set(ids||[])]));return true;}catch(e){return false;}
+}
+
+function isProblematicProduct(id){return getProblematicProductIds().includes(String(id));}
+
+function toggleProblematicProduct(id){
+  const sid=String(id),ids=getProblematicProductIds(),i=ids.indexOf(sid);
+  if(i>=0)ids.splice(i,1);else ids.push(sid);
+  saveProblematicProductIds(ids);return i<0;
+}
+
+function openProblematicScreen(){
+  if(!requireAccess('orders'))return;
+  const list=getProblematicProductIds().map(id=>products.find(p=>p.id===id)).filter(Boolean);
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="sheet-overlay" id="problematic-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Проблемные товары</div><button class="sheet-close" id="problematic-close">✕</button></div><div class="sheet-body">${list.length?list.map(p=>`<div class="list-row"><div class="row-icon">${productIcon(p,42)}</div><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div><div class="row-sub">${fmtMoney(p.price)} · остаток ${Number(p.qty)||0} ${escapeHtml(p.unit||'шт')}</div></div><button class="btn" type="button" data-problematic-remove="${escapeHtml(p.id)}">Убрать</button></div>`).join(''):'<div class="empty">Проблемных товаров пока нет.<br><span class="form-hint">Зажмите товар в кассе, чтобы добавить его.</span></div>'}</div></div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('problematic-close').onclick=close;
+  document.getElementById('problematic-ov').onclick=e=>{if(e.target.id==='problematic-ov')close();};
+  document.querySelectorAll('[data-problematic-remove]').forEach(b=>b.onclick=()=>{toggleProblematicProduct(b.dataset.problematicRemove);openProblematicScreen();});
+}

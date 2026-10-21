@@ -47,7 +47,7 @@ $movedFns = @(
   'openSupplierModal','openSupplierDetail','openSupplierContactModal',
   'openProductPickerSheet','openPurchaseModal','deletePurchase','openProductPurchaseHistory',
   'requestMessage','sendRequestWhatsApp','openProcurementRequestDetail','openRequestStatusPicker','openPurchaseFromRequest',
-  '_newCartObject','_renumberCarts','_saveCarts','_loadCarts','_resetCarts','newCart','switchCart','closeCart','calcDiscount','cartSubtotal','calcSale','showPosNotice','viewOrders','viewPOS','viewOrdersHistory','bindOrders','renderCartTabs','renderCartBar','openCartSheet','renderCartSheetContent','checkoutCart','finalizePreparedSale'
+  '_newCartObject','_renumberCarts','_saveCarts','_loadCarts','_resetCarts','newCart','switchCart','closeCart','calcDiscount','cartSubtotal','calcSale','showPosNotice','viewOrders','viewPOS','viewOrdersHistory','bindOrders','renderCartTabs','renderCartBar','openCartSheet','renderCartSheetContent','checkoutCart','finalizePreparedSale','openFavContextMenu','getProblematicProductIds','saveProblematicProductIds','isProblematicProduct','toggleProblematicProduct','openProblematicScreen'
 )
 
 foreach($fn in $movedFns){
