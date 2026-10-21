@@ -408,6 +408,7 @@ var kaspiSettings={host:'',port:8080,cashierName:'On.i CRM',terminalId:'',verify
 var halykSettings={host:'',port:8080,terminalId:'61698734'};
 var fiscalSettings={enabled:false,provider:'ekassa',apiKey:'',kassaId:''};
 var pendingKaspiSale=null;
+var pendingHalykSale=null;
 var giftCards=[];
 var shopSettings={name:'On.i Store',address:'',phone:'',whatsapp:'',note:''};
 const AUTH_SESSION_KEY='oni_crm_auth_session';
@@ -4941,7 +4942,7 @@ function openReceiptModal(order){
 
 
 /* ===================== PAYMENTS / DEBTS / CONSIGNMENT ===================== */
-function paymentLabel(m){return ({cash:'Наличные',kaspi:'Карта',red:'Kaspi Red',transfer:'Перевод',gift:'Сертификат',debt:'Кредит'}[m]||m||'—');}
+function paymentLabel(m){return ({cash:'Наличные',kaspi:'Карта',red:'Kaspi Red',transfer:'Перевод',gift:'Сертификат',debt:'Кредит',halyk:'Halyk POS'}[m]||m||'—');}
 
 function debtStatus(d){
   if(d.status==='paid'||d.remaining<=0)return 'paid';
@@ -5343,6 +5344,32 @@ window.onHalykResult=function(raw){
   showToast('Halyk '+r.action+': '+(ok?'OK':(d.msg||'code '+code)));
 };
 
+function showHalykPaymentWaiting(total){
+  const root=document.getElementById('modal-root');
+  root.innerHTML='<div class="sheet-overlay" id="halyk-wait-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Halyk POS</div><button class="sheet-close" id="halyk-wait-close">X</button></div><div class="sheet-body"><div class="form-hint">Sleduyte instruktsiyam na terminale...</div><div class="form-hint" style="margin-top:8px;">Summa: '+fmtMoney(total)+'</div></div></div></div>';
+  document.getElementById('halyk-wait-close').onclick=()=>{ pendingHalykSale=null; root.innerHTML=''; };
+}
+
+window.onHalykPaymentResult=async function(raw){
+  let r={};try{r=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){}
+  const ov=document.getElementById('halyk-wait-ov');
+  if(!r.ok){if(ov)ov.remove();showToast('Halyk: '+(r.message||'oshibka soedineniya'));pendingHalykSale=null;return;}
+  let body={};try{body=JSON.parse(r.body||'{}');}catch(e){}
+  const d=body.data||{};
+  const code=String(d.result||'');
+  if(code!=='0'){if(ov)ov.remove();showToast('Halyk: '+(d.msg||'code '+code));pendingHalykSale=null;return;}
+  const order=pendingHalykSale&&pendingHalykSale.order;
+  if(!order){if(ov)ov.remove();showToast('Halyk: net zakaza');return;}
+  order.paymentMethod='halyk';
+  order.tagRRN=d.tagRRN||'';
+  order.cardNo=d.cardNo||'';
+  order.issuerName=d.issuerName||'';
+  order.halykTerminalId=d.terminalId||'';
+  order.halykReceiptInfo=d.receiptInfo||'';
+  if(ov)ov.remove();
+  pendingHalykSale=null;
+  if(typeof finalizePreparedSale==='function') await finalizePreparedSale(order);
+};
 function openCashSettings(){
   if(activeUser?.role!=='admin') return;
   const root=document.getElementById('modal-root');

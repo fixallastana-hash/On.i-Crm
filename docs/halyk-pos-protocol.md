@@ -53,5 +53,5 @@ Confirmed from reverse engineering of HalykPOS_A2_1.20_PAX_A800_PAX_A930RTX.dll 
 
 ## Open questions
 
-- Currency unit of amount (tenge vs tenge*100) - test with amount="100"
+- CONFIRMED: amount is in tenge as-is (multiplier = 1). amount="100" -> 100 KZT on terminal
 - Full list of result codes (only 0 and 1007 confirmed)

@@ -2088,6 +2088,7 @@ function renderCartSheetContent(root){
           <button class="pay-btn ${payMethod==='kaspi'?'active':''}" data-pay="kaspi">Kaspi Pay</button>
           <button class="pay-btn ${payMethod==='red'?'active':''}" data-pay="red">Kaspi Red</button>
           <button class="pay-btn ${payMethod==='transfer'?'active':''}" data-pay="transfer">Перевод</button>
+          <button class="pay-btn ${payMethod==='halyk'?'active':''}'" data-pay="halyk">Halyk POS</button>
           ${isModOn('giftcards') ? `<button class="pay-btn ${payMethod==='gift'?'active':''}" data-pay="gift">🎁 Сертификат</button>` : ''}
           ${isModOn('debts') ? `<button class="pay-btn ${payMethod==='debt'?'active':''}" data-pay="debt">Долг</button>` : ''}
         </div>
@@ -2319,6 +2320,15 @@ async function checkoutCart(){
     if(!kaspiSettings.host||!kaspiSettings.terminalId){openKaspiSettings(true);showToast('Сначала укажите IP/имя Smart POS и ID терминала');return;}
     pendingKaspiSale={order,expectedMethod:payMethod};showKaspiPaymentWaiting(total,payMethod);
     window.Android.startKaspiPayment(String(total),String(payMethod),String(kaspiSettings.host),String(kaspiSettings.port||8080),String(kaspiSettings.terminalId),String(kaspiSettings.cashierName||'On.i CRM'),!!kaspiSettings.verifyCertificate);return;
+  }
+
+  if(payMethod==='halyk'){
+    if(!(window.Android&&typeof window.Android.startHalykPayment==='function')){showToast('Halyk POS dostupen tolko v Android-prilozhenii');return;}
+    if(!halykSettings.host||!halykSettings.terminalId){openHalykSettings(true);showToast('Nastroyte Halyk POS: IP i Terminal ID');return;}
+    pendingHalykSale={order};
+    if(typeof showHalykPaymentWaiting==='function') showHalykPaymentWaiting(total);
+    window.Android.startHalykPayment(String(halykSettings.host),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId));
+    return;
   }
 
   await finalizePreparedSale(order);
