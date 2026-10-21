@@ -405,7 +405,7 @@ var productSearch=''; var debtSearch=''; var consignmentSearch=''; var receiptSe
 var saleDiscountType='percent'; var saleDiscountValue=0;
 var cashSettings={taxRate:4,kaspiPayRate:13,kaspiRedRate:0,cashDifferenceLimit:0,sessionLockEnabled:false,sessionLockMinutes:15,sessionLogoutMinutes:120,shiftAutoCloseHours:24,bonusEnabled:false,bonusPercent:1,bonusMaxPayPercent:50};
 var kaspiSettings={host:'',port:8080,cashierName:'On.i CRM',terminalId:'',verifyCertificate:true};
-var halykSettings={host:'',port:8080};
+var halykSettings={host:'',port:8080,terminalId:'61698734'};
 var fiscalSettings={enabled:false,provider:'ekassa',apiKey:'',kassaId:''};
 var pendingKaspiSale=null;
 var giftCards=[];
@@ -5308,16 +5308,41 @@ async function openHalykSettings(autoOpen=false){
   if(activeUser?.role!=='admin') return;
   await loadHalykSettings();
   const root=document.getElementById('modal-root');
-  root.innerHTML=`<div class="sheet-overlay" id="halyk-settings-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Halyk POS</div><button class="sheet-close" id="halyk-settings-close">✕</button></div><div class="sheet-body"><div class="cash-settings"><div class="cash-settings-title">Подключение по Wi-Fi</div><div class="form-hint" style="margin-bottom:8px;">Телефон с On.i CRM и терминал Halyk должны быть в одной локальной Wi-Fi сети.</div></div><div class="form-grid2"><div class="form-field"><label class="form-label">IP-адрес терминала</label><input class="form-input" id="halyk-host" placeholder="например 192.168.8.29" value="${escapeHtml(halykSettings.host||'')}"></div><div class="form-field"><label class="form-label">Порт</label><input class="form-input" id="halyk-port" type="number" value="${Number(halykSettings.port)||8080}"></div></div><div class="panel" style="margin-top:10px;"><div class="panel-head"><div class="panel-title">Состояние подключения</div></div><div class="panel-body"><div id="halyk-connection-status" class="form-hint">TCP-проверка подтверждает только доступность порта. Оплата требует официальной спецификации Halyk POS.</div></div></div><div class="form-hint" style="margin-top:10px;color:var(--muted);">Протокол оплаты Halyk POS (PAX A930RTX) ещё не подтверждён. Настройки сохраняются, TCP-проверка работает, но платёж пока недоступен.</div></div><div class="sheet-foot" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><button class="btn" id="halyk-test">🔌 Проверить TCP</button><button class="btn btn-primary" id="halyk-save">Сохранить</button></div></div></div>`;
+  root.innerHTML=`<div class="sheet-overlay" id="halyk-settings-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Halyk POS</div><button class="sheet-close" id="halyk-settings-close">✕</button></div><div class="sheet-body"><div class="cash-settings"><div class="cash-settings-title">Подключение по Wi-Fi</div><div class="form-hint" style="margin-bottom:8px;">Телефон и терминал Halyk должны быть в одной локальной Wi-Fi сети.</div></div><div class="form-grid2"><div class="form-field"><label class="form-label">IP-адрес терминала</label><input class="form-input" id="halyk-host" placeholder="например 192.168.8.29" value="${escapeHtml(halykSettings.host||'')}"></div><div class="form-field"><label class="form-label">Порт</label><input class="form-input" id="halyk-port" type="number" value="${Number(halykSettings.port)||8080}"></div></div><div class="form-grid2"><div class="form-field"><label class="form-label">Terminal ID</label><input class="form-input" id="halyk-terminal" placeholder="61698734" value="${escapeHtml(halykSettings.terminalId||'')}"></div><div class="form-field"><label class="form-label">Сумма теста (тиын)</label><input class="form-input" id="halyk-test-amount" type="number" value="100"></div></div><div class="panel" style="margin-top:10px;"><div class="panel-head"><div class="panel-title">Состояние</div></div><div class="panel-body"><div id="halyk-connection-status" class="form-hint" style="white-space:pre-wrap;">Готово</div></div></div><div class="form-hint" style="margin-top:10px;color:var(--muted);">Echo — проверка связи. Оплата/возврат/отмена/сверка выполняются на терминале. Сумма — в тиынах (100 = 1 ₸).</div></div><div class="sheet-foot" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><button class="btn" id="halyk-echo">🔌 Echo</button><button class="btn" id="halyk-pay">💳 Оплата</button><button class="btn" id="halyk-refund">↩️ Возврат</button><button class="btn" id="halyk-reversal">🚫 Отмена</button><button class="btn" id="halyk-settle">📊 Сверка</button><button class="btn btn-primary" id="halyk-save">Сохранить</button></div></div></div>`;
   const close=()=>root.innerHTML='';
   document.getElementById('halyk-settings-close').onclick=close;
   document.getElementById('halyk-settings-ov').onclick=e=>{if(e.target.id==='halyk-settings-ov')close();};
-  const readFields=()=>{halykSettings.host=document.getElementById('halyk-host').value.trim();halykSettings.port=Math.max(1,Number(document.getElementById('halyk-port').value)||8080);};
+  const st=()=>document.getElementById('halyk-connection-status');
+  const readFields=()=>{halykSettings.host=document.getElementById('halyk-host').value.trim();halykSettings.port=Math.max(1,Number(document.getElementById('halyk-port').value)||8080);halykSettings.terminalId=document.getElementById('halyk-terminal').value.trim();};
+  const needHost=()=>{if(!halykSettings.host){showToast('Укажите IP-адрес');return false;}return true;};
+  const needAndroid=()=>{if(!(window.Android&&typeof window.Android.echoHalyk==='function')){if(st())st().textContent='Метод недоступен — обновите APK';return false;}return true;};
+  const amt=()=>document.getElementById('halyk-test-amount').value.trim()||'100';
   document.getElementById('halyk-save').onclick=async()=>{readFields();await saveHalykSettings();close();showToast('Настройки Halyk POS сохранены');};
-  document.getElementById('halyk-test').onclick=()=>{readFields();if(!halykSettings.host){showToast('Укажите IP-адрес терминала');return;}const st=document.getElementById('halyk-connection-status');if(st)st.textContent='Проверяю TCP-соединение…';if(window.Android&&typeof window.Android.testHalykConnection==='function'){window.Android.testHalykConnection(halykSettings.host,String(halykSettings.port));}else if(st){st.textContent='TCP-проверка доступна только в Android-приложении (метод testHalykConnection не найден — обновите APK).';}};
+  document.getElementById('halyk-echo').onclick=()=>{readFields();if(!needHost()||!needAndroid())return;if(st())st().textContent='Echo…';window.Android.echoHalyk(halykSettings.host,String(halykSettings.port));};
+  document.getElementById('halyk-pay').onclick=()=>{readFields();if(!needHost()||!needAndroid())return;if(!halykSettings.terminalId){showToast('Укажите Terminal ID');return;}if(st())st().textContent='Ожидание карты…';window.Android.startHalykPayment(halykSettings.host,String(halykSettings.port),amt(),halykSettings.terminalId);};
+  document.getElementById('halyk-refund').onclick=()=>{readFields();if(!needHost()||!needAndroid())return;if(!halykSettings.terminalId){showToast('Укажите Terminal ID');return;}window.Android.refundHalyk(halykSettings.host,String(halykSettings.port),amt(),halykSettings.terminalId);};
+  document.getElementById('halyk-reversal').onclick=()=>{readFields();if(!needHost()||!needAndroid())return;if(!halykSettings.terminalId){showToast('Укажите Terminal ID');return;}window.Android.reversalHalyk(halykSettings.host,String(halykSettings.port),amt(),halykSettings.terminalId);};
+  document.getElementById('halyk-settle').onclick=()=>{readFields();if(!needHost()||!needAndroid())return;if(st())st().textContent='Сверка…';window.Android.settleHalyk(halykSettings.host,String(halykSettings.port),false);};
   if(autoOpen)setTimeout(()=>document.getElementById('halyk-host')?.focus(),50);
 }
 window.onHalykConnectionResult=async function(raw){let r={};try{r=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){}const st=document.getElementById('halyk-connection-status');if(r.status==='success'){if(st)st.textContent='TCP OK: '+r.host+':'+r.port+' (открыт, '+(r.ms||'?')+' мс)';showToast('Halyk POS: TCP OK');}else{if(st)st.textContent='Ошибка: '+(r.message||'не удалось подключиться');showToast('Halyk POS: '+(r.message||'ошибка TCP'));}};
+window.onHalykResult=function(raw){
+  let r={};try{r=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){}
+  const st=document.getElementById('halyk-connection-status');
+  if(!r.ok){if(st)st.textContent='❌ '+r.action+': '+(r.message||'ошибка');showToast('Halyk '+r.action+': '+(r.message||'ошибка'));return;}
+  let body={};try{body=JSON.parse(r.body||'{}');}catch(e){}
+  const d=body.data||{};
+  const code=String(d.result||'');
+  const ok=code==='0';
+  let text=(ok?'✅':'❌')+' '+r.action+' · result='+code+(d.msg?' · '+d.msg:'');
+  if(d.tagRRN)text+='\nRRN: '+d.tagRRN;
+  if(d.cardNo)text+='\nCard: '+d.cardNo;
+  if(d.issuerName)text+='\nBank: '+d.issuerName;
+  if(d.receiptInfo)text+='\n\n'+d.receiptInfo;
+  if(st)st.textContent=text;
+  showToast('Halyk '+r.action+': '+(ok?'OK':(d.msg||'code '+code)));
+};
+
 function openCashSettings(){
   if(activeUser?.role!=='admin') return;
   const root=document.getElementById('modal-root');
