@@ -2537,3 +2537,201 @@ function receiptWhatsAppText(order){
   const lines=(order.items||[]).map(it=>`${it.name} ×${it.qty} — ${fmtMoney(it.price*it.qty)}`);
   return [`ЧЕК №${order.number}`,`Дата: ${fmtDate(order.date)}`,`Клиент: ${order.customer}`,'',...lines,'',`Итого: ${fmtMoney(order.total)}`,...(order.paymentMethod==='transfer'?[]:[`Оплата: ${paymentLabel(order.paymentMethod)}`]),...(order.comment?[`Комментарий: ${order.comment}`]:[]),'','Спасибо за покупку!'].join('\n');
 }
+
+
+// ===== Step 8: AI/product lookup + image helpers =====
+function _compressImage(dataUrl, maxSize, quality){
+  return new Promise(function(resolve){
+    try{
+      var img = new Image();
+      img.onload = function(){
+        try{
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if(!w || !h){ resolve(dataUrl); return; }
+          var scale = Math.min(1, (maxSize||1280) / Math.max(w, h));
+          var nw = Math.round(w * scale);
+          var nh = Math.round(h * scale);
+          var canvas = document.createElement('canvas');
+          canvas.width = nw;
+          canvas.height = nh;
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, nw, nh);
+          ctx.drawImage(img, 0, 0, nw, nh);
+          var out = canvas.toDataURL('image/jpeg', quality||0.8);
+          resolve(out && out.length < dataUrl.length ? out : dataUrl);
+        }catch(e){ resolve(dataUrl); }
+      };
+      img.onerror = function(){ resolve(dataUrl); };
+      img.src = dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+}
+
+function buildProductDescriptionFromLookup(data){
+  const category=String(data.category||'Товар');
+  const subtype=String(data.subtype||'').trim();
+  const results=Array.isArray(data.results)?data.results:[];
+  const f=data.fragrantica||{};
+  const texts=results.map(r=>String(r.snippetRu||r.snippet||'')).filter(v=>v&&v.length>8);
+  const titles=results.map(r=>String(r.titleRu||r.title||'')).filter(Boolean);
+  const all=[...titles,...texts].join(' ');
+  const firstMatch=(re)=>{const m=all.match(re);return m?m[1].trim():'';};
+  const clean=s=>String(s||'').replace(/\s+/g,' ').replace(/^[,;:. -]+|[,;:. -]+$/g,'').trim();
+  const useful=v=>{v=clean(v); if(!v||v.length<2)return ''; if(/^(отзыв|review|reviews|читать отзывы|read reviews)$/i.test(v))return ''; return v;};
+  const line=(emoji,label,value)=>{value=useful(value);return value?`${emoji} ${label}: ${value}`:'';};
+  const out=[];
+  if(category==='Парфюм'){
+    let gender=clean(f.gender||'');
+    gender=/unisex|унисекс|men and women|мужчин и женщин/i.test(gender)?'унисекс':/women|женщин/i.test(gender)?'женский':/men|мужчин/i.test(gender)?'мужской':'';
+    const notes=clean([f.topNotes,f.middleNotes,f.baseNotes].filter(Boolean).map((v,i)=>`${['Верхние','Средние','Базовые'][i]}: ${v}`).join('; '));
+    const year=clean(f.year||'');
+    // Для парфюма не используем произвольный текст выдачи как «парфюмера».
+    // Парфюмер, которого нет в структурированных данных, вообще не выводим.
+    const longevity=firstMatch(/(?:longevity|lasting power|lasting|стойкость|стойкость\s+аромата|tenue|kalıcılık)\s*(?:[:\-–—]|=)?\s*([^.!?]{2,100})/i);
+    const sillage=firstMatch(/(?:sillage|шлейф|projection|проекция|silaj)\s*(?:[:\-–—]|=)?\s*([^.!?]{2,100})/i);
+    const seasons={
+      'Весна':firstMatch(/(?:весна|spring)\s*(?:[:\-–—]|=)?\s*(★{1,5}|[1-5]\s*(?:из|\/)\s*5|[^.!?]{1,40})/i),
+      'Лето':firstMatch(/(?:лето|summer)\s*(?:[:\-–—]|=)?\s*(★{1,5}|[1-5]\s*(?:из|\/)\s*5|[^.!?]{1,40})/i),
+      'Осень':firstMatch(/(?:осень|autumn|fall)\s*(?:[:\-–—]|=)?\s*(★{1,5}|[1-5]\s*(?:из|\/)\s*5|[^.!?]{1,40})/i),
+      'Зима':firstMatch(/(?:зима|winter)\s*(?:[:\-–—]|=)?\s*(★{1,5}|[1-5]\s*(?:из|\/)\s*5|[^.!?]{1,40})/i)
+    };
+    out.push(line('🌸','Тип',gender?`${gender} парфюм`:'парфюм'));
+    out.push(line('👃','Ноты',notes));
+    out.push(line('📅','Год выпуска',year));
+    out.push(line('☀️','Весна',seasons['Весна']));
+    out.push(line('🌸','Лето',seasons['Лето']));
+    out.push(line('🍂','Осень',seasons['Осень']));
+    out.push(line('❄️','Зима',seasons['Зима']));
+    out.push(line('⏱','Стойкость',longevity));
+    out.push(line('💨','Шлейф',sillage));
+  } else if(category==='БАД / витамины'){
+    out.push(line('💊','Тип',subtype||'БАД / витамин / комплекс'));
+    out.push(line('🎯','Для чего',firstMatch(/(?:benefits?|для чего|польза|supports?|поддерживает)\s*(?:[:\-–—]\s*)?([^.!?]{10,220})/i)));
+    out.push(line('✨','Основные свойства',firstMatch(/(?:ingredients?|состав|properties|свойства)\s*(?:[:\-–—]\s*)?([^.!?]{10,220})/i)));
+    out.push(line('🥄','Как принимать',firstMatch(/(?:how to take|directions|дозировк[аи]|как принимать|принимать|serving)\s*(?:[:\-–—]\s*)?([^.!?]{5,180})/i)));
+    out.push(line('📅','Курс',firstMatch(/(?:course|курс)\s*(?:[:\-–—]\s*)?([^.!?]{3,120})/i)));
+    out.push(line('⚠️','Важно',firstMatch(/(?:contraindications?|warnings?|противопоказани[яй]|предупреждени[ея])\s*(?:[:\-–—]\s*)?([^.!?]{5,220})/i)));
+  } else if(category==='Книга'){
+    out.push(line('📚','Жанр',firstMatch(/(?:genre|жанр)\s*(?:[:\-–—]\s*)?([^.!?]{2,100})/i)));
+    out.push(line('✍️','Автор',firstMatch(/(?:author|автор|by)\s*(?:[:\-–—]\s*)?([^.!?,]{2,100})/i)));
+    out.push(line('📖','О чём',firstMatch(/(?:about|synopsis|summary|о чем|о чём|содержание|сюжет)\s*(?:[:\-–—]\s*)?([^.!?]{15,260})/i)));
+    out.push(line('💡','Главная тема',firstMatch(/(?:theme|main theme|главная тема)\s*(?:[:\-–—]\s*)?([^.!?]{10,180})/i)));
+  } else if(category==='Косметика'){
+    const kind=subtype||(/\b(шампунь|shampoo)\b/i.test(all)?'шампунь':/\b(зубн(?:ая|ую)\s+паста|toothpaste)\b/i.test(all)?'зубная паста':/\b(миноксидил|minoxidil)\b/i.test(all)?'средство для роста волос':'косметическое средство');
+    out.push(line('💧','Тип',kind));
+    out.push(line('🎯','Для чего',firstMatch(/(?:for|benefits?|назначение|для чего|для)\s*(?:[:\-–—]\s*)?([^.!?]{10,180})/i)));
+    out.push(line('✨','Эффект',firstMatch(/(?:effect|benefits?|эффект|действие|action)\s*(?:[:\-–—]\s*)?([^.!?]{10,180})/i)));
+    out.push(line('🧴','Как применять',firstMatch(/(?:how to use|directions|application|как применять|применение)\s*(?:[:\-–—]\s*)?([^.!?]{5,200})/i)));
+    out.push(line('⚠️','Важно',firstMatch(/(?:contraindications?|warnings?|противопоказани[яй]|предупреждени[ея])\s*(?:[:\-–—]\s*)?([^.!?]{5,220})/i)));
+  } else if(category==='Электроника'){
+    out.push(line('⚙️','Характеристики',firstMatch(/(?:specifications?|характеристики)\s*(?:[:\-–—]\s*)?([^.!?]{10,260})/i)));
+    out.push(line('🔋','Питание / батарея',firstMatch(/(?:battery|батаре[яи]|аккумулятор)\s*(?:[:\-–—]\s*)?([^.!?]{5,180})/i)));
+  } else {
+    out.push(line('📝','Описание',texts.slice(0,2).join(' ')));
+  }
+  return out.filter(Boolean).join('\n');
+}
+
+async function readOriginalProductImage(file){return new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>resolve('');r.readAsDataURL(file);});}
+
+async function readResizedProductImage(file,maxSide=1200,quality=0.82){
+  const dataUrl=await readOriginalProductImage(file);
+  if(!dataUrl)return '';
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        let w=img.naturalWidth,h=img.naturalHeight;
+        if(w>maxSide||h>maxSide){
+          if(w>=h){h=Math.round(h*maxSide/w);w=maxSide;}else{w=Math.round(w*maxSide/h);h=maxSide;}
+        }
+        const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        if(!ctx){resolve(dataUrl);return;}
+        ctx.drawImage(img,0,0,w,h);
+        const out=canvas.toDataURL('image/jpeg',quality);
+        resolve(out&&out.length<dataUrl.length?out:dataUrl);
+      }catch(e){resolve(dataUrl);}
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
+function renderSearchLinks(name){
+  var box=document.getElementById('f-search-links');
+  if(!box) return;
+  var q=String(name||'').trim();
+  if(!q || q.length<2){ box.innerHTML=''; return; }
+  var enc=encodeURIComponent(q);
+  var links=[
+    {t:'🛒 Wildberries', u:'https://www.wildberries.ru/catalog/0/search.aspx?search='+enc},
+    {t:'🛍 Ozon', u:'https://www.ozon.ru/search/?text='+enc},
+    {t:'🏪 Kaspi', u:'https://kaspi.kz/shop/search/?text='+enc},
+    {t:'🔍 Google', u:'https://www.google.com/search?q='+enc+' описание характеристики'},
+    {t:'✨ Gemini', u:'https://gemini.google.com/app'},
+    {t:'🔮 Perplexity', u:'https://www.perplexity.ai/search?q='+enc+' описание характеристики'}
+  ];
+  box.innerHTML=links.map(function(l){
+    return '<button type="button" data-wv-url="'+l.u+'" class="oni-wv-btn" style="padding:6px 10px;border:1px solid #E5E5E5;border-radius:14px;font-size:12px;color:#0A84FF;background:#FFFFFF;font-weight:600;cursor:pointer;">'+l.t+'</button>';
+  }).join('');
+  var btns=box.querySelectorAll('.oni-wv-btn');
+  for(var i=0;i<btns.length;i++){
+    (function(b){ b.onclick=function(){ (function(){var _u=b.getAttribute('data-wv-url');if(_u&&_u.indexOf('gemini.google.com')>=0){var _b=window.Android||window.AndroidWV;var _lang=(_b&&_b.getReviewLang)?_b.getReviewLang():'kz';var _p=window.__oniBuildPrompt?window.__oniBuildPrompt(_lang,q):('Товар: '+q);if(_b&&_b.saveGeminiQuery){_b.saveGeminiQuery(_p);}window.openInWV('https://gemini.google.com/app');return;}window.openInWV(_u);})(); }; })(btns[i]);
+  }
+}
+
+function openAISettings(){
+  if(activeUser?.role!=='admin') return;
+  const root=document.getElementById('modal-root');
+  let cfg={enabled:false,openaiEnabled:false,deepseekEnabled:false,model:'gpt-5.6-luna',deepseekModel:'deepseek-v4-flash',apiKeySet:false,openaiApiKeySet:false,deepseekApiKeySet:false,geminiEnabled:false,geminiModel:'gemini-3.6-flash',geminiApiKey:'',geminiApiKeySet:false};
+  try{if(window.Android&&typeof window.Android.getAISettings==='function'){const x=JSON.parse(window.Android.getAISettings()||'{}');cfg=Object.assign(cfg,x);}}catch(e){}
+  try{const g=JSON.parse(localStorage.getItem('oni_crm_gemini_settings')||'null');if(g&&typeof g==='object'){cfg.geminiEnabled=!!g.enabled;cfg.geminiModel=g.model||cfg.geminiModel;if(!cfg.geminiModel||/^gemini-(?:2\.|1\.)/i.test(String(cfg.geminiModel)))cfg.geminiModel='gemini-3.6-flash';cfg.geminiApiKey=g.apiKey||'';cfg.geminiApiKeySet=!!(g.apiKey&&String(g.apiKey).trim());}}catch(e){}
+  const sw=(id,checked)=>`<label class="ai-switch"><input id="${id}" type="checkbox" ${checked?'checked':''}><span class="ai-switch-track"></span></label>`;
+  root.innerHTML=`<div class="sheet-overlay" id="ai-settings-ov"><div class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">ИИ</div><button class="sheet-close" id="ai-settings-close">✕</button></div><div class="sheet-body">
+    <div class="cash-settings"><div class="cash-settings-title">Провайдеры ИИ</div><div class="form-hint">Каждый провайдер можно независимо включать и отключать. Выключенный провайдер не используется для новых запросов.</div></div>
+    <div class="panel" style="margin-top:10px;"><div class="panel-body" style="padding:4px 12px;">
+      <div class="ai-provider-row"><div class="ai-provider-meta"><div class="ai-provider-name">OpenAI</div><div class="ai-provider-state" id="openai-state">${cfg.openaiApiKeySet||cfg.apiKeySet?'Ключ сохранён':'Ключ не задан'}</div></div>${sw('ai-openai-enabled',!!(cfg.openaiEnabled||cfg.enabled))}</div>
+      <div class="ai-provider-row"><div class="ai-provider-meta"><div class="ai-provider-name">DeepSeek</div><div class="ai-provider-state" id="deepseek-state">${cfg.deepseekApiKeySet?'Ключ сохранён':'Ключ не задан'}</div></div>${sw('ai-deepseek-enabled',!!cfg.deepseekEnabled)}</div>
+      <div class="ai-provider-row"><div class="ai-provider-meta"><div class="ai-provider-name">Gemini</div><div class="ai-provider-state" id="gemini-state">${cfg.geminiApiKeySet?'Ключ сохранён':'Ключ не задан'}</div></div>${sw('ai-gemini-enabled',!!cfg.geminiEnabled)}</div>
+    </div></div>
+    <div class="form-field"><label class="form-label">Модель OpenAI</label><input class="form-input" id="ai-model" value="${escapeHtml(cfg.model||'gpt-5.6-luna')}"></div>
+    <div class="form-field"><label class="form-label">OpenAI API-ключ</label><input class="form-input" id="ai-key" type="password" placeholder="${cfg.openaiApiKeySet||cfg.apiKeySet?'Ключ уже сохранён — оставьте пустым':'sk-…'}" autocomplete="off"></div>
+    <div class="form-field"><label class="form-label">Модель DeepSeek</label><input class="form-input" id="deepseek-model" value="${escapeHtml(cfg.deepseekModel||'deepseek-v4-flash')}"></div>
+    <div class="form-field"><label class="form-label">DeepSeek API-ключ</label><input class="form-input" id="deepseek-key" type="password" placeholder="${cfg.deepseekApiKeySet?'Ключ уже сохранён — оставьте пустым':'sk-…'}" autocomplete="off"></div>
+    <div class="form-field"><label class="form-label">Модель Gemini</label><input class="form-input" id="gemini-model" value="${escapeHtml(cfg.geminiModel||'gemini-3.6-flash')}"></div>
+    <div class="form-field"><label class="form-label">Gemini API-ключ</label><input class="form-input" id="gemini-key" type="password" placeholder="${cfg.geminiApiKeySet?'Ключ уже сохранён — оставьте пустым':'AIza…'}" autocomplete="off"></div>
+    <div class="panel" style="margin-top:10px;"><div class="panel-head"><div class="panel-title">Состояние</div></div><div class="panel-body"><div id="ai-status" class="form-hint">${(cfg.openaiApiKeySet||cfg.apiKeySet||cfg.deepseekApiKeySet)?'Настройки сохранены в Android':'API-ключи не заданы'}</div></div></div>
+    <div class="panel" style="margin-top:10px;"><div class="panel-head"><div class="panel-title">ИИ-помощник</div></div><div class="panel-body"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span><b>Автоматическое применение</b><br><span class="form-hint">Выкл — ИИ только предлагает изменение. Вкл — после твоего подтверждения разрешённое изменение применяется автоматически.</span></span><input id="ai-assistant-auto" type="checkbox"></label></div></div>
+    <div class="form-hint" style="margin-top:10px;">Gemini API-ключ хранится в localStorage под ключом oni_crm_gemini_settings. Ключи OpenAI/DeepSeek хранятся в Android и не попадают в резервную копию CRM.</div>
+  </div><div class="sheet-foot" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><button class="btn" id="ai-test">Проверить</button><button class="btn btn-primary" id="ai-save">Сохранить</button></div></div></div>`;
+  const close=()=>root.innerHTML='';
+  document.getElementById('ai-settings-close').onclick=close;document.getElementById('ai-settings-ov').onclick=e=>{if(e.target.id==='ai-settings-ov')close();};
+  try{const a=document.getElementById('ai-assistant-auto');if(a)a.checked=!!(window.Android&&typeof window.Android.getAIAssistantAutoApply==='function'&&window.Android.getAIAssistantAutoApply());}catch(e){}
+  const auto=document.getElementById('ai-assistant-auto'); if(auto) auto.onchange=()=>{try{if(window.Android&&typeof window.Android.setAIAssistantAutoApply==='function')window.Android.setAIAssistantAutoApply(!!auto.checked);}catch(e){}};
+  const save=()=>{
+    // Gemini: сохраняем в localStorage (Android-мост пока не поддерживает Gemini).
+    // Работает и в браузере, и в Android WebView — localStorage персистентный.
+    try{
+      const prev=(()=>{try{return JSON.parse(localStorage.getItem('oni_crm_gemini_settings')||'null')||{};}catch(e){return {};}})();
+      const newKey=document.getElementById('gemini-key').value.trim();
+      const finalKey=newKey || (prev.apiKey||'');
+      let geminiModel=document.getElementById('gemini-model').value.trim()||'gemini-3.6-flash';
+      if(/^gemini-(?:2\.|1\.)/i.test(geminiModel))geminiModel='gemini-3.6-flash';
+      localStorage.setItem('oni_crm_gemini_settings',JSON.stringify({
+        enabled:!!document.getElementById('ai-gemini-enabled').checked,
+        model:geminiModel,
+        apiKey:finalKey
+      }));
+    }catch(e){ console.error('gemini save failed',e); }
+    // OpenAI / DeepSeek: через Android-мост, если он есть (как было).
+    if(window.Android&&typeof window.Android.saveAISettings==='function'){
+      window.Android.saveAISettings('true',document.getElementById('ai-openai-enabled').checked?'true':'false',document.getElementById('ai-deepseek-enabled').checked?'true':'false',document.getElementById('ai-model').value.trim()||'gpt-5.6-luna',document.getElementById('ai-key').value.trim(),document.getElementById('deepseek-model').value.trim()||'deepseek-v4-flash',document.getElementById('deepseek-key').value.trim());
+    }
+    return true;
+  };
+  document.getElementById('ai-save').onclick=()=>{if(save()){close();showToast('Настройки ИИ сохранены');}};
+  document.getElementById('ai-test').onclick=()=>{save();const st=document.getElementById('ai-status');if(st)st.textContent='Проверяю включённые провайдеры…';if(window.Android&&typeof window.Android.testAIConnection==='function')window.Android.testAIConnection();else if(st)st.textContent='Проверка доступна только в Android-приложении';};
+}
