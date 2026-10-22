@@ -409,6 +409,7 @@ var halykSettings={host:'',port:8080,terminalId:'61698734'};
 var fiscalSettings={enabled:false,provider:'ekassa',apiKey:'',kassaId:''};
 var pendingKaspiSale=null;
 var pendingKaspiReturn=null;
+var pendingHalykReturn=null;
 var pendingHalykSale=null;
 var giftCards=[];
 var shopSettings={name:'On.i Store',address:'',phone:'',whatsapp:'',note:''};
@@ -5734,6 +5735,48 @@ function showKaspiRefundWaiting(total,method){
 }
 
 window.onKaspiRefundProgress=function(status,subStatus){const el=document.getElementById('kaspi-refund-wait-status');if(el)el.textContent=subStatus||status||'Ожидание...';};
+function showHalykRefundWaiting(total){
+  const root=document.getElementById('modal-root');
+  root.innerHTML='<div class="sheet-overlay" id="halyk-refund-wait-ov"><div class="sheet"><div class="sheet-head"><div class="sheet-title">Возврат Halyk POS</div></div><div class="sheet-body"><div class="form-hint">Следуйте инструкциям на терминале Halyk...</div><div class="form-hint" style="margin-top:8px;">Сумма возврата: '+fmtMoney(total)+'</div></div></div></div>';
+  document.getElementById('halyk-refund-wait-close')&&(document.getElementById('halyk-refund-wait-close').onclick=()=>{ pendingHalykReturn=null; root.innerHTML=''; });
+}
+window.onHalykRefundResult=async function(raw){
+  let r={};try{r=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){}
+  const pending=pendingHalykReturn;if(!pending)return;
+  const ov=document.getElementById('halyk-refund-wait-ov');
+  if(!r.ok){if(ov)ov.remove();showToast('Halyk возврат: '+(r.message||'ошибка'));pendingHalykReturn=null;return;}
+  let body={};try{body=JSON.parse(r.body||'{}');}catch(e){}
+  const d=body.data||{};
+  const code=String(d.result||'');
+  if(code!=='0'){if(ov)ov.remove();showToast('Halyk: '+(d.msg||'code '+code));pendingHalykReturn=null;return;}
+  const {order,selected,total,reason,returnMethod,snapshot,close}=pending;
+  pendingHalykReturn=null;
+  for(const {it,qty} of selected){
+    const p=products.find(x=>x.id===it.productId);
+    if(!p)continue;
+    var _retWhId=(order&&order.warehouseId)||'wh-default';
+    var _st={...(p.stock||{})};
+    _st[_retWhId]=(Number(_st[_retWhId])||0)+qty;
+    p.stock=_st;
+    p.qty=Object.keys(_st).reduce(function(s,k){return s+(Number(_st[k])||0);},0);
+    p.updatedAt=nowISO();
+    movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'return',qty,date:todayISO(),note:'Возврат '+order.number+(reason?' · '+reason:''),orderId:order.id});
+  }
+  if(!order.returns)order.returns=[];
+  order.returns.push({id:uid(),date:todayISO(),reason,total,method:returnMethod,needsHalykRefund:false,halykRrn:d.tagRRN||'',items:selected.map(({it,qty})=>({productId:it.productId,name:it.name,sku:it.sku,qty,price:it.price}))});
+  const returnedTotal=getOrderReturnTotal(order);
+  if(returnedTotal>=order.total)order.status='Возврат';
+  const saveResults=await Promise.all([persist('products'),persist('movements'),persist('orders')]);
+  if(saveResults.some(x=>x===false)){
+    products=snapshot.products;movements=snapshot.movements;orders=snapshot.orders;
+    if(ov)ov.remove();
+    showToast('Ошибка сохранения возврата. Данные восстановлены.');return;
+  }
+  if(ov)ov.remove();
+  if(typeof close==='function')close();
+  safeRender();
+  showToast('Возврат оформлен: '+fmtMoney(total));
+};
 function openReturnModal(order){
   const root=document.getElementById('modal-root');
   const availableItems=(order.items||[]).map((it,index)=>{
@@ -5868,6 +5911,13 @@ function openReturnModal(order){
       pendingKaspiReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
       showKaspiRefundWaiting(total,returnMethod);
       window.Android.startKaspiRefund(String(total),String(returnMethod),String(kaspiSettings.host||''),String(kaspiSettings.port||8080),String(kaspiSettings.terminalId||''),String(kaspiSettings.cashierName||'On.i CRM'),String(order.kaspiTransactionId||''));
+      return;
+    }
+    if(returnMethod==='halyk' && window.Android && typeof window.Android.refundHalyk==='function'){
+      if(!halykSettings.host||!halykSettings.terminalId){ openHalykSettings(true); showToast('Настройте Halyk POS: IP и Terminal ID'); return; }
+      pendingHalykReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
+      showHalykRefundWaiting(total);
+      window.Android.refundHalyk(String(halykSettings.host),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId));
       return;
     }
     // Проверяем и восстанавливаем остаток товара.
