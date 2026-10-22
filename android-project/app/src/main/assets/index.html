@@ -5331,7 +5331,7 @@ async function openHalykSettings(autoOpen=false){
 window.onHalykConnectionResult=async function(raw){let r={};try{r=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){}const st=document.getElementById('halyk-connection-status');if(r.status==='success'){if(st)st.textContent='TCP OK: '+r.host+':'+r.port+' (открыт, '+(r.ms||'?')+' мс)';showToast('Halyk POS: TCP OK');}else{if(st)st.textContent='Ошибка: '+(r.message||'не удалось подключиться');showToast('Halyk POS: '+(r.message||'ошибка TCP'));}};
 window.onHalykResult=function(raw){
   let r={};try{r=typeof raw==='string'?JSON.parse(raw):raw||{};}catch(e){}
-  const st=document.getElementById('halyk-connection-status');
+  if(r&&r.action==='purchase'&&typeof window.onHalykPaymentResult==='function'){window.onHalykPaymentResult(raw);return;}const st=document.getElementById('halyk-connection-status');
   if(!r.ok){if(st)st.textContent='❌ '+r.action+': '+(r.message||'ошибка');showToast('Halyk '+r.action+': '+(r.message||'ошибка'));return;}
   let body={};try{body=JSON.parse(r.body||'{}');}catch(e){}
   const d=body.data||{};
