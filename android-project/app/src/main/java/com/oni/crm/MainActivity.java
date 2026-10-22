@@ -658,16 +658,16 @@ public class MainActivity extends Activity {
         private void sendKaspiResult(String json){String js="window.onKaspiPaymentResult&&window.onKaspiPaymentResult("+JSONObject.quote(json)+")";runOnUiThread(()->webView.evaluateJavascript(js,null));}
         private void sendKaspiRegisterResult(String json){String js="window.onKaspiRegisterResult&&window.onKaspiRegisterResult("+JSONObject.quote(json)+")";runOnUiThread(()->webView.evaluateJavascript(js,null));}
         private JSONObject kaspiRequest(String host,int port,String path,String token,boolean verify,String... headers)throws Exception{
-    URL u=new URL("https://"+host+":"+port+path);
-    HttpsURLConnection c=(HttpsURLConnection)u.openConnection();
+    URL u=new URL("http://"+host+":"+port+path);
+    HttpURLConnection c=(HttpURLConnection)u.openConnection();
     c.setConnectTimeout(10000); c.setReadTimeout(15000);
     c.setRequestMethod("GET"); c.setUseCaches(false);
     c.setRequestProperty("Accept","application/json");
     if(token!=null&&!token.isEmpty()) c.setRequestProperty("accesstoken",token);
     for(int i=0;i+1<headers.length;i+=2)c.setRequestProperty(headers[i],headers[i+1]);
-    c.setSSLSocketFactory(insecureSocketFactory()); c.setHostnameVerifier((h,s)->true);
+    // HTTP mode: no SSL factory (terminal speaks plain HTTP)
 
-    Log.i("OniKaspi","GET https://"+host+":"+port+path
+    Log.i("OniKaspi","GET http://"+host+":"+port+path
         +(token!=null&&!token.isEmpty()?" [token]":""));
     if(headers.length>=2){
         StringBuilder hb=new StringBuilder();
