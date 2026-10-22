@@ -514,13 +514,13 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void refundHalyk(String host, String port, String amount, String terminalId) {
-            final String hh=host; final String pp=port; final String aa=amount; final String tt=terminalId;
+        public void refundHalyk(String host, String port, String amount, String terminalId, String originalRrn) {
+            final String hh=host; final String pp=port; final String aa=amount; final String tt=terminalId; final String rr=originalRrn;
             new Thread(() -> {
                 String result;
                 try {
                     int p=Integer.parseInt(pp);
-                    String json="{\"task\":\"refund\",\"data\":{\"amount\":"+JSONObject.quote(aa)+",\"terminalId\":"+JSONObject.quote(tt)+"}}";
+                    String json="{\"task\":\"refund\",\"data\":{\"amount\":"+JSONObject.quote(aa)+",\"xlsId\":"+JSONObject.quote(rr)+",\"terminalId\":"+JSONObject.quote(tt)+"}}";
                     Log.i("OniHalyk","refund POST http://"+hh+":"+p+" body="+json);
                     String body=halykHttpPost(hh,p,json,260000);
                     Log.i("OniHalyk","refund response="+body);
