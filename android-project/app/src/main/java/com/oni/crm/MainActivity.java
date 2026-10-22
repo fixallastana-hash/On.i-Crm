@@ -514,23 +514,22 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void refundHalyk(String host, String port, String amount, String terminalId, String originalRrn) {
-            final String hh=host; final String pp=port; final String aa=amount; final String tt=terminalId; final String rr=originalRrn;
-            new Thread(() -> {
-                String result;
-                try {
-                    int p=Integer.parseInt(pp);
-                    String json="{\"task\":\"refund\",\"data\":{\"amount\":"+JSONObject.quote(aa)+",\"xlsId\":"+JSONObject.quote(rr)+",\"terminalId\":"+JSONObject.quote(tt)+"}}";
-                    Log.i("OniHalyk","refund POST http://"+hh+":"+p+" body="+json);
-                    String body=halykHttpPost(hh,p,json,260000);
-                    Log.i("OniHalyk","refund response="+body);
-                    result="{\"action\":\"refund\",\"ok\":true,\"body\":"+JSONObject.quote(body)+"}";
-                } catch(Exception e){ String msg=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage(); Log.e("OniHalyk","refund failed: "+msg,e); result="{\"action\":\"refund\",\"ok\":false,\"message\":"+JSONObject.quote(msg)+"}"; }
-                final String r=result;
-                runOnUiThread(() -> webView.evaluateJavascript("window.onHalykRefundResult&&window.onHalykRefundResult("+JSONObject.quote(r)+")",null));
-            },"Halyk-refund").start();
-        }
-        @JavascriptInterface
+        public void refundHalyk(String host, String port, String amount, String terminalId, String tagRRN) {
+        final String hh=host; final String pp=port; final String aa=amount; final String tt=terminalId; final String rr=tagRRN;
+        new Thread(() -> {
+            String result;
+            try {
+                int p=Integer.parseInt(pp);
+                String json="{\"task\":\"refund\",\"data\":{\"amount\":"+Double.parseDouble(aa)+",\"method\":1,\"tagRRN\":"+JSONObject.quote(rr)+",\"terminalId\":"+JSONObject.quote(tt)+"}}";
+                Log.i("OniHalyk","refund POST http://"+hh+":"+p+" body="+json);
+                String body=halykHttpPost(hh,p,json,250000);
+                Log.i("OniHalyk","refund response="+body);
+                result="{\"action\":\"refund\",\"ok\":true,\"body\":"+JSONObject.quote(body)+"}";
+            } catch(Exception e){ String msg=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage(); Log.e("OniHalyk","refund failed: "+msg,e); result="{\"action\":\"refund\",\"ok\":false,\"message\":"+JSONObject.quote(msg)+"}"; }
+            final String r=result;
+            runOnUiThread(() -> webView.evaluateJavascript("window.onHalykRefundResult&&window.onHalykRefundResult("+JSONObject.quote(r)+")",null));
+        },"Halyk-refund").start();
+    }@JavascriptInterface
         public void reversalHalyk(String host, String port, String amount, String terminalId) {
             try {
                 int p = Integer.parseInt(port);

@@ -5737,7 +5737,7 @@ function showKaspiRefundWaiting(total,method){
 window.onKaspiRefundProgress=function(status,subStatus){const el=document.getElementById('kaspi-refund-wait-status');if(el)el.textContent=subStatus||status||'Ожидание...';};
 function showHalykRefundWaiting(total){
   const root=document.getElementById('modal-root');
-  root.innerHTML='<div class="sheet-overlay" id="halyk-refund-wait-ov"><div class="sheet"><div class="sheet-head"><div class="sheet-title">Возврат Halyk POS</div></div><div class="sheet-body"><div class="form-hint">Следуйте инструкциям на терминале Halyk...</div><div class="form-hint" style="margin-top:8px;">Сумма возврата: '+fmtMoney(total)+'</div></div></div></div>';
+  root.innerHTML='<div class="sheet-overlay" id="halyk-refund-wait-ov"><div class="sheet"><div class="sheet-head"><div class="sheet-title">Возврат Halyk POS</div></div><div class="sheet-body"><div class="form-hint">Попросите клиента отсканировать QR-код в приложении Superapp (или Halyk) на терминале...</div><div class="form-hint" style="margin-top:8px;">Сумма возврата: '+fmtMoney(total)+'</div></div></div></div>';
   document.getElementById('halyk-refund-wait-close')&&(document.getElementById('halyk-refund-wait-close').onclick=()=>{ pendingHalykReturn=null; root.innerHTML=''; });
 }
 window.onHalykRefundResult=async function(raw){
