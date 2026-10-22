@@ -35,6 +35,7 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.net.URL;
+import java.net.HttpURLConnection;
 import java.net.Socket;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
@@ -678,9 +679,6 @@ public class MainActivity extends Activity {
     int code;
     try{
         code=c.getResponseCode();
-    }catch(SSLHandshakeException e){
-        Log.e("OniKaspi","SSLHandshakeException: "+e.getMessage(),e);
-        throw new IOException("TLS не согласован: "+safeMessage(e),e);
     }catch(ConnectException e){
         Log.e("OniKaspi","ConnectException: "+e.getMessage(),e);
         throw new IOException("Терминал недоступен: "+safeMessage(e),e);
