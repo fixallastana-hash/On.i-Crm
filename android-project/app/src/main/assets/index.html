@@ -5917,7 +5917,7 @@ function openReturnModal(order){
       if(!halykSettings.host||!halykSettings.terminalId){ openHalykSettings(true); showToast('Настройте Halyk POS: IP и Terminal ID'); return; }
       pendingHalykReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
       showHalykRefundWaiting(total);
-      window.Android.refundHalyk(String(halykSettings.host),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId));
+      window.Android.refundHalyk(String(halykSettings.host),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId),String(order.tagRRN||''));
       return;
     }
     // Проверяем и восстанавливаем остаток товара.
