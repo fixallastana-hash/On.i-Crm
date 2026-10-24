@@ -6155,6 +6155,8 @@ window.onAndroidBack=function(){
     if(_phLb){ var _phC = _phLb.querySelector('.product-photo-lightbox-close'); if(_phC) _phC.click(); else _phLb.remove(); return true; }
     var _aiChat = document.getElementById('oni-chat-ov');
     if(_aiChat){ var _aiClose = document.getElementById('oni-chat-close'); if(_aiClose) _aiClose.click(); else _aiChat.remove(); return true; }
+    var _ppOv = document.getElementById('pp-ov');
+    if(_ppOv){ if(window.__oniPickerClose) window.__oniPickerClose(); else _ppOv.remove(); return true; }
     var _puForm = document.getElementById('pu-new-form');
     if(_puForm && _puForm.style.display === 'block'){ _puForm.style.display = 'none'; return true; }
     const root=document.getElementById('modal-root');
