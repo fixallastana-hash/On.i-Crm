@@ -6153,6 +6153,8 @@ window.onAndroidBack=function(){
     if(!activeUser) return true;
     var _phLb = document.getElementById('product-photo-lightbox');
     if(_phLb){ var _phC = _phLb.querySelector('.product-photo-lightbox-close'); if(_phC) _phC.click(); else _phLb.remove(); return true; }
+    var _puForm = document.getElementById('pu-new-form');
+    if(_puForm && _puForm.style.display === 'block'){ _puForm.style.display = 'none'; return true; }
     const root=document.getElementById('modal-root');
     if(root && root.innerHTML.trim()){ root.innerHTML=''; if(typeof window._inventoryPrevScanner!=='undefined'){ window.onBarcodeScanned=window._inventoryPrevScanner; window._inventoryPrevScanner=undefined; } return true; }
     if(typeof productSelectionMode!=='undefined' && productSelectionMode){ if(typeof exitProductSelection==='function') exitProductSelection(); return true; }
