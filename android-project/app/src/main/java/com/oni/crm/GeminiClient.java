@@ -18,11 +18,7 @@ public class GeminiClient {
         JSONObject parts = new JSONObject();
         parts.put("text", prompt);
         contents.put(new JSONObject().put("parts", new JSONArray().put(parts)));
-        requestBody.put("contents", contents);
-
-        JSONObject generationConfig = new JSONObject();
-        generationConfig.put("response_mime_type", "application/json");
-        requestBody.put("generationConfig", generationConfig);
+        requestBody.put("contents", contents);// N-9: no forced JSON in text mode
 
         return sendRequest(urlStr, requestBody.toString());
     }

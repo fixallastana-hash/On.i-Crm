@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function userData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isMemberOf(shopId) { return request.auth != null && shopId in userData().memberOf.keys(); }
+    function hasRole(shopId, roles) { return isMemberOf(shopId) && userData().memberOf[shopId] in roles; }
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.memberOf.size() == 1 && ((request.resource.data.memberOf.keys().hasOnly([('shop-' + request.auth.uid)]) && request.resource.data.memberOf[('shop-' + request.auth.uid)] == 'owner') || (request.resource.data.inviteCode is string && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)) && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.used == false));
+      allow update: if request.auth != null && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','email','password','active','role','login','memberOf','authUid','authEmail']);
+      allow delete: if false;
+    }
+    match /invites/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null && request.resource.data.shopId is string && isMemberOf(request.resource.data.shopId) && hasRole(request.resource.data.shopId, ['owner','manager']) && request.resource.data.role in ['manager','storekeeper','cashier','staff'];
+      allow update: if request.auth != null && resource.data.shopId is string && isMemberOf(resource.data.shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used','usedAt','usedBy']);
+      allow delete: if request.auth != null && resource.data.shopId is string && isMemberOf(resource.data.shopId) && hasRole(resource.data.shopId, ['owner','manager']);
+    }
+    match /shops/{shopId} {
+      allow read: if isMemberOf(shopId);
+      allow create: if request.auth != null && shopId == ('shop-' + request.auth.uid) && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null && isMemberOf(shopId) && hasRole(shopId, ['owner']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted','deletedAt','deletedBy']);
+      allow delete: if false;
+    }
+    match /shops/{shopId}/{collectionName}/{docId} {
+      allow read: if isMemberOf(shopId);
+      allow write: if hasRole(shopId, ['owner','manager','storekeeper']);
+      allow create, update: if hasRole(shopId, ['cashier']) && collectionName in ['orders','movements','shifts','debts','contacts','meta','giftCards','products'];
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

@@ -1255,6 +1255,7 @@ async function loginViaFirebase(login, password){
                 // HARD DELETE: убрать локальные товары, которых нет в Firestore > 60 сек
         try{
           var _fsSnapH = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').get();
+          var _fsEmptyH = (_fsSnapH && _fsSnapH.size === 0);
           var _fsIdsH = {};
           _fsSnapH.forEach(function(doc){
             var d = doc.data() || {};
@@ -1269,6 +1270,7 @@ async function loginViaFirebase(login, password){
           var _nowH = Date.now();
           var _removedH = 0;
           products = products.filter(function(p){
+            if(_fsEmptyH) return true; // N-1
             if(!p || !p.id) return true;
             var sid = String(p.id);
             if(_fsIdsH[sid]) return true;
@@ -1649,12 +1651,12 @@ var posNoticeTimer=null;
 function productIndicators(p){ return ''; }
 
 /* ===================== AUTH / CASHIERS ===================== */
-const ADMIN_RECOVERY_CODE='ONI-RECOVERY-2026';
+const ADMIN_RECOVERY_CODE=null;
 function ensureDefaultAdmin(){
   if(!Array.isArray(users)) users=[];
   let a=users.find(u=>u&&u.role==='admin'&&u.login==='admin');
-  if(!a){ users.unshift({id:'admin',name:'Администратор',login:'admin',password:'12345',role:'admin',active:true,createdAt:new Date().toISOString()}); }
-  else { a.active=a.active!==false; a.role='admin'; if(!a.password) a.password='12345'; }
+  if(!a){ users.unshift({id:'admin',name:'Администратор',login:'admin',password:'',role:'admin',active:true,createdAt:new Date().toISOString()}); }
+  else { a.active=a.active!==false; a.role='admin'; }
 }
 
 function ensureDefaultWarehouseAndPoint(){
@@ -6160,7 +6162,7 @@ window.onAndroidBack=function(){
     var _puForm = document.getElementById('pu-new-form');
     if(_puForm && _puForm.style.display === 'block'){ _puForm.style.display = 'none'; return true; }
     const root=document.getElementById('modal-root');
-    if(root && root.innerHTML.trim()){ root.innerHTML=''; if(typeof window._inventoryPrevScanner!=='undefined'){ window.onBarcodeScanned=window._inventoryPrevScanner; window._inventoryPrevScanner=undefined; } return true; }
+    if(root && root.innerHTML.trim()){ root.innerHTML=''; if(typeof window._inventoryPrevScanner!=='undefined'){ window.onBarcodeScanned=window._inventoryPrevScanner; window._inventoryPrevScanner=undefined; } if(typeof window.__oniBarcodeEditPrev!=='undefined'){ window.onBarcodeScanned=window.__oniBarcodeEditPrev; delete window.__oniBarcodeEditPrev; } if(typeof window.__oniPurchasePrev!=='undefined'){ window.onBarcodeScanned=window.__oniPurchasePrev; delete window.__oniPurchasePrev; } return true; }
     if(typeof productSelectionMode!=='undefined' && productSelectionMode){ if(typeof exitProductSelection==='function') exitProductSelection(); return true; }
     if(typeof posCategoryOpen!=='undefined' && posCategoryOpen){ posCategoryOpen=false; if(typeof safeRender==='function')safeRender(); return true; }
     if(typeof ordersSubView!=='undefined' && currentView==='orders' && ordersSubView!=='pos'){ ordersSubView='pos'; if(typeof saveUiState==='function')saveUiState(); if(typeof safeRender==='function')safeRender(); return true; }
