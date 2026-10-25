@@ -1,6 +1,6 @@
 # Halyk POS Protocol (PAX A930RTX)
 
-Confirmed from reverse engineering of HalykPOS_A2_1.20_PAX_A800_PAX_A930RTX.dll and live terminal tests on 192.168.8.29:8080.
+Confirmed from reverse engineering of HalykPOS_A2_1.20_PAX_A800_PAX_A930RTX.dll and live terminal tests on <host>:<port>.
 
 ## Transport
 
@@ -36,7 +36,7 @@ Confirmed from reverse engineering of HalykPOS_A2_1.20_PAX_A800_PAX_A930RTX.dll 
 
 | name | default |
 | :--- | :--- |
-| DeviceAddress | 192.168.1.30:8080 |
+| DeviceAddress | <host>:<port> |
 | ConnectTimeout | 10 sec |
 | WaitTimeout | 250 sec (20-600) |
 | ConnectAttempt | 1 (1-10) |
@@ -47,9 +47,8 @@ Confirmed from reverse engineering of HalykPOS_A2_1.20_PAX_A800_PAX_A930RTX.dll 
 
 ## Terminal identity
 
-- terminalId: 61698734
-- Business: IP FIXALL ASTANA
-- Previous shift total: 57250 KZT
+- terminalId: <redacted>
+- Business: <business>
 
 ## Open questions
 
