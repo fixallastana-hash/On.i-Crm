@@ -30,3 +30,7 @@ MainActivity.before_patch
 review_inject_new.txt
 
 cross_drawable.txt
+
+# Audit working files
+_audit_check/
+phase0-patch.ps1
