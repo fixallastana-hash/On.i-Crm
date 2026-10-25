@@ -636,12 +636,7 @@ exports.chatHistory = onCall(
       }
       const snap = await ref.get();
       let msgs = snap.exists ? (snap.data().messages || []) : [];
-      msgs.push({
-        r: msg.r === "a" ? "a" : "u",
-        t: String(msg.t).slice(0, 8000),
-        p: msg.p ? String(msg.p).slice(0, 64) : undefined,
-        ts: Date.now()
-      });
+      const rec = { r: msg.r === "a" ? "a" : "u", t: String(msg.t).slice(0, 8000), ts: Date.now() }; if (msg.p) rec.p = String(msg.p).slice(0, 64); msgs.push(rec);
       if (msgs.length > CHAT_HISTORY_LIMIT) {
         msgs = msgs.slice(msgs.length - CHAT_HISTORY_LIMIT);
       }

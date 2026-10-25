@@ -16,7 +16,7 @@ if not p.exists():
 s = p.read_text(encoding="utf-8")
 
 s = re.sub(r'\\{2,}"', r'\\"', s)
-s = s.replace('getBoolean("assistantAutoApply", false)', 'getBoolean("assistantAutoApply", true)')
+s = s.replace('getBoolean("assistantAutoApply", true)', 'getBoolean("assistantAutoApply", false)')
 s = s.replace("snippet|text-container|organic__snippet|b_caption",
               "snippet|text-container|organic__snippet|b_caption|VwiC3b|aCOpRe|yXK7lf|IsZvec|MUxGbd|kno-rdesc")
 s = re.sub(r'\n[ \t]*private String firstRegex\([^)]*\)\s*\{.*?\n[ \t]*\}\n', '\n', s, count=1, flags=re.DOTALL)
