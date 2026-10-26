@@ -259,6 +259,39 @@ var _excelOutsideClickHandler=null;
 var _backupFailCount=0;
 var _backupQueued=false;
 
+// P1-1: namespaced localStorage keys.
+// tombstones belong to the shop, carts belong to the user.
+function _lsShopId(){
+  try{ return (typeof FB_SHOP_ID !== 'undefined' && FB_SHOP_ID) ? FB_SHOP_ID : 'default'; }
+  catch(e){ return 'default'; }
+}
+function _lsUserId(){
+  try{ return (typeof activeUser !== 'undefined' && activeUser && activeUser.id) ? activeUser.id : '_anon'; }
+  catch(e){ return '_anon'; }
+}
+function _lsTombKey(){ return 'sklad_crm_' + _lsShopId() + '_recent_deletes'; }
+function _lsTombSyncedKey(){ return 'sklad_crm_' + _lsShopId() + '_tombstones_synced'; }
+function _lsCartKey(){ return 'oni_carts_' + _lsUserId(); }
+function _migrateP11Keys(){
+  try{
+    var newTomb = _lsTombKey();
+    var oldTomb = 'sklad_crm_recent_deletes';
+    if(!localStorage.getItem(newTomb) && localStorage.getItem(oldTomb)){
+      localStorage.setItem(newTomb, localStorage.getItem(oldTomb));
+    }
+    var newSync = _lsTombSyncedKey();
+    var oldSync = 'sklad_crm_tombstones_synced';
+    if(!localStorage.getItem(newSync) && localStorage.getItem(oldSync)){
+      localStorage.setItem(newSync, localStorage.getItem(oldSync));
+    }
+    var newCart = _lsCartKey();
+    var oldCart = 'oni_carts';
+    if(!localStorage.getItem(newCart) && localStorage.getItem(oldCart)){
+      localStorage.setItem(newCart, localStorage.getItem(oldCart));
+    }
+  }catch(e){}
+}
+
 
 const CRM_BACKUP_VERSION=6;
 
@@ -1035,12 +1068,12 @@ async function loginViaFirebase(login, password){
     try{
       if(collectionName === 'products'){
         var _recentDelSync = {};
-        try{ _recentDelSync = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
+        try{ _recentDelSync = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
         /* H-7.1: skip tombstones already deleted on Firestore, so every
            persist('products') doesn't resend batch.delete for all tombstones
            from the past 24h. Retry only the ones that failed. */
         var _syncedTomb = {};
-        try{ _syncedTomb = JSON.parse(localStorage.getItem('sklad_crm_tombstones_synced') || '{}') || {}; }catch(e){}
+        try{ _syncedTomb = JSON.parse(localStorage.getItem(_lsTombSyncedKey()) || '{}') || {}; }catch(e){}
         var _tombIds = Object.keys(_recentDelSync).filter(function(k){ return !_syncedTomb[k]; });
         if(_tombIds.length > 0){
           var _delBatch = fbDb.batch();
@@ -1059,15 +1092,37 @@ async function loginViaFirebase(login, password){
             /* Prune markers older than 24h to keep the map small */
             var _syncedClean = {};
             for(var _tk in _syncedTomb){ if(_nowSync - Number(_syncedTomb[_tk]) < 86400000) _syncedClean[_tk] = _syncedTomb[_tk]; }
-            try{ localStorage.setItem('sklad_crm_tombstones_synced', JSON.stringify(_syncedClean)); }catch(e){}
+            try{ localStorage.setItem(_lsTombSyncedKey(), JSON.stringify(_syncedClean)); }catch(e){}
             // tombstones НЕ удаляем - пусть живут 24 часа, чтобы pull смог их дообработать.
           }catch(e){
             _log('tombstone delete failed: ' + ((e && e.message) || e));
           }
         }
+
+        // P1-2: pull server-side tombstones so this device doesn't re-upload
+        // products deleted on another device. Fixes "deleted products come back".
+        try{
+          var _srvTombP12 = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('productTombstones').get();
+          if(_srvTombP12 && _srvTombP12.size > 0){
+            var _rdP12 = {};
+            try{ _rdP12 = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
+            _srvTombP12.forEach(function(doc){
+              var d = doc.data() || {};
+              if(d && d.id){ _rdP12[String(d.id)] = Number(d.deletedAt) || Date.now(); }
+            });
+            try{ localStorage.setItem(_lsTombKey(), JSON.stringify(_rdP12)); }catch(e){}
+          }
+        }catch(e){ _log('P1-2 srv tombstone pull failed: ' + ((e && e.message) || e)); }
       }
 
       var data = _fbGetCollectionData(collectionName);
+      // P1-2: filter out anything with a tombstone so stale device can't
+      // revive a deleted product by pushing its local cache to Firestore.
+      if(collectionName === 'products' && Array.isArray(data)){
+        var _rdFilter = {};
+        try{ _rdFilter = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
+        data = data.filter(function(it){ return !it || !_rdFilter[String(it.id)]; });
+      }
       if(!Array.isArray(data) || data.length === 0){
         return;
       }
@@ -1283,7 +1338,7 @@ async function loginViaFirebase(login, password){
           });
           var _tombH = {};
           try{
-            var _localH = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+            var _localH = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
             Object.keys(_localH).forEach(function(k){ _tombH[String(k)] = true; });
           }catch(e){}
           var _nowH = Date.now();
@@ -1356,17 +1411,17 @@ async function loginViaFirebase(login, password){
                   var _tombCol = (m.name === 'products') ? 'productTombstones' : 'movementTombstones';
                   var _srvTombSnap = await fbDb.collection('shops').doc(FB_SHOP_ID).collection(_tombCol).get();
                   if(_srvTombSnap && _srvTombSnap.size > 0){
-                    var _srvTombMap = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+                    var _srvTombMap = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
                     _srvTombSnap.forEach(function(doc){
                       var d = doc.data() || {};
                       if(d && d.id){ _srvTombMap[String(d.id)] = Number(d.deletedAt) || Date.now(); }
                     });
-                    localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_srvTombMap));
+                    localStorage.setItem(_lsTombKey(), JSON.stringify(_srvTombMap));
                   }
                 }catch(e){}
               }
               var _recentDel = {};
-              try{ _recentDel = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
+              try{ _recentDel = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
               for(var ai=0; ai<arr.length; ai++){
                 var item = arr[ai];
                 if(!item || !item.id) continue;
@@ -1433,7 +1488,7 @@ async function loginViaFirebase(login, password){
       // Добиваем tombstones: если товар помечен удалённым, но ещё есть в Firestore или локально — убираем.
       try{
         var _tombNow = {};
-        try{ _tombNow = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
+        try{ _tombNow = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
         var _tombKeys = Object.keys(_tombNow);
         if(_tombKeys.length > 0){
           var _nowT = Date.now();
@@ -1445,7 +1500,7 @@ async function loginViaFirebase(login, password){
             _alive[_k] = _tombNow[_k];
           }
           if(_removedTomb > 0){
-            try{ localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_alive)); }catch(e){}
+            try{ localStorage.setItem(_lsTombKey(), JSON.stringify(_alive)); }catch(e){}
           }
           var _aliveKeys = Object.keys(_alive);
           if(_aliveKeys.length > 0){
@@ -3372,6 +3427,7 @@ function initSheetSwipeClose(){
 
 /* ===================== INIT ===================== */
 async function init(){
+  _migrateP11Keys();
   // Сначала пытаемся открыть основную локальную БД. Повреждённое/неполное значение
   // не должно превращаться в пустой каталог и не должно блокировать запуск CRM.
   const keys=['products','movements','orders','meta','debts','consignments','contacts','suppliers','purchases','procurementRequests','giftCards','cashSettings','shopSettings','visualSettings','users','shifts','messages','sessions','inventorySessions','modulesConfig','userPreferences','actionHistory','reminders','warehouses','points','fiscalSettings'];
@@ -4085,11 +4141,11 @@ function openMassDeleteConfirm(){
       }
     }
     try{
-      var _rdm = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+      var _rdm = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
       var _nowm = Date.now();
       productSelectionSet.forEach(function(pid){ _rdm[String(pid)] = _nowm; });
       Object.keys(_rdm).forEach(function(k){ if(_nowm - Number(_rdm[k]) > 86400000) delete _rdm[k]; });
-      localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rdm));
+      localStorage.setItem(_lsTombKey(), JSON.stringify(_rdm));
     }catch(e){}
     products=products.filter(p=>!productSelectionSet.has(p.id));
     const removed=before-products.length;
@@ -4634,11 +4690,11 @@ async function deleteMovement(id){
   }
   movements=movements.filter(x=>x.id!==id);
   try{
-    var _rdM = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+    var _rdM = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
     _rdM[String(id)] = Date.now();
     var _nowM = Date.now();
     Object.keys(_rdM).forEach(function(k){ if(_nowM - Number(_rdM[k]) > 86400000) delete _rdM[k]; });
-    localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rdM));
+    localStorage.setItem(_lsTombKey(), JSON.stringify(_rdM));
     if(fbDb && fbAuth && fbAuth.currentUser){
       var _safeMid = String(id).replace(/[\/\s]+/g, '_');
       await fbDb.collection('shops').doc(FB_SHOP_ID).collection('movementTombstones').doc(_safeMid).set({
