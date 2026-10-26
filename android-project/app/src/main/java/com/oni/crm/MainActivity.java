@@ -1047,7 +1047,7 @@ private String callSelectedProvider(String input, boolean webSearch) throws Exce
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
         try {
             android.util.Log.i("On.i AI", "Using aiProxy (server)");
-            String r = callAiProxy(input, "auto", null, null);
+            String r = callAiProxy(input, "auto", null, null, null);
             if (r != null && !r.trim().isEmpty()) {
                 return r;
             }
