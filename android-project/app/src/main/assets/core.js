@@ -1267,14 +1267,24 @@ window.__oniAddExternalPhotos = function(list0){
     const mainPhotoIndex=Math.max(0,photos.indexOf(mainPhoto));
     if(editing){
       var _oldQty=Number(editing.qty)||0;
-      Object.assign(editing,fields);
-      var _newQty=Number(editing.qty)||0;
+      var _newQty=Number(fields.qty)||0;
       var _qDiff=_newQty-_oldQty;
+      var _stockDelta=null;
       if(_qDiff!==0){
+        var _editWhId=((points.find(x=>x.id===currentPointId)||{}).warehouseId)||'wh-default';
         var _stE={...(editing.stock||{})};
-        _stE['wh-default']=Math.max(0,(Number(_stE['wh-default'])||0)+_qDiff);
-        editing.stock=_stE;
+        var _curEdit=Number(_stE[_editWhId])||0;
+        if(_curEdit+_qDiff<0){
+          err.textContent='Остаток на выбранном складе не может быть отрицательным';
+          err.style.display='block';
+          showToast('Недостаточно остатка на складе для такого изменения');
+          return;
+        }
+        _stE[_editWhId]=_curEdit+_qDiff;
+        _stockDelta=_stE;
       }
+      Object.assign(editing,fields);
+      if(_stockDelta) editing.stock=_stockDelta;
       editing.updatedAt=nowISO();
       editing.hasPhotos=hasPhotos;
       editing.mainPhotoIndex=mainPhotoIndex;
@@ -1551,6 +1561,7 @@ function openProductPickerSheet(options){options=options||{};var root=document.g
     <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Новая закупка</div><button class="sheet-close" id="purchase-close">✕</button></div>
     <div class="sheet-body">
       <div class="form-field"><label class="form-label">Поставщик</label><select class="form-select" id="pu-supplier">${supplierOptions}</select></div>
+      <div class="form-field"><label class="form-label">Склад</label><select class="form-select" id="pu-warehouse">${warehouses.map(w=>`<option value="${escapeHtml(w.id)}" ${w.id===(((points.find(x=>x.id===currentPointId)||{}).warehouseId)||'wh-default')?'selected':''}>${escapeHtml(w.name||w.id)}</option>`).join('')}</select></div>
       <div class="purchase-items-head"><div class="panel-title">Товары в закупке</div><button class="btn" type="button" id="pu-add-row">＋ Товар</button><button class="btn" type="button" id="pu-add-new" style="margin-left:6px;">+ New</button></div>
       <div id="pu-items"></div><div id="pu-new-form" style="display:none; background:#f4f4f5; padding:10px; border-radius:8px; margin-top:10px; border:1px solid #e4e4e7;"><div class="form-field"><label class="form-label">Название нового товара</label><input class="form-input" id="pu-new-name" placeholder="Например: Чай черный"></div><div class="form-grid2"><div class="form-field"><label class="form-label">Закупочная цена</label><input class="form-input" id="pu-new-cost" type="number" value="0" min="0"></div><div class="form-field"><label class="form-label">Количество</label><input class="form-input" id="pu-new-qty" type="number" value="1" min="1"></div></div><div style="display:flex; gap:8px; margin-top:10px;"><button class="btn btn-primary" id="pu-new-save" type="button">Создать и добавить</button><button class="btn" id="pu-new-cancel" type="button">Отмена</button></div></div>
       <div class="total-row"><span class="label">Итого закупка</span><span class="value" id="pu-total">${fmtMoney(0)}</span></div>
@@ -1625,12 +1636,15 @@ var _puScan=document.getElementById('pu-scan');if(_puScan)_puScan.onclick=functi
     if(paymentStatus==='debt') paid=0;
     if(paymentStatus==='partial' && (paid<=0 || paid>=batchTotal)){showToast('Для частичной оплаты укажите сумму меньше итога');return;}
     const paymentLeft=Math.max(0,batchTotal-paid);
+    const whId=document.getElementById('pu-warehouse').value||'wh-default';
     lines.forEach(line=>{
       const p=products.find(x=>x.id===line.productId);
-      const purchase={id:uid(),batchId,supplierId,productId:p.id,productName:p.name,productSku:p.sku,unit:p.unit,qty:line.qty,cost:line.cost,date,note,invoice,paymentStatus,paidAmount:batchTotal?paid*(line.qty*line.cost/batchTotal):0,totalAmount:line.qty*line.cost,batchTotal,batchPaid:paid,batchDebt:paymentLeft};
+      const purchase={id:uid(),batchId,supplierId,productId:p.id,productName:p.name,productSku:p.sku,unit:p.unit,qty:line.qty,cost:line.cost,date,note,invoice,paymentStatus,paidAmount:batchTotal?paid*(line.qty*line.cost/batchTotal):0,totalAmount:line.qty*line.cost,batchTotal,batchPaid:paid,batchDebt:paymentLeft,warehouseId:whId};
       purchases.push(purchase);
-      p.qty=(Number(p.qty)||0)+line.qty;p.stock={...(p.stock||{}),'wh-default':(Number((p.stock||{})['wh-default'])||0)+line.qty};p.updatedAt=nowISO();
-      movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'in',qty:line.qty,date,note:`Закупка · ${supplierName(supplierId)}${invoice?' · накладная '+invoice:''}${note?' · '+note:''}`,purchaseId:purchase.id,batchId});
+      p.qty=(Number(p.qty)||0)+line.qty;
+      p.stock={...(p.stock||{}),[whId]:(Number((p.stock||{})[whId])||0)+line.qty};
+      p.updatedAt=nowISO();
+      movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'in',qty:line.qty,date,note:`Закупка · ${supplierName(supplierId)}${invoice?' · накладная '+invoice:''}${note?' · '+note:''}`,purchaseId:purchase.id,batchId,warehouseId:whId});
     });
     await Promise.all([persist('products'),persist('movements'),persist('purchases')]);
     if(requestId){ const rr=procurementRequests.find(x=>x.id===requestId); if(rr){ rr.status='completed'; rr.updatedAt=new Date().toISOString(); await persist('procurementRequests'); } }
@@ -2259,15 +2273,20 @@ async function checkoutCart(){
   if(!requireAccess('orders')) return;
   if(cart.length===0)return;
 
+  const whId = ((points.find(x=>x.id===currentPointId)||{}).warehouseId) || 'wh-default';
   for(const c of cart){
     const p=products.find(x=>x.id===c.productId);
     if(!p){
       showToast('Товар "' + (c.name || 'неизвестный') + '" удалён из каталога. Удалите его из чека.');
       return;
     }
-    if(!c.emergencySale && c.qty>p.qty){
-      showToast('Недостаточно товара на складе: ' + p.name);
-      return;
+    if(!c.emergencySale){
+      const whStock = Number((p.stock||{})[whId]) || 0;
+      if(c.qty > whStock){
+        const whName = (warehouses.find(w=>w.id===whId)||{}).name || whId;
+        showToast(`Недостаточно на складе «${whName}»: ${p.name} (нужно ${c.qty}, есть ${whStock})`);
+        return;
+      }
     }
     const salePrice=Number(c.price??p.price)||0;
     if(salePrice<0){showToast('Цена не может быть отрицательной');return;}
@@ -2343,7 +2362,23 @@ async function finalizePreparedSale(order){
     var _ptWhId=((points.find(x=>x.id===currentPointId)||{}).warehouseId)||'wh-default';
     order.pointId=currentPointId||null;
     order.warehouseId=_ptWhId;
-    order.items=(order.items||[]).map(it=>{const p=products.find(x=>x.id===it.productId);if(p&&!it.emergencySale){var _st={...(p.stock||{})};_st[_ptWhId]=Math.max(0,(Number(_st[_ptWhId])||0)-it.qty);p.stock=_st;p.qty=Object.keys(_st).reduce(function(s,k){return s+(Number(_st[k])||0);},0);p.updatedAt=nowISO();movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'sale',qty:it.qty,date,note:`Чек ${number}`,orderId,warehouseId:_ptWhId});}return it;});
+    const _whName = (warehouses.find(w=>w.id===_ptWhId)||{}).name || _ptWhId;
+    order.items=(order.items||[]).map(it=>{
+      const p=products.find(x=>x.id===it.productId);
+      if(p && !it.emergencySale){
+        const _st={...(p.stock||{})};
+        const _cur=Number(_st[_ptWhId])||0;
+        if(_cur < it.qty){
+          throw new Error(`insufficient_stock:${p.name}:need=${it.qty},have=${_cur},wh=${_whName}`);
+        }
+        _st[_ptWhId]=_cur-it.qty;
+        p.stock=_st;
+        p.qty=Object.keys(_st).reduce(function(s,k){return s+(Number(_st[k])||0);},0);
+        p.updatedAt=nowISO();
+        movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'sale',qty:it.qty,date,note:`Чек ${number}`,orderId,warehouseId:_ptWhId});
+      }
+      return it;
+    });
     orders.push(order);const sh=shifts.find(x=>x.id===order.shiftId);if(sh&&!sh.orderIds.includes(order.id))sh.orderIds.push(order.id);meta.orderSeq++;
     if(order.bonusUsed>0&&order.contactId){const c=contacts.find(x=>x.id===order.contactId);if(c){if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];c.bonusBalance=Math.max(0,(Number(c.bonusBalance)||0)-Number(order.bonusUsed));c.bonusHistory.push({id:uid(),type:'out',amount:order.bonusUsed,date:todayISO(),orderId:order.id,note:`Списано по чеку ${order.number}`});}}
     if(cashSettings.bonusEnabled&&order.contactId){const c=contacts.find(x=>x.id===order.contactId);if(c){if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];const earned=Math.max(0,Math.round((Number(order.total||0)*Number(cashSettings.bonusPercent||0)/100)*100)/100);if(earned>0){c.bonusBalance=(Number(c.bonusBalance)||0)+earned;c.bonusHistory.push({id:uid(),type:'in',amount:earned,date:todayISO(),orderId:order.id,note:`Начислено за чек ${order.number}`});order.bonusEarned=earned;}}}
@@ -2365,7 +2400,12 @@ async function finalizePreparedSale(order){
   }catch(e){
     products=snapshot.products;movements=snapshot.movements;orders=snapshot.orders;debts=snapshot.debts;contacts=snapshot.contacts;meta=snapshot.meta;giftCards=snapshot.giftCards;
     console.error('SALE ERROR',e);
-    showToast('Ошибка сохранения продажи. Данные не изменены.');
+    const msg=String(e&&e.message||'');
+    if(msg.indexOf('insufficient_stock:')===0){
+      showToast('Недостаточно товара на складе: '+msg.slice('insufficient_stock:'.length));
+    } else {
+      showToast('Ошибка сохранения продажи. Данные не изменены.');
+    }
     return false;
   }
 
