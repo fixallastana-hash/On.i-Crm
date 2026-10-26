@@ -1036,7 +1036,12 @@ async function loginViaFirebase(login, password){
       if(collectionName === 'products'){
         var _recentDelSync = {};
         try{ _recentDelSync = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
-        var _tombIds = Object.keys(_recentDelSync);
+        /* H-7.1: skip tombstones already deleted on Firestore, so every
+           persist('products') doesn't resend batch.delete for all tombstones
+           from the past 24h. Retry only the ones that failed. */
+        var _syncedTomb = {};
+        try{ _syncedTomb = JSON.parse(localStorage.getItem('sklad_crm_tombstones_synced') || '{}') || {}; }catch(e){}
+        var _tombIds = Object.keys(_recentDelSync).filter(function(k){ return !_syncedTomb[k]; });
         if(_tombIds.length > 0){
           var _delBatch = fbDb.batch();
           for(var _ti=0; _ti<_tombIds.length; _ti++){
@@ -1048,6 +1053,13 @@ async function loginViaFirebase(login, password){
           try{
             await _delBatch.commit();
             _log('tombstones deleted: ' + _tombIds.length);
+            /* Mark as synced so we don't resend on every persist() */
+            var _nowSync = Date.now();
+            for(var _ti2=0; _ti2<_tombIds.length; _ti2++){ _syncedTomb[String(_tombIds[_ti2])] = _nowSync; }
+            /* Prune markers older than 24h to keep the map small */
+            var _syncedClean = {};
+            for(var _tk in _syncedTomb){ if(_nowSync - Number(_syncedTomb[_tk]) < 86400000) _syncedClean[_tk] = _syncedTomb[_tk]; }
+            try{ localStorage.setItem('sklad_crm_tombstones_synced', JSON.stringify(_syncedClean)); }catch(e){}
             // tombstones НЕ удаляем - пусть живут 24 часа, чтобы pull смог их дообработать.
           }catch(e){
             _log('tombstone delete failed: ' + ((e && e.message) || e));
@@ -1223,6 +1235,7 @@ async function loginViaFirebase(login, password){
 
     var _fbSyncPullTimer = null;
     var _fbSyncPullRunning = false;
+    var _lastPullAt = 0; /* H-7.2: last pull start, used for max-wait */
 
     async function _fbSyncPull(){
       if(_fbSyncPullRunning) return;
@@ -1233,10 +1246,11 @@ async function loginViaFirebase(login, password){
       // Если открыт любой модал — не трогаем UI.
       var modalRoot = document.getElementById('modal-root');
       if(modalRoot && modalRoot.innerHTML.trim().length > 0){
-        var _roIds=['wh-ov','pt-ov','al-ov','analytics-ov','reports-ov','action-history-ov','preset-wizard-ov','inv-list-ov','reqs-ov','ph-ov','phub-ov','low-ov','req-detail-ov','inv-detail-ov','fiscal-ov'];
-        var _ro=false;
-        for(var _i=0;_i<_roIds.length;_i++){ if(modalRoot.querySelector('#'+_roIds[_i])){ _ro=true; break; } }
-        if(!_ro) return;
+        /* H-7.3: block pull only for editable forms where user has unsaved input.
+           Read-only views (reports, analytics, action history, purchase hub, etc.)
+           no longer block sync. */
+        var _editableSelector = '#f-name, #pu-supplier, #pu-items, #checkout, #ce-name, #emp-email, #reg-login, #inv-email';
+        if(modalRoot.querySelector(_editableSelector)) return;
       }
       // Если прямо сейчас идёт запись в Firestore — пропускаем.
       var syncBusy = false;
@@ -1247,10 +1261,15 @@ async function loginViaFirebase(login, password){
       // 15 секунд, значит запись в Firestore ещё может не завершиться. 
       // Pull в этом окне может вернуть СТАРУЮ версию и перетереть свежие 
       // локальные изменения.
-      if(!syncBusy && (Date.now() - _lastPersistAt) < 15000){ syncBusy = true; }
+      if(!syncBusy && (Date.now() - _lastPersistAt) < 15000){
+        /* H-7.2: max-wait — force pull if we haven't pulled in 60s,
+           so rapid save-after-save never starves synchronization. */
+        if((Date.now() - _lastPullAt) < 60000) syncBusy = true;
+      }
       if(syncBusy) return;
 
       _fbSyncPullRunning = true;
+      _lastPullAt = Date.now(); /* H-7.2: mark pull start for max-wait */
       try{
                 // HARD DELETE: убрать локальные товары, которых нет в Firestore > 60 сек
         try{
