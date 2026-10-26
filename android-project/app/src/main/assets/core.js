@@ -261,20 +261,21 @@ function makeFullBackup(){
 }
 
 async function saveFullBackupNow(){
-      /* Phone B fix: IndexedDB в этом WebView отключён патчем в <head>.
-         Без IDB полный бэкап хранить негде — тихо выходим, не шумим 
-         ложным тостом о свободном месте. */
-      if(!window.indexedDB){
-        return false;
-      }
       if(_saveBusy){ _backupQueued=true; return false; }
       _saveBusy=true;
       let ok=false;
       try{
         const data=makeFullBackup();
         const ts=String(Date.now());
-        try{ if(await idbSet(BACKUP_KEY,data)) ok=true; }catch(e){}
-        try{ await idbSet(BACKUP_TS_KEY,ts); }catch(e){}
+        // H-9: primary — native Android file (survives WebView IndexedDB being broken)
+        if(window.Android && typeof window.Android.saveBackupToFile === 'function'){
+          try{ if(window.Android.saveBackupToFile(data)) ok=true; }catch(e){}
+        }
+        // H-9: secondary — IndexedDB (works on devices where the Phone B fix isn't needed)
+        if(window.indexedDB){
+          try{ if(await idbSet(BACKUP_KEY,data)) ok=true; }catch(e){}
+          try{ await idbSet(BACKUP_TS_KEY,ts); }catch(e){}
+        }
         if(ok){
           _backupFailCount=0;
         }else{
@@ -301,7 +302,13 @@ function queueFullBackup(){
 }
 
 async function getFullBackup(){
-    try{ const v=await idbGet(BACKUP_KEY); if(v) return v; }catch(e){}
+    // H-9: try IndexedDB first (legacy stores), then native file
+    if(window.indexedDB){
+      try{ const v=await idbGet(BACKUP_KEY); if(v) return v; }catch(e){}
+    }
+    if(window.Android && typeof window.Android.loadBackupFromFile === 'function'){
+      try{ const v=window.Android.loadBackupFromFile(); if(v && v.length > 0) return v; }catch(e){}
+    }
     return null;
   }
 
@@ -1267,14 +1274,24 @@ window.__oniAddExternalPhotos = function(list0){
     const mainPhotoIndex=Math.max(0,photos.indexOf(mainPhoto));
     if(editing){
       var _oldQty=Number(editing.qty)||0;
-      Object.assign(editing,fields);
-      var _newQty=Number(editing.qty)||0;
+      var _newQty=Number(fields.qty)||0;
       var _qDiff=_newQty-_oldQty;
+      var _stockDelta=null;
       if(_qDiff!==0){
+        var _editWhId=((points.find(x=>x.id===currentPointId)||{}).warehouseId)||'wh-default';
         var _stE={...(editing.stock||{})};
-        _stE['wh-default']=Math.max(0,(Number(_stE['wh-default'])||0)+_qDiff);
-        editing.stock=_stE;
+        var _curEdit=Number(_stE[_editWhId])||0;
+        if(_curEdit+_qDiff<0){
+          err.textContent='Остаток на выбранном складе не может быть отрицательным';
+          err.style.display='block';
+          showToast('Недостаточно остатка на складе для такого изменения');
+          return;
+        }
+        _stE[_editWhId]=_curEdit+_qDiff;
+        _stockDelta=_stE;
       }
+      Object.assign(editing,fields);
+      if(_stockDelta) editing.stock=_stockDelta;
       editing.updatedAt=nowISO();
       editing.hasPhotos=hasPhotos;
       editing.mainPhotoIndex=mainPhotoIndex;
@@ -1551,6 +1568,7 @@ function openProductPickerSheet(options){options=options||{};var root=document.g
     <div class="sheet-handle"></div><div class="sheet-head"><div class="sheet-title">Новая закупка</div><button class="sheet-close" id="purchase-close">✕</button></div>
     <div class="sheet-body">
       <div class="form-field"><label class="form-label">Поставщик</label><select class="form-select" id="pu-supplier">${supplierOptions}</select></div>
+      <div class="form-field"><label class="form-label">Склад</label><select class="form-select" id="pu-warehouse">${warehouses.map(w=>`<option value="${escapeHtml(w.id)}" ${w.id===(((points.find(x=>x.id===currentPointId)||{}).warehouseId)||'wh-default')?'selected':''}>${escapeHtml(w.name||w.id)}</option>`).join('')}</select></div>
       <div class="purchase-items-head"><div class="panel-title">Товары в закупке</div><button class="btn" type="button" id="pu-add-row">＋ Товар</button><button class="btn" type="button" id="pu-add-new" style="margin-left:6px;">+ New</button></div>
       <div id="pu-items"></div><div id="pu-new-form" style="display:none; background:#f4f4f5; padding:10px; border-radius:8px; margin-top:10px; border:1px solid #e4e4e7;"><div class="form-field"><label class="form-label">Название нового товара</label><input class="form-input" id="pu-new-name" placeholder="Например: Чай черный"></div><div class="form-grid2"><div class="form-field"><label class="form-label">Закупочная цена</label><input class="form-input" id="pu-new-cost" type="number" value="0" min="0"></div><div class="form-field"><label class="form-label">Количество</label><input class="form-input" id="pu-new-qty" type="number" value="1" min="1"></div></div><div style="display:flex; gap:8px; margin-top:10px;"><button class="btn btn-primary" id="pu-new-save" type="button">Создать и добавить</button><button class="btn" id="pu-new-cancel" type="button">Отмена</button></div></div>
       <div class="total-row"><span class="label">Итого закупка</span><span class="value" id="pu-total">${fmtMoney(0)}</span></div>
@@ -1625,12 +1643,15 @@ var _puScan=document.getElementById('pu-scan');if(_puScan)_puScan.onclick=functi
     if(paymentStatus==='debt') paid=0;
     if(paymentStatus==='partial' && (paid<=0 || paid>=batchTotal)){showToast('Для частичной оплаты укажите сумму меньше итога');return;}
     const paymentLeft=Math.max(0,batchTotal-paid);
+    const whId=document.getElementById('pu-warehouse').value||'wh-default';
     lines.forEach(line=>{
       const p=products.find(x=>x.id===line.productId);
-      const purchase={id:uid(),batchId,supplierId,productId:p.id,productName:p.name,productSku:p.sku,unit:p.unit,qty:line.qty,cost:line.cost,date,note,invoice,paymentStatus,paidAmount:batchTotal?paid*(line.qty*line.cost/batchTotal):0,totalAmount:line.qty*line.cost,batchTotal,batchPaid:paid,batchDebt:paymentLeft};
+      const purchase={id:uid(),batchId,supplierId,productId:p.id,productName:p.name,productSku:p.sku,unit:p.unit,qty:line.qty,cost:line.cost,date,note,invoice,paymentStatus,paidAmount:batchTotal?paid*(line.qty*line.cost/batchTotal):0,totalAmount:line.qty*line.cost,batchTotal,batchPaid:paid,batchDebt:paymentLeft,warehouseId:whId};
       purchases.push(purchase);
-      p.qty=(Number(p.qty)||0)+line.qty;p.stock={...(p.stock||{}),'wh-default':(Number((p.stock||{})['wh-default'])||0)+line.qty};p.updatedAt=nowISO();
-      movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'in',qty:line.qty,date,note:`Закупка · ${supplierName(supplierId)}${invoice?' · накладная '+invoice:''}${note?' · '+note:''}`,purchaseId:purchase.id,batchId});
+      p.qty=(Number(p.qty)||0)+line.qty;
+      p.stock={...(p.stock||{}),[whId]:(Number((p.stock||{})[whId])||0)+line.qty};
+      p.updatedAt=nowISO();
+      movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'in',qty:line.qty,date,note:`Закупка · ${supplierName(supplierId)}${invoice?' · накладная '+invoice:''}${note?' · '+note:''}`,purchaseId:purchase.id,batchId,warehouseId:whId});
     });
     await Promise.all([persist('products'),persist('movements'),persist('purchases')]);
     if(requestId){ const rr=procurementRequests.find(x=>x.id===requestId); if(rr){ rr.status='completed'; rr.updatedAt=new Date().toISOString(); await persist('procurementRequests'); } }
@@ -2058,7 +2079,7 @@ function renderCartSheetContent(root){
               <button class="cart-item-remove" data-remove="${l.productId}">✕</button>
             </div>`:`
             <div class="cart-item">
-              <div class="cart-item-name">${escapeHtml(l.product.name)}<span class="sku">${escapeHtml(l.product.sku)}</span></div>
+              <div class="cart-item-name">${escapeHtml(l.product.name)}${(Number(l.product.price)>0 && Number(l.price)>0 && Number(l.price)<Number(l.product.price))?` <span style="background:#FEE2E2;color:#991B1B;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;">−${Math.round((1-Number(l.price)/Number(l.product.price))*100)}%</span>`:''}<span class="sku">${escapeHtml(l.product.sku)}</span></div>
               <div class="qty-stepper">
                 <button class="qty-btn" data-dec="${l.productId}">−</button>
                 <span class="qty-val">${l.qty}</span>
@@ -2259,15 +2280,20 @@ async function checkoutCart(){
   if(!requireAccess('orders')) return;
   if(cart.length===0)return;
 
+  const whId = ((points.find(x=>x.id===currentPointId)||{}).warehouseId) || 'wh-default';
   for(const c of cart){
     const p=products.find(x=>x.id===c.productId);
     if(!p){
       showToast('Товар "' + (c.name || 'неизвестный') + '" удалён из каталога. Удалите его из чека.');
       return;
     }
-    if(!c.emergencySale && c.qty>p.qty){
-      showToast('Недостаточно товара на складе: ' + p.name);
-      return;
+    if(!c.emergencySale){
+      const whStock = Number((p.stock||{})[whId]) || 0;
+      if(c.qty > whStock){
+        const whName = (warehouses.find(w=>w.id===whId)||{}).name || whId;
+        showToast(`Недостаточно на складе «${whName}»: ${p.name} (нужно ${c.qty}, есть ${whStock})`);
+        return;
+      }
     }
     const salePrice=Number(c.price??p.price)||0;
     if(salePrice<0){showToast('Цена не может быть отрицательной');return;}
@@ -2279,7 +2305,7 @@ async function checkoutCart(){
   let linkedClient=selectedClient;
   if(!linkedClient && (customerInput?.value.trim() || whatsapp)){linkedClient=findOrCreateContact({name:customer,phone:whatsapp,whatsapp,type:'client'});await persist('contacts');}
   const date=todayISO(),orderDate=nowISO(),number='Ч-'+String(meta.orderSeq).padStart(4,'0'),orderId=uid();
-  const preparedItems=cart.map(c=>{const p=products.find(x=>x.id===c.productId);const salePrice=Number(c.price??p.price)||0;const activeConsignment=consignments.filter(x=>x.productId===p.id&&x.status==='open').sort((a,b)=>new Date(b.date)-new Date(a.date))[0]||null;return {productId:p.id,name:p.name,sku:p.sku,qty:c.qty,price:salePrice,cost:p.cost,emergencySale:!!c.emergencySale,isConsignment:!!activeConsignment,supplierCost:activeConsignment?.supplierCost||0,supplierName:activeConsignment?.supplierName||''};});
+  const preparedItems=cart.map(c=>{const p=products.find(x=>x.id===c.productId);const salePrice=Number(c.price??p.price)||0;const originalPrice=Number(p.price)||0;const activeConsignment=consignments.filter(x=>x.productId===p.id&&x.status==='open').sort((a,b)=>new Date(b.date)-new Date(a.date))[0]||null;return {productId:p.id,name:p.name,sku:p.sku,qty:c.qty,price:salePrice,originalPrice,cost:p.cost,emergencySale:!!c.emergencySale,isConsignment:!!activeConsignment,supplierCost:activeConsignment?.supplierCost||0,supplierName:activeConsignment?.supplierName||''};});
   const subtotal=preparedItems.reduce((s,it)=>s+it.price*it.qty,0),calc=calcSale(subtotal);
   const bonusUse=isModOn('bonuses')&&cashSettings.bonusEnabled?Math.max(0,Math.min(Number(document.getElementById('sale-bonus-use')?.value)||0,calc.afterDiscount)):0;
   const total=Math.max(0,calc.afterDiscount-bonusUse);
@@ -2343,7 +2369,23 @@ async function finalizePreparedSale(order){
     var _ptWhId=((points.find(x=>x.id===currentPointId)||{}).warehouseId)||'wh-default';
     order.pointId=currentPointId||null;
     order.warehouseId=_ptWhId;
-    order.items=(order.items||[]).map(it=>{const p=products.find(x=>x.id===it.productId);if(p&&!it.emergencySale){var _st={...(p.stock||{})};_st[_ptWhId]=Math.max(0,(Number(_st[_ptWhId])||0)-it.qty);p.stock=_st;p.qty=Object.keys(_st).reduce(function(s,k){return s+(Number(_st[k])||0);},0);p.updatedAt=nowISO();movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'sale',qty:it.qty,date,note:`Чек ${number}`,orderId,warehouseId:_ptWhId});}return it;});
+    const _whName = (warehouses.find(w=>w.id===_ptWhId)||{}).name || _ptWhId;
+    order.items=(order.items||[]).map(it=>{
+      const p=products.find(x=>x.id===it.productId);
+      if(p && !it.emergencySale){
+        const _st={...(p.stock||{})};
+        const _cur=Number(_st[_ptWhId])||0;
+        if(_cur < it.qty){
+          throw new Error(`insufficient_stock:${p.name}:need=${it.qty},have=${_cur},wh=${_whName}`);
+        }
+        _st[_ptWhId]=_cur-it.qty;
+        p.stock=_st;
+        p.qty=Object.keys(_st).reduce(function(s,k){return s+(Number(_st[k])||0);},0);
+        p.updatedAt=nowISO();
+        movements.push({id:uid(),productId:p.id,productName:p.name,productSku:p.sku,type:'sale',qty:it.qty,date,note:`Чек ${number}`,orderId,warehouseId:_ptWhId});
+      }
+      return it;
+    });
     orders.push(order);const sh=shifts.find(x=>x.id===order.shiftId);if(sh&&!sh.orderIds.includes(order.id))sh.orderIds.push(order.id);meta.orderSeq++;
     if(order.bonusUsed>0&&order.contactId){const c=contacts.find(x=>x.id===order.contactId);if(c){if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];c.bonusBalance=Math.max(0,(Number(c.bonusBalance)||0)-Number(order.bonusUsed));c.bonusHistory.push({id:uid(),type:'out',amount:order.bonusUsed,date:todayISO(),orderId:order.id,note:`Списано по чеку ${order.number}`});}}
     if(cashSettings.bonusEnabled&&order.contactId){const c=contacts.find(x=>x.id===order.contactId);if(c){if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];const earned=Math.max(0,Math.round((Number(order.total||0)*Number(cashSettings.bonusPercent||0)/100)*100)/100);if(earned>0){c.bonusBalance=(Number(c.bonusBalance)||0)+earned;c.bonusHistory.push({id:uid(),type:'in',amount:earned,date:todayISO(),orderId:order.id,note:`Начислено за чек ${order.number}`});order.bonusEarned=earned;}}}
@@ -2365,7 +2407,12 @@ async function finalizePreparedSale(order){
   }catch(e){
     products=snapshot.products;movements=snapshot.movements;orders=snapshot.orders;debts=snapshot.debts;contacts=snapshot.contacts;meta=snapshot.meta;giftCards=snapshot.giftCards;
     console.error('SALE ERROR',e);
-    showToast('Ошибка сохранения продажи. Данные не изменены.');
+    const msg=String(e&&e.message||'');
+    if(msg.indexOf('insufficient_stock:')===0){
+      showToast('Недостаточно товара на складе: '+msg.slice('insufficient_stock:'.length));
+    } else {
+      showToast('Ошибка сохранения продажи. Данные не изменены.');
+    }
     return false;
   }
 

@@ -1047,7 +1047,7 @@ private String callSelectedProvider(String input, boolean webSearch) throws Exce
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
         try {
             android.util.Log.i("On.i AI", "Using aiProxy (server)");
-            String r = callAiProxy(input, "auto", null, null);
+            String r = callAiProxy(input, "auto", null, null, null);
             if (r != null && !r.trim().isEmpty()) {
                 return r;
             }
@@ -2119,6 +2119,50 @@ private void postGuideResult(final String json) {
                     try { android.util.Log.e("On.i CRM", "openProductWebView failed", e); } catch (Exception ignored) {}
                 }
             }});
+        }
+
+        // H-9: native file backup. Works even when WebView's IndexedDB is unavailable
+        // (Phone B fix disables it globally). Primary storage; IndexedDB stays as fallback.
+        @JavascriptInterface
+        public boolean saveBackupToFile(String json) {
+            if (json == null) return false;
+            try {
+                File target = new File(getFilesDir(), "oni-backup.json");
+                File tmp = new File(getFilesDir(), "oni-backup.json.tmp");
+                try (FileOutputStream fos = new FileOutputStream(tmp)) {
+                    fos.write(json.getBytes(StandardCharsets.UTF_8));
+                    fos.flush();
+                    fos.getFD().sync();
+                }
+                if (tmp.renameTo(target)) return true;
+                try { if (target.exists()) target.delete(); } catch (Exception ignored) {}
+                if (tmp.renameTo(target)) return true;
+                return target.exists() && target.length() > 0;
+            } catch (Exception e) {
+                android.util.Log.e("On.i backup", "saveBackupToFile failed", e);
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public String loadBackupFromFile() {
+            try {
+                File f = new File(getFilesDir(), "oni-backup.json");
+                if (!f.exists() || f.length() == 0) return null;
+                try (FileInputStream fis = new FileInputStream(f)) {
+                    byte[] data = new byte[(int) f.length()];
+                    int total = 0;
+                    while (total < data.length) {
+                        int n = fis.read(data, total, data.length - total);
+                        if (n < 0) break;
+                        total += n;
+                    }
+                    return new String(data, 0, total, StandardCharsets.UTF_8);
+                }
+            } catch (Exception e) {
+                android.util.Log.e("On.i backup", "loadBackupFromFile failed", e);
+                return null;
+            }
         }
 
     }

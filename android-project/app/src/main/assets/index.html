@@ -259,6 +259,40 @@ var _excelOutsideClickHandler=null;
 var _backupFailCount=0;
 var _backupQueued=false;
 
+// P1-1: namespaced localStorage keys.
+// tombstones belong to the shop, carts belong to the user.
+function _lsShopId(){
+  try{ return (typeof FB_SHOP_ID !== 'undefined' && FB_SHOP_ID) ? FB_SHOP_ID : 'default'; }
+  catch(e){ return 'default'; }
+}
+function _lsUserId(){
+  try{ return (typeof activeUser !== 'undefined' && activeUser && activeUser.id) ? activeUser.id : '_anon'; }
+  catch(e){ return '_anon'; }
+}
+function _lsTombKey(){ return 'sklad_crm_' + _lsShopId() + '_recent_deletes'; }
+function _lsUserDelKey(){ return 'sklad_crm_' + _lsShopId() + '_user_deletes'; }
+function _lsTombSyncedKey(){ return 'sklad_crm_' + _lsShopId() + '_tombstones_synced'; }
+function _lsCartKey(){ return 'oni_carts_' + _lsUserId(); }
+function _migrateP11Keys(){
+  try{
+    var newTomb = _lsTombKey();
+    var oldTomb = 'sklad_crm_recent_deletes';
+    if(!localStorage.getItem(newTomb) && localStorage.getItem(oldTomb)){
+      localStorage.setItem(newTomb, localStorage.getItem(oldTomb));
+    }
+    var newSync = _lsTombSyncedKey();
+    var oldSync = 'sklad_crm_tombstones_synced';
+    if(!localStorage.getItem(newSync) && localStorage.getItem(oldSync)){
+      localStorage.setItem(newSync, localStorage.getItem(oldSync));
+    }
+    var newCart = _lsCartKey();
+    var oldCart = 'oni_carts';
+    if(!localStorage.getItem(newCart) && localStorage.getItem(oldCart)){
+      localStorage.setItem(newCart, localStorage.getItem(oldCart));
+    }
+  }catch(e){}
+}
+
 
 const CRM_BACKUP_VERSION=6;
 
@@ -1035,8 +1069,13 @@ async function loginViaFirebase(login, password){
     try{
       if(collectionName === 'products'){
         var _recentDelSync = {};
-        try{ _recentDelSync = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
-        var _tombIds = Object.keys(_recentDelSync);
+        try{ _recentDelSync = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
+        /* H-7.1: skip tombstones already deleted on Firestore, so every
+           persist('products') doesn't resend batch.delete for all tombstones
+           from the past 24h. Retry only the ones that failed. */
+        var _syncedTomb = {};
+        try{ _syncedTomb = JSON.parse(localStorage.getItem(_lsTombSyncedKey()) || '{}') || {}; }catch(e){}
+        var _tombIds = Object.keys(_recentDelSync).filter(function(k){ return !_syncedTomb[k]; });
         if(_tombIds.length > 0){
           var _delBatch = fbDb.batch();
           for(var _ti=0; _ti<_tombIds.length; _ti++){
@@ -1048,14 +1087,64 @@ async function loginViaFirebase(login, password){
           try{
             await _delBatch.commit();
             _log('tombstones deleted: ' + _tombIds.length);
+            /* Mark as synced so we don't resend on every persist() */
+            var _nowSync = Date.now();
+            for(var _ti2=0; _ti2<_tombIds.length; _ti2++){ _syncedTomb[String(_tombIds[_ti2])] = _nowSync; }
+            /* Prune markers older than 24h to keep the map small */
+            var _syncedClean = {};
+            for(var _tk in _syncedTomb){ if(_nowSync - Number(_syncedTomb[_tk]) < 86400000) _syncedClean[_tk] = _syncedTomb[_tk]; }
+            try{ localStorage.setItem(_lsTombSyncedKey(), JSON.stringify(_syncedClean)); }catch(e){}
             // tombstones НЕ удаляем - пусть живут 24 часа, чтобы pull смог их дообработать.
           }catch(e){
             _log('tombstone delete failed: ' + ((e && e.message) || e));
           }
         }
+
+        // P1-2: pull server-side tombstones so this device doesn't re-upload
+        // products deleted on another device. Fixes "deleted products come back".
+        try{
+          var _srvTombP12 = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('productTombstones').get();
+          if(_srvTombP12 && _srvTombP12.size > 0){
+            var _rdP12 = {};
+            try{ _rdP12 = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
+            _srvTombP12.forEach(function(doc){
+              var d = doc.data() || {};
+              if(d && d.id){ _rdP12[String(d.id)] = Number(d.deletedAt) || Date.now(); }
+            });
+            try{ localStorage.setItem(_lsTombKey(), JSON.stringify(_rdP12)); }catch(e){}
+          }
+        }catch(e){ _log('P1-2 srv tombstone pull failed: ' + ((e && e.message) || e)); }
       }
 
       var data = _fbGetCollectionData(collectionName);
+      // P1-2: filter out anything with a tombstone so stale device can't
+      // revive a deleted product by pushing its local cache to Firestore.
+      if(collectionName === 'products' && Array.isArray(data)){
+        var _rdFilter = {};
+        try{ _rdFilter = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
+        data = data.filter(function(it){ return !it || !_rdFilter[String(it.id)]; });
+      }
+
+      // P1-4: users have their own tombstones. Delete on server + filter local.
+      // Without this, deleteEmployee left the doc in shops/{shopId}/users and
+      // the next pull resurrected the deleted member.
+      if(collectionName === 'users'){
+        var _ud = {};
+        try{ _ud = JSON.parse(localStorage.getItem(_lsUserDelKey()) || '{}') || {}; }catch(e){}
+        var _udIds = Object.keys(_ud);
+        if(_udIds.length > 0){
+          var _ub = fbDb.batch();
+          for(var _ui=0; _ui<_udIds.length; _ui++){
+            var _uid = String(_udIds[_ui]);
+            var _usafe = _uid.replace(/[\/\s]+/g, '_');
+            _ub.delete(fbDb.collection('shops').doc(FB_SHOP_ID).collection('users').doc(_usafe));
+          }
+          try{ await _ub.commit(); }catch(e){ _log('user tombstone delete failed: ' + ((e && e.message) || e)); }
+        }
+        if(Array.isArray(data)){
+          data = data.filter(function(it){ return !it || !_ud[String(it.id)]; });
+        }
+      }
       if(!Array.isArray(data) || data.length === 0){
         return;
       }
@@ -1223,6 +1312,7 @@ async function loginViaFirebase(login, password){
 
     var _fbSyncPullTimer = null;
     var _fbSyncPullRunning = false;
+    var _lastPullAt = 0; /* H-7.2: last pull start, used for max-wait */
 
     async function _fbSyncPull(){
       if(_fbSyncPullRunning) return;
@@ -1233,10 +1323,11 @@ async function loginViaFirebase(login, password){
       // Если открыт любой модал — не трогаем UI.
       var modalRoot = document.getElementById('modal-root');
       if(modalRoot && modalRoot.innerHTML.trim().length > 0){
-        var _roIds=['wh-ov','pt-ov','al-ov','analytics-ov','reports-ov','action-history-ov','preset-wizard-ov','inv-list-ov','reqs-ov','ph-ov','phub-ov','low-ov','req-detail-ov','inv-detail-ov','fiscal-ov'];
-        var _ro=false;
-        for(var _i=0;_i<_roIds.length;_i++){ if(modalRoot.querySelector('#'+_roIds[_i])){ _ro=true; break; } }
-        if(!_ro) return;
+        /* H-7.3: block pull only for editable forms where user has unsaved input.
+           Read-only views (reports, analytics, action history, purchase hub, etc.)
+           no longer block sync. */
+        var _editableSelector = '#f-name, #pu-supplier, #pu-items, #checkout, #ce-name, #emp-email, #reg-login, #inv-email';
+        if(modalRoot.querySelector(_editableSelector)) return;
       }
       // Если прямо сейчас идёт запись в Firestore — пропускаем.
       var syncBusy = false;
@@ -1247,10 +1338,15 @@ async function loginViaFirebase(login, password){
       // 15 секунд, значит запись в Firestore ещё может не завершиться. 
       // Pull в этом окне может вернуть СТАРУЮ версию и перетереть свежие 
       // локальные изменения.
-      if(!syncBusy && (Date.now() - _lastPersistAt) < 15000){ syncBusy = true; }
+      if(!syncBusy && (Date.now() - _lastPersistAt) < 15000){
+        /* H-7.2: max-wait — force pull if we haven't pulled in 60s,
+           so rapid save-after-save never starves synchronization. */
+        if((Date.now() - _lastPullAt) < 60000) syncBusy = true;
+      }
       if(syncBusy) return;
 
       _fbSyncPullRunning = true;
+      _lastPullAt = Date.now(); /* H-7.2: mark pull start for max-wait */
       try{
                 // HARD DELETE: убрать локальные товары, которых нет в Firestore > 60 сек
         try{
@@ -1264,7 +1360,7 @@ async function loginViaFirebase(login, password){
           });
           var _tombH = {};
           try{
-            var _localH = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+            var _localH = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
             Object.keys(_localH).forEach(function(k){ _tombH[String(k)] = true; });
           }catch(e){}
           var _nowH = Date.now();
@@ -1306,7 +1402,10 @@ async function loginViaFirebase(login, password){
           {name:'shifts',              apply:function(a){shifts=a;},              get:function(){return shifts;}},
           {name:'messages',            apply:function(a){messages=a;},            get:function(){return messages;}},
           {name:'warehouses',          apply:function(a){warehouses=a;},          get:function(){return warehouses;}, merge:true},
-          {name:'points',              apply:function(a){points=a;},              get:function(){return points;}, merge:true}
+          {name:'points',              apply:function(a){points=a;},              get:function(){return points;}, merge:true},
+          /* P1-3: users must be pulled back from server when local list was emptied
+             or a member was added on another device. Passwords stay local. */
+          {name:'users',               apply:function(a){users=a;},               get:function(){return users;}, users:true}
         ];
 
         var changed = false;
@@ -1317,6 +1416,29 @@ async function loginViaFirebase(login, password){
             if(!snap) continue;
             var arr = [];
             snap.forEach(function(doc){ arr.push(doc.data()); });
+
+            // P1-3: users are synced as full replace from server (preserve passwords).
+            // Skip if server list is empty so a transient empty fetch never wipes local users.
+            if(m.users && arr.length > 0){
+              // P1-4: drop anything in the local user tombstone list, so a deleted
+              // member cannot come back through pull.
+              var _udFilter = {};
+              try{ _udFilter = JSON.parse(localStorage.getItem(_lsUserDelKey()) || '{}') || {}; }catch(e){}
+              arr = arr.filter(function(u){ return u && u.id && !_udFilter[String(u.id)]; });
+              var _pwKeep = {};
+              var _localUsers = m.get() || [];
+              for(var _lu=0; _lu<_localUsers.length; _lu++){
+                if(_localUsers[_lu] && _localUsers[_lu].id && _localUsers[_lu].password){
+                  _pwKeep[_localUsers[_lu].id] = _localUsers[_lu].password;
+                }
+              }
+              for(var _au=0; _au<arr.length; _au++){
+                if(arr[_au] && arr[_au].id && _pwKeep[arr[_au].id]) arr[_au].password = _pwKeep[arr[_au].id];
+              }
+              m.apply(arr);
+              changed = true;
+              continue;
+            }
 
             /* Фаза 4 fix: pull только ДОБАВЛЯЕТ новые элементы с сервера.
                Никогда не перезаписывает и не удаляет локальные. Это 
@@ -1337,17 +1459,17 @@ async function loginViaFirebase(login, password){
                   var _tombCol = (m.name === 'products') ? 'productTombstones' : 'movementTombstones';
                   var _srvTombSnap = await fbDb.collection('shops').doc(FB_SHOP_ID).collection(_tombCol).get();
                   if(_srvTombSnap && _srvTombSnap.size > 0){
-                    var _srvTombMap = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+                    var _srvTombMap = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
                     _srvTombSnap.forEach(function(doc){
                       var d = doc.data() || {};
                       if(d && d.id){ _srvTombMap[String(d.id)] = Number(d.deletedAt) || Date.now(); }
                     });
-                    localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_srvTombMap));
+                    localStorage.setItem(_lsTombKey(), JSON.stringify(_srvTombMap));
                   }
                 }catch(e){}
               }
               var _recentDel = {};
-              try{ _recentDel = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
+              try{ _recentDel = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
               for(var ai=0; ai<arr.length; ai++){
                 var item = arr[ai];
                 if(!item || !item.id) continue;
@@ -1361,6 +1483,13 @@ async function loginViaFirebase(login, password){
                 if(!localItem){
                   local.push(item);
                   added++;
+                  continue;
+                }
+                if(m.users){
+                  // P1-3: never overwrite a local password with server value (server has none)
+                  // and update other fields (name, role, active, memberOf) from server.
+                  Object.keys(item).forEach(function(k){ if(k !== 'password') localItem[k] = item[k]; });
+                  updated++;
                   continue;
                 }
                 if(!m.merge) continue;
@@ -1414,7 +1543,7 @@ async function loginViaFirebase(login, password){
       // Добиваем tombstones: если товар помечен удалённым, но ещё есть в Firestore или локально — убираем.
       try{
         var _tombNow = {};
-        try{ _tombNow = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {}; }catch(e){}
+        try{ _tombNow = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {}; }catch(e){}
         var _tombKeys = Object.keys(_tombNow);
         if(_tombKeys.length > 0){
           var _nowT = Date.now();
@@ -1426,7 +1555,7 @@ async function loginViaFirebase(login, password){
             _alive[_k] = _tombNow[_k];
           }
           if(_removedTomb > 0){
-            try{ localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_alive)); }catch(e){}
+            try{ localStorage.setItem(_lsTombKey(), JSON.stringify(_alive)); }catch(e){}
           }
           var _aliveKeys = Object.keys(_alive);
           if(_aliveKeys.length > 0){
@@ -1654,6 +1783,17 @@ function productIndicators(p){ return ''; }
 const ADMIN_RECOVERY_CODE=null;
 function ensureDefaultAdmin(){
   if(!Array.isArray(users)) users=[];
+  // P1-3b: if any real admin/owner exists (Firebase Auth UID or has memberOf),
+  // never create the legacy phantom admin='admin'.
+  var hasRealAdmin = users.some(function(u){
+    if(!u) return false;
+    if(u.id === 'admin' && u.login === 'admin') return false;
+    if(u.role !== 'admin' && u.role !== 'owner') return false;
+    if(u.authUid || u.authEmail) return true;
+    if(u.memberOf && typeof u.memberOf === 'object' && Object.keys(u.memberOf).length > 0) return true;
+    return false;
+  });
+  if(hasRealAdmin) return;
   let a=users.find(u=>u&&u.role==='admin'&&u.login==='admin');
   if(!a){ users.unshift({id:'admin',name:'Администратор',login:'admin',password:'',role:'admin',active:true,createdAt:new Date().toISOString()}); }
   else { a.active=a.active!==false; a.role='admin'; }
@@ -2916,7 +3056,7 @@ function openCashierEditModal(id=null){
     if(users.some(x=>x.login===login && x.id!==(u?.id))){ showToast('Такой логин уже есть'); return; }
     if(u && u.login==='admin' && role!=='admin'){ showToast('Нельзя понизить встроенного admin'); return; }
     if(u){ u.name=name; u.login=login; u.role=role; if(pass) u.password=pass; }
-    else  users.push({ id:uid(), name, login, password:pass, role, active:true, createdAt:nowISO() });
+    else  users.push((function(){var o={ id:uid(), name:name, login:login, password:pass, role:role, active:true, createdAt:nowISO() }; o.memberOf={}; o.memberOf[FB_SHOP_ID]=role === 'admin' ? 'owner' : role; return o;})());
     await persist('users'); close(); openCashiersModal();
   };
 }
@@ -2942,9 +3082,24 @@ async function deleteEmployee(id){
   if(u.id===activeUser.id){ showToast('Нельзя удалить себя'); return; }
   if(!confirm('Удалить сотрудника «'+(u.name||u.login||'')+'»?\nОн больше не сможет войти.')) return;
   const uid=u.authUid||u.id;
+
+  // P1-4: write tombstone BEFORE persist so sync + pull cannot resurrect.
+  try{
+    var _ud = JSON.parse(localStorage.getItem(_lsUserDelKey()) || '{}') || {};
+    _ud[String(u.id)] = Date.now();
+    var _now = Date.now();
+    Object.keys(_ud).forEach(function(k){ if(_now - Number(_ud[k]) > 86400000) delete _ud[k]; });
+    localStorage.setItem(_lsUserDelKey(), JSON.stringify(_ud));
+  }catch(e){}
+
   try{
     if(fbDb && uid){
       try{ await fbDb.collection('users').doc(uid).delete(); }catch(e){ console.warn('[delete user fb]', e && e.message); }
+      // Also delete from shop-scoped users collection so pull won't see it.
+      try{
+        var _safeId = String(u.id).replace(/[\/\s]+/g, '_');
+        await fbDb.collection('shops').doc(FB_SHOP_ID).collection('users').doc(_safeId).delete();
+      }catch(e){ console.warn('[delete user fb shop]', e && e.message); }
     }
   }catch(e){}
   users=users.filter(x=>x.id!==id);
@@ -2973,10 +3128,31 @@ function loginAsUser(id){
   showToast(`Вход как ${u.name} (${roleLabel(u.role)})`);
 }
 
+/* P1-3b: only users who actually belong to FB_SHOP_ID.
+   - memberOf present -> must contain FB_SHOP_ID
+   - no memberOf (legacy) -> keep only cashier/staff, hide admin/owner
+   - phantom admin (id="admin") -> hide when a real admin exists
+*/
+function _relevantUsers(){
+  try{
+    var arr = Array.isArray(users) ? users : [];
+    var hasRealAdmin = arr.some(function(x){ return x && x.id !== 'admin' && (x.role === 'admin' || x.role === 'owner'); });
+    return arr.filter(function(u){
+      if(!u) return false;
+      if(u.id === 'admin' && u.login === 'admin' && hasRealAdmin) return false;
+      if(u.memberOf && typeof u.memberOf === 'object'){
+        return !!u.memberOf[FB_SHOP_ID];
+      }
+      if(u.role === 'admin' || u.role === 'owner') return false;
+      return true;
+    });
+  }catch(e){ return Array.isArray(users) ? users : []; }
+}
+
 function openCashiersModal(){
   if(activeUser?.role!=='admin') return;
   const root=document.getElementById('modal-root');
-  const rows = users.map(u=>{
+  const rows = _relevantUsers().map(u=>{
     const sh = shifts.find(x=>x.userId===u.id && x.status==='open');
     const isMe = u.id===activeUser.id;
     const badge = u.role==='admin'?'🔑':u.role==='manager'?'📊':u.role==='storekeeper'?'📦':'💰';
@@ -3353,6 +3529,7 @@ function initSheetSwipeClose(){
 
 /* ===================== INIT ===================== */
 async function init(){
+  _migrateP11Keys();
   // Сначала пытаемся открыть основную локальную БД. Повреждённое/неполное значение
   // не должно превращаться в пустой каталог и не должно блокировать запуск CRM.
   const keys=['products','movements','orders','meta','debts','consignments','contacts','suppliers','purchases','procurementRequests','giftCards','cashSettings','shopSettings','visualSettings','users','shifts','messages','sessions','inventorySessions','modulesConfig','userPreferences','actionHistory','reminders','warehouses','points','fiscalSettings'];
@@ -4066,11 +4243,11 @@ function openMassDeleteConfirm(){
       }
     }
     try{
-      var _rdm = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+      var _rdm = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
       var _nowm = Date.now();
       productSelectionSet.forEach(function(pid){ _rdm[String(pid)] = _nowm; });
       Object.keys(_rdm).forEach(function(k){ if(_nowm - Number(_rdm[k]) > 86400000) delete _rdm[k]; });
-      localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rdm));
+      localStorage.setItem(_lsTombKey(), JSON.stringify(_rdm));
     }catch(e){}
     products=products.filter(p=>!productSelectionSet.has(p.id));
     const removed=before-products.length;
@@ -4615,11 +4792,11 @@ async function deleteMovement(id){
   }
   movements=movements.filter(x=>x.id!==id);
   try{
-    var _rdM = JSON.parse(localStorage.getItem('sklad_crm_recent_deletes') || '{}') || {};
+    var _rdM = JSON.parse(localStorage.getItem(_lsTombKey()) || '{}') || {};
     _rdM[String(id)] = Date.now();
     var _nowM = Date.now();
     Object.keys(_rdM).forEach(function(k){ if(_nowM - Number(_rdM[k]) > 86400000) delete _rdM[k]; });
-    localStorage.setItem('sklad_crm_recent_deletes', JSON.stringify(_rdM));
+    localStorage.setItem(_lsTombKey(), JSON.stringify(_rdM));
     if(fbDb && fbAuth && fbAuth.currentUser){
       var _safeMid = String(id).replace(/[\/\s]+/g, '_');
       await fbDb.collection('shops').doc(FB_SHOP_ID).collection('movementTombstones').doc(_safeMid).set({
@@ -4890,7 +5067,7 @@ function openReceiptModal(order){
         ${order.warehouseId?`<div class="receipt-row muted"><span>Склад</span><span>${escapeHtml((warehouses.find(w=>w.id===order.warehouseId)||{}).name||order.warehouseId)}</span></div>`:''}
         ${showPayment?((order.paymentSplits&&order.paymentSplits.length)?order.paymentSplits.map(sp=>`<div class="receipt-row muted"><span>Оплата · ${escapeHtml(paymentLabel(sp.method))}</span><span>${fmtMoney(sp.amount)}</span></div>`).join(''):`<div class="receipt-row muted"><span>Способ оплаты</span><span>${escapeHtml(order.paymentMethod==='kaspi'?'Kaspi':paymentLabel(order.paymentMethod))}</span></div>`):''}
         <div class="receipt-line"></div>
-        ${(order.items||[]).map(it=>`<div class="receipt-row"><span>${it.emergencySale?'⚡ ':''}${escapeHtml(it.name)} ×${it.qty}</span><span>${fmtMoney(it.price*it.qty)}</span></div>`).join('')}
+        ${(order.items||[]).map(it=>{const _o=Number(it.originalPrice)||0;const _c=Number(it.price)||0;const _hd=(_o>0&&_c>0&&_c<_o);const _p=_hd?Math.round((1-_c/_o)*100):0;return `<div class="receipt-row"><span>${it.emergencySale?'⚡ ':''}${escapeHtml(it.name)} ×${it.qty}${_hd?` <span style="color:#B91C1C;font-size:11px;">(скидка ${_p}%)</span>`:''}</span><span>${fmtMoney(it.price*it.qty)}${_hd?` <s style="color:#9CA3AF;font-size:11px;">${fmtMoney(_o*it.qty)}</s>`:''}</span></div>`;}).join('')}
         <div class="receipt-line"></div>
         <div class="receipt-row muted"><span>Скидка</span><span>− ${fmtMoney(order.discount||0)}</span></div>
         <div class="receipt-row receipt-total"><span>Итого</span><span>${fmtMoney(order.total)}</span></div>
@@ -4912,7 +5089,7 @@ function openReceiptModal(order){
   document.getElementById('whatsapp-receipt').onclick=()=>openReceiptWhatsApp(order);
 
   document.getElementById('print-receipt').onclick=()=>{
-    const rows=(order.items||[]).map(it=>`<tr><td>${escapeHtml(it.name)} ×${it.qty}</td><td>${fmtMoney(it.price*it.qty)}</td></tr>`).join('');
+    const rows=(order.items||[]).map(it=>{const _o=Number(it.originalPrice)||0;const _c=Number(it.price)||0;const _hd=(_o>0&&_c>0&&_c<_o);const _p=_hd?Math.round((1-_c/_o)*100):0;return `<tr><td>${escapeHtml(it.name)} ×${it.qty}${_hd?` (скидка ${_p}%)`:''}</td><td>${fmtMoney(it.price*it.qty)}</td></tr>`;}).join('');
     const paymentRow=showPayment?((order.paymentSplits&&order.paymentSplits.length)?order.paymentSplits.map(sp=>`<tr><td>Оплата · ${escapeHtml(paymentLabel(sp.method))}</td><td>${fmtMoney(sp.amount)}</td></tr>`).join(''):`<tr><td>Оплата</td><td>${escapeHtml(order.paymentMethod==='kaspi'?'Kaspi':paymentLabel(order.paymentMethod))}</td></tr>`):'';
     const commentRow=order.comment?`<tr><td>Комментарий</td><td>${escapeHtml(order.comment)}</td></tr>`:'';
     const printHtml=`<!doctype html><html><head><meta charset="utf-8"><title>Чек ${escapeHtml(order.number)}</title>
@@ -5679,6 +5856,16 @@ function lowStockProducts(){
 
 /* ===================== RETURNS ===================== */
 function getReturnedQty(orderId, productId){
+  // H-6.1: canonical source is order.returns[]. Deleting a movement no longer
+  // unlocks a second refund for the same product on the same receipt.
+  // Movements remain the fallback for legacy receipts written before this change.
+  const o = (typeof orders !== 'undefined' && Array.isArray(orders)) ? orders.find(x=>x.id===orderId) : null;
+  if(o && Array.isArray(o.returns) && o.returns.length){
+    return o.returns.reduce((s,r)=>{
+      if(!Array.isArray(r.items)) return s;
+      return s + r.items.filter(it=>it.productId===productId).reduce((a,it)=>a+(Number(it.qty)||0),0);
+    }, 0);
+  }
   return movements
     .filter(m=>m.type==='return' && m.orderId===orderId && m.productId===productId)
     .reduce((s,m)=>s+(Number(m.qty)||0),0);
@@ -5895,6 +6082,13 @@ function openReturnModal(order){
 
     const reason=(document.getElementById('return-reason')?.value.trim())||'Возврат по чеку';
 
+    // H-6.2: reject bonus return early, before stock is touched
+    if(returnMethod==='bonus'){
+      if(!isModOn('bonuses')){ showToast('Модуль «Бонусы» выключен. Выберите другой способ возврата.'); return; }
+      if(!order.contactId){ showToast('Для возврата на бонусы нужен клиент в чеке. Выберите другой способ.'); return; }
+      if(!contacts.find(x=>x.id===order.contactId)){ showToast('Клиент из чека не найден в базе. Выберите другой способ.'); return; }
+    }
+
     if((returnMethod==='kaspi'||returnMethod==='red') && !(window.Android&&typeof window.Android.startKaspiRefund==='function')){
       showToast('Возврат Kaspi доступен только в Android-приложении с поддержкой Smart POS');
       return;
@@ -5910,6 +6104,7 @@ function openReturnModal(order){
     };
 
     if((returnMethod==='kaspi'||returnMethod==='red') && window.Android && typeof window.Android.startKaspiRefund==='function'){
+      if(!order.kaspiTransactionId){ showToast('Оригинальный чек не содержит Kaspi-транзакции. Возврат Kaspi невозможен — выберите другой способ.'); return; }
       pendingKaspiReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
       showKaspiRefundWaiting(total,returnMethod);
       window.Android.startKaspiRefund(String(total),String(returnMethod),String(kaspiSettings.host||''),String(kaspiSettings.port||8080),String(kaspiSettings.terminalId||''),String(kaspiSettings.cashierName||'On.i CRM'),String(order.kaspiTransactionId||''));
@@ -5917,6 +6112,7 @@ function openReturnModal(order){
     }
     if(returnMethod==='halyk' && window.Android && typeof window.Android.refundHalyk==='function'){
       if(!halykSettings.host||!halykSettings.terminalId){ openHalykSettings(true); showToast('Настройте Halyk POS: IP и Terminal ID'); return; }
+      if(!order.tagRRN){ showToast('Оригинальный чек не содержит RRN Halyk. Возврат Halyk невозможен — выберите другой способ.'); return; }
       pendingHalykReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
       showHalykRefundWaiting(total);
       window.Android.refundHalyk(String(halykSettings.host),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId),String(order.tagRRN||''));
