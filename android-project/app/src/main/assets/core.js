@@ -261,20 +261,21 @@ function makeFullBackup(){
 }
 
 async function saveFullBackupNow(){
-      /* Phone B fix: IndexedDB в этом WebView отключён патчем в <head>.
-         Без IDB полный бэкап хранить негде — тихо выходим, не шумим 
-         ложным тостом о свободном месте. */
-      if(!window.indexedDB){
-        return false;
-      }
       if(_saveBusy){ _backupQueued=true; return false; }
       _saveBusy=true;
       let ok=false;
       try{
         const data=makeFullBackup();
         const ts=String(Date.now());
-        try{ if(await idbSet(BACKUP_KEY,data)) ok=true; }catch(e){}
-        try{ await idbSet(BACKUP_TS_KEY,ts); }catch(e){}
+        // H-9: primary — native Android file (survives WebView IndexedDB being broken)
+        if(window.Android && typeof window.Android.saveBackupToFile === 'function'){
+          try{ if(window.Android.saveBackupToFile(data)) ok=true; }catch(e){}
+        }
+        // H-9: secondary — IndexedDB (works on devices where the Phone B fix isn't needed)
+        if(window.indexedDB){
+          try{ if(await idbSet(BACKUP_KEY,data)) ok=true; }catch(e){}
+          try{ await idbSet(BACKUP_TS_KEY,ts); }catch(e){}
+        }
         if(ok){
           _backupFailCount=0;
         }else{
@@ -301,7 +302,13 @@ function queueFullBackup(){
 }
 
 async function getFullBackup(){
-    try{ const v=await idbGet(BACKUP_KEY); if(v) return v; }catch(e){}
+    // H-9: try IndexedDB first (legacy stores), then native file
+    if(window.indexedDB){
+      try{ const v=await idbGet(BACKUP_KEY); if(v) return v; }catch(e){}
+    }
+    if(window.Android && typeof window.Android.loadBackupFromFile === 'function'){
+      try{ const v=window.Android.loadBackupFromFile(); if(v && v.length > 0) return v; }catch(e){}
+    }
     return null;
   }
 
