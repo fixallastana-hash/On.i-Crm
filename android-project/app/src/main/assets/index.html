@@ -5679,6 +5679,16 @@ function lowStockProducts(){
 
 /* ===================== RETURNS ===================== */
 function getReturnedQty(orderId, productId){
+  // H-6.1: canonical source is order.returns[]. Deleting a movement no longer
+  // unlocks a second refund for the same product on the same receipt.
+  // Movements remain the fallback for legacy receipts written before this change.
+  const o = (typeof orders !== 'undefined' && Array.isArray(orders)) ? orders.find(x=>x.id===orderId) : null;
+  if(o && Array.isArray(o.returns) && o.returns.length){
+    return o.returns.reduce((s,r)=>{
+      if(!Array.isArray(r.items)) return s;
+      return s + r.items.filter(it=>it.productId===productId).reduce((a,it)=>a+(Number(it.qty)||0),0);
+    }, 0);
+  }
   return movements
     .filter(m=>m.type==='return' && m.orderId===orderId && m.productId===productId)
     .reduce((s,m)=>s+(Number(m.qty)||0),0);
@@ -5895,6 +5905,13 @@ function openReturnModal(order){
 
     const reason=(document.getElementById('return-reason')?.value.trim())||'Возврат по чеку';
 
+    // H-6.2: reject bonus return early, before stock is touched
+    if(returnMethod==='bonus'){
+      if(!isModOn('bonuses')){ showToast('Модуль «Бонусы» выключен. Выберите другой способ возврата.'); return; }
+      if(!order.contactId){ showToast('Для возврата на бонусы нужен клиент в чеке. Выберите другой способ.'); return; }
+      if(!contacts.find(x=>x.id===order.contactId)){ showToast('Клиент из чека не найден в базе. Выберите другой способ.'); return; }
+    }
+
     if((returnMethod==='kaspi'||returnMethod==='red') && !(window.Android&&typeof window.Android.startKaspiRefund==='function')){
       showToast('Возврат Kaspi доступен только в Android-приложении с поддержкой Smart POS');
       return;
@@ -5910,6 +5927,7 @@ function openReturnModal(order){
     };
 
     if((returnMethod==='kaspi'||returnMethod==='red') && window.Android && typeof window.Android.startKaspiRefund==='function'){
+      if(!order.kaspiTransactionId){ showToast('Оригинальный чек не содержит Kaspi-транзакции. Возврат Kaspi невозможен — выберите другой способ.'); return; }
       pendingKaspiReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
       showKaspiRefundWaiting(total,returnMethod);
       window.Android.startKaspiRefund(String(total),String(returnMethod),String(kaspiSettings.host||''),String(kaspiSettings.port||8080),String(kaspiSettings.terminalId||''),String(kaspiSettings.cashierName||'On.i CRM'),String(order.kaspiTransactionId||''));
@@ -5917,6 +5935,7 @@ function openReturnModal(order){
     }
     if(returnMethod==='halyk' && window.Android && typeof window.Android.refundHalyk==='function'){
       if(!halykSettings.host||!halykSettings.terminalId){ openHalykSettings(true); showToast('Настройте Halyk POS: IP и Terminal ID'); return; }
+      if(!order.tagRRN){ showToast('Оригинальный чек не содержит RRN Halyk. Возврат Halyk невозможен — выберите другой способ.'); return; }
       pendingHalykReturn={order:order,selected:selected,total:total,reason:reason,returnMethod:returnMethod,snapshot:returnSnapshot,close:close};
       showHalykRefundWaiting(total);
       window.Android.refundHalyk(String(halykSettings.host),String(halykSettings.port||8080),String(total),String(halykSettings.terminalId),String(order.tagRRN||''));
