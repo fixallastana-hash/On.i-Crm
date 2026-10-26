@@ -2079,7 +2079,7 @@ function renderCartSheetContent(root){
               <button class="cart-item-remove" data-remove="${l.productId}">✕</button>
             </div>`:`
             <div class="cart-item">
-              <div class="cart-item-name">${escapeHtml(l.product.name)}<span class="sku">${escapeHtml(l.product.sku)}</span></div>
+              <div class="cart-item-name">${escapeHtml(l.product.name)}${(Number(l.product.price)>0 && Number(l.price)>0 && Number(l.price)<Number(l.product.price))?` <span style="background:#FEE2E2;color:#991B1B;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;">−${Math.round((1-Number(l.price)/Number(l.product.price))*100)}%</span>`:''}<span class="sku">${escapeHtml(l.product.sku)}</span></div>
               <div class="qty-stepper">
                 <button class="qty-btn" data-dec="${l.productId}">−</button>
                 <span class="qty-val">${l.qty}</span>
@@ -2305,7 +2305,7 @@ async function checkoutCart(){
   let linkedClient=selectedClient;
   if(!linkedClient && (customerInput?.value.trim() || whatsapp)){linkedClient=findOrCreateContact({name:customer,phone:whatsapp,whatsapp,type:'client'});await persist('contacts');}
   const date=todayISO(),orderDate=nowISO(),number='Ч-'+String(meta.orderSeq).padStart(4,'0'),orderId=uid();
-  const preparedItems=cart.map(c=>{const p=products.find(x=>x.id===c.productId);const salePrice=Number(c.price??p.price)||0;const activeConsignment=consignments.filter(x=>x.productId===p.id&&x.status==='open').sort((a,b)=>new Date(b.date)-new Date(a.date))[0]||null;return {productId:p.id,name:p.name,sku:p.sku,qty:c.qty,price:salePrice,cost:p.cost,emergencySale:!!c.emergencySale,isConsignment:!!activeConsignment,supplierCost:activeConsignment?.supplierCost||0,supplierName:activeConsignment?.supplierName||''};});
+  const preparedItems=cart.map(c=>{const p=products.find(x=>x.id===c.productId);const salePrice=Number(c.price??p.price)||0;const originalPrice=Number(p.price)||0;const activeConsignment=consignments.filter(x=>x.productId===p.id&&x.status==='open').sort((a,b)=>new Date(b.date)-new Date(a.date))[0]||null;return {productId:p.id,name:p.name,sku:p.sku,qty:c.qty,price:salePrice,originalPrice,cost:p.cost,emergencySale:!!c.emergencySale,isConsignment:!!activeConsignment,supplierCost:activeConsignment?.supplierCost||0,supplierName:activeConsignment?.supplierName||''};});
   const subtotal=preparedItems.reduce((s,it)=>s+it.price*it.qty,0),calc=calcSale(subtotal);
   const bonusUse=isModOn('bonuses')&&cashSettings.bonusEnabled?Math.max(0,Math.min(Number(document.getElementById('sale-bonus-use')?.value)||0,calc.afterDiscount)):0;
   const total=Math.max(0,calc.afterDiscount-bonusUse);

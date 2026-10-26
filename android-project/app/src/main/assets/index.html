@@ -5067,7 +5067,7 @@ function openReceiptModal(order){
         ${order.warehouseId?`<div class="receipt-row muted"><span>Склад</span><span>${escapeHtml((warehouses.find(w=>w.id===order.warehouseId)||{}).name||order.warehouseId)}</span></div>`:''}
         ${showPayment?((order.paymentSplits&&order.paymentSplits.length)?order.paymentSplits.map(sp=>`<div class="receipt-row muted"><span>Оплата · ${escapeHtml(paymentLabel(sp.method))}</span><span>${fmtMoney(sp.amount)}</span></div>`).join(''):`<div class="receipt-row muted"><span>Способ оплаты</span><span>${escapeHtml(order.paymentMethod==='kaspi'?'Kaspi':paymentLabel(order.paymentMethod))}</span></div>`):''}
         <div class="receipt-line"></div>
-        ${(order.items||[]).map(it=>`<div class="receipt-row"><span>${it.emergencySale?'⚡ ':''}${escapeHtml(it.name)} ×${it.qty}</span><span>${fmtMoney(it.price*it.qty)}</span></div>`).join('')}
+        ${(order.items||[]).map(it=>{const _o=Number(it.originalPrice)||0;const _c=Number(it.price)||0;const _hd=(_o>0&&_c>0&&_c<_o);const _p=_hd?Math.round((1-_c/_o)*100):0;return `<div class="receipt-row"><span>${it.emergencySale?'⚡ ':''}${escapeHtml(it.name)} ×${it.qty}${_hd?` <span style="color:#B91C1C;font-size:11px;">(скидка ${_p}%)</span>`:''}</span><span>${fmtMoney(it.price*it.qty)}${_hd?` <s style="color:#9CA3AF;font-size:11px;">${fmtMoney(_o*it.qty)}</s>`:''}</span></div>`;}).join('')}
         <div class="receipt-line"></div>
         <div class="receipt-row muted"><span>Скидка</span><span>− ${fmtMoney(order.discount||0)}</span></div>
         <div class="receipt-row receipt-total"><span>Итого</span><span>${fmtMoney(order.total)}</span></div>
@@ -5089,7 +5089,7 @@ function openReceiptModal(order){
   document.getElementById('whatsapp-receipt').onclick=()=>openReceiptWhatsApp(order);
 
   document.getElementById('print-receipt').onclick=()=>{
-    const rows=(order.items||[]).map(it=>`<tr><td>${escapeHtml(it.name)} ×${it.qty}</td><td>${fmtMoney(it.price*it.qty)}</td></tr>`).join('');
+    const rows=(order.items||[]).map(it=>{const _o=Number(it.originalPrice)||0;const _c=Number(it.price)||0;const _hd=(_o>0&&_c>0&&_c<_o);const _p=_hd?Math.round((1-_c/_o)*100):0;return `<tr><td>${escapeHtml(it.name)} ×${it.qty}${_hd?` (скидка ${_p}%)`:''}</td><td>${fmtMoney(it.price*it.qty)}</td></tr>`;}).join('');
     const paymentRow=showPayment?((order.paymentSplits&&order.paymentSplits.length)?order.paymentSplits.map(sp=>`<tr><td>Оплата · ${escapeHtml(paymentLabel(sp.method))}</td><td>${fmtMoney(sp.amount)}</td></tr>`).join(''):`<tr><td>Оплата</td><td>${escapeHtml(order.paymentMethod==='kaspi'?'Kaspi':paymentLabel(order.paymentMethod))}</td></tr>`):'';
     const commentRow=order.comment?`<tr><td>Комментарий</td><td>${escapeHtml(order.comment)}</td></tr>`:'';
     const printHtml=`<!doctype html><html><head><meta charset="utf-8"><title>Чек ${escapeHtml(order.number)}</title>
