@@ -27,3 +27,14 @@
 - Residual risk: a device compromise yields the user's own LLM keys, not the
   project's server keys. Blast radius is limited to that user's quota.
 - Decision: accepted until Phase 4 (App Check + EncryptedSharedPreferences).
+
+### `memberOf` client-writable (accepted until Phase 4)
+- `users.update` allows `memberOf` in `affectedKeys().hasOnly([...])`.
+- A user with DevTools can self-grant `memberOf['shop-any'] = 'owner'`,
+  and `isMemberOf()` / `hasRole()` will return true for that shop.
+- `firestore.rules` is **validation, not authorization** until `memberOf`
+  moves to Custom Claims (`request.auth.token.shops`).
+- Why accepted: P0-3 removed `role` but left `memberOf`, and moving it to
+  Custom Claims requires `admin.auth().setCustomUserClaims()` + re-issue of
+  ID tokens + client-side role reads from JWT. That is Phase 4 work.
+- Decision: accepted until Phase 4 (Custom Claims + App Check).
