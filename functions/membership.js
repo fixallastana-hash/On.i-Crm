@@ -119,27 +119,63 @@ exports.deleteShop = onCall(async (request) => {
 });
 // SENIOR-PATCH: ensureUser creates users/{authUid} on every login.
 // Guarantees usersDocExists for _employeeCheck and rules.
+// SENIOR-PATCH: ensureUser writes shop-scoped mirror for every shop in memberOf
 exports.ensureUser = onCall(async (request) => {
   const callerUid = await requireAuth(request);
   const userRef = db().collection("users").doc(callerUid);
   const snap = await userRef.get();
+
+  let data, isNew = false;
   if (snap.exists) {
-    const data = snap.data() || {};
+    data = snap.data() || {};
     if (data.active === false) {
       throw new HttpsError("permission-denied", "Account disabled.");
     }
-    return { ok: true, created: false, memberOf: data.memberOf || {}, uid: callerUid };
+  } else {
+    const auth = await admin.auth().getUser(callerUid).catch(() => null);
+    const email = auth && auth.email ? auth.email : "";
+    const displayName = auth && auth.displayName ? auth.displayName : (email ? email.split("@")[0] : "");
+    data = {
+      active: true,
+      email: email,
+      name: displayName,
+      login: email ? email.split("@")[0] : "",
+      memberOf: {},
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await userRef.set(data, { merge: true });
+    isNew = true;
   }
-  const auth = await admin.auth().getUser(callerUid).catch(() => null);
-  const email = auth && auth.email ? auth.email : "";
-  const displayName = auth && auth.displayName ? auth.displayName : (email ? email.split("@")[0] : "");
-  await userRef.set({
-    active: true,
-    email: email,
-    name: displayName,
-    login: email ? email.split("@")[0] : "",
-    memberOf: {},
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { ok: true, created: true, memberOf: {}, uid: callerUid };
+
+  const mo = data.memberOf || {};
+  for (const shopId of Object.keys(mo)) {
+    const role = mo[shopId];
+    const mirrorRef = db().collection("shops").doc(shopId).collection("users").doc(callerUid);
+    const mirrorSnap = await mirrorRef.get();
+    if (!mirrorSnap.exists) {
+      await mirrorRef.set({
+        id: callerUid,
+        authUid: callerUid,
+        email: data.email || "",
+        login: data.login || "",
+        name: data.name || "",
+        role: role,
+        memberOf: { [shopId]: role },
+        active: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } else {
+      const mData = mirrorSnap.data() || {};
+      const patchData = {};
+      if (!mData.authUid) patchData.authUid = callerUid;
+      if (!mData.memberOf || !mData.memberOf[shopId]) {
+        patchData.memberOf = Object.assign({}, mData.memberOf || {}, { [shopId]: role });
+      }
+      if (Object.keys(patchData).length > 0) {
+        await mirrorRef.set(patchData, { merge: true });
+      }
+    }
+  }
+
+  return { ok: true, created: isNew, memberOf: mo, uid: callerUid };
 });

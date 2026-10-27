@@ -551,6 +551,28 @@ function openSavedFiltersDialog(section){
   root.querySelectorAll('[data-apply]').forEach(function(b){b.onclick=function(){applySavedFilter(section,b.dataset.apply);close();};});
   root.querySelectorAll('[data-del]').forEach(function(b){b.onclick=function(){deleteSavedFilter(section,b.dataset.del);openSavedFiltersDialog(section);};});
 }
+// SENIOR-PATCH: dedupeUsers by login/email/authUid before persist
+function _dedupeUsers(arr){
+  if(!Array.isArray(arr)) return arr;
+  var seen = {}, out = [];
+  arr.forEach(function(u){
+    if(!u) return;
+    var key = String(u.login || u.email || u.authUid || u.id || '').toLowerCase().trim();
+    if(!key){ out.push(u); return; }
+    var existing = seen[key];
+    if(!existing){ seen[key] = u; out.push(u); return; }
+    var pref = (u.authUid && !existing.authUid) ? u : existing;
+    var other = (pref === u) ? existing : u;
+    ['password','authUid','email','login','name'].forEach(function(f){
+      if(!pref[f] && other[f]) pref[f] = other[f];
+    });
+    seen[key] = pref;
+    var i = out.indexOf(other);
+    if(i >= 0) out[i] = pref;
+  });
+  return out;
+}
+
 async function persistUserPreferences(){return persist('userPreferences');}
 var visualSettings={salesYellow:10,salesOrange:30,salesRed:50,stockYellow:10,stockRed:5};
 
@@ -653,14 +675,23 @@ async function testFirebaseConnection(){
     var role='owner';
     if(keys.length>0 && mo[keys[0]]) role=mo[keys[0]];
     if(role==='owner') role='admin';
-    var exists=users.find(function(x){return x && (x.id===uid || x.authUid===uid || (login && x.login===login));});
+    // SENIOR-PATCH: case-insensitive match — no dup creation
+    var _ln = login ? String(login).toLowerCase() : '';
+    var _em = em ? String(em).toLowerCase() : '';
+    var exists=users.find(function(x){
+      if(!x) return false;
+      if(x.id===uid || x.authUid===uid) return true;
+      if(_ln && x.login && String(x.login).toLowerCase()===_ln) return true;
+      if(_em && x.email && String(x.email).toLowerCase()===_em) return true;
+      return false;
+    });
     if(exists){
       if(exists.role==='owner') exists.role='admin';
       if(!exists.authUid) exists.authUid=uid;
       if(!exists.authEmail) exists.authEmail=em;
       if(!exists.email) exists.email=em;
       if(!exists.memberOf) exists.memberOf=mo;
-      try{ await persist('users'); }catch(e){}
+      try{ users = _dedupeUsers(users); await persist('users'); }catch(e){}
     } else {
       users.push({
         id:uid,
@@ -675,7 +706,7 @@ async function testFirebaseConnection(){
         authEmail:em,
         createdAt:nowISO()
       });
-      try{ await persist('users'); }catch(e){}
+      try{ users = _dedupeUsers(users); await persist('users'); }catch(e){}
     }
   }catch(e){ console.warn('[shop] load active failed', e && e.message || e); }
 }
@@ -821,7 +852,7 @@ async function loginViaFirebase(login, password){
 
     try{
       if(linked>0){
-        await persist('users');
+        users = _dedupeUsers(users); await persist('users');
         appendLog('users[] сохранён');
       }
     }catch(e){
@@ -934,7 +965,7 @@ async function loginViaFirebase(login, password){
 
     try{
       if(changes>0){
-        await persist('users');
+        users = _dedupeUsers(users); await persist('users');
         appendLog('users[] сохранён в localStorage и Firestore');
       }
     }catch(e){
@@ -1407,7 +1438,7 @@ async function loginViaFirebase(login, password){
           {name:'points',              apply:function(a){points=a;},              get:function(){return points;}, merge:true},
           /* P1-3: users must be pulled back from server when local list was emptied
              or a member was added on another device. Passwords stay local. */
-          {name:'users',               apply:function(a){users=a;},               get:function(){return users;}, users:true}
+          {name:'users',               apply:function(a){users=_dedupeUsers(a);},        get:function(){return users;}, users:true}
         ];
 
         var changed = false;
@@ -2108,7 +2139,7 @@ function authRender(){
               var _login=_em.indexOf('@')>0 ? _em.slice(0,_em.indexOf('@')) : _em;
               var _role=_keys.length>0 ? (_mo[_keys[0]]||'owner') : 'owner';
               users.push({id:fbResult.uid,name:_ud.name||_login||'Владелец',login:_login,email:_em,memberOf:_mo,password:'',role:_role,active:true,authUid:fbResult.uid,authEmail:_em,createdAt:nowISO()});
-              try{ await persist('users'); }catch(e){}
+              try{ users = _dedupeUsers(users); await persist('users'); }catch(e){}
               u=users.find(x=>x.authUid===fbResult.uid);
             }
           }catch(e){}
@@ -3012,7 +3043,7 @@ function openMyAccountModal(){
   const close=()=>root.innerHTML='';document.getElementById('account-close').onclick=close;document.getElementById('account-ov').onclick=e=>{if(e.target.id==='account-ov')close()};
   document.getElementById('my-prefs').onclick=()=>{close();openMyPreferences();};
   var myFavBtn=document.getElementById('my-favorites'); if(myFavBtn)myFavBtn.onclick=function(){close();openMyFavorites();};
-  document.getElementById('my-pass-save').onclick=async()=>{const a=document.getElementById('my-new-pass').value,b=document.getElementById('my-new-pass2').value;if(a.length<4)return showToast('Пароль должен быть не короче 4 символов');if(a!==b)return showToast('Пароли не совпадают');const u=users.find(x=>x.id===activeUser.id);u.password=a;activeUser={...u};await persist('users');showToast('Пароль изменён');close();};
+  document.getElementById('my-pass-save').onclick=async()=>{const a=document.getElementById('my-new-pass').value,b=document.getElementById('my-new-pass2').value;if(a.length<4)return showToast('Пароль должен быть не короче 4 символов');if(a!==b)return showToast('Пароли не совпадают');const u=users.find(x=>x.id===activeUser.id);u.password=a;activeUser={...u};users = _dedupeUsers(users); await persist('users');showToast('Пароль изменён');close();};
   var _recBtn=document.getElementById('my-recovery-save');
   if(_recBtn)_recBtn.onclick=async()=>{
     const errEl=document.getElementById('my-recovery-err');
@@ -3085,7 +3116,7 @@ function openCashierEditModal(id=null){
     if(u && u.login==='admin' && role!=='admin'){ showToast('Нельзя понизить встроенного admin'); return; }
     if(u){ u.name=name; u.login=login; u.role=role; if(pass) u.password=pass; }
     else  users.push((function(){var o={ id:uid(), name:name, login:login, password:pass, role:role, active:true, createdAt:nowISO() }; o.memberOf={}; o.memberOf[FB_SHOP_ID]=role === 'admin' ? 'owner' : role; return o;})());
-    await persist('users'); close(); openCashiersModal();
+    users = _dedupeUsers(users); await persist('users'); close(); openCashiersModal();
   };
 }
 async function resetEmployeePassword(id){
@@ -3135,7 +3166,7 @@ async function deleteEmployee(id){
     }
   }catch(e){}
   users=users.filter(x=>x.id!==id);
-  await persist('users');
+  users = _dedupeUsers(users); await persist('users');
   showToast('Сотрудник удалён');
   openCashiersModal();
 }
@@ -3230,7 +3261,7 @@ function openCashiersModal(){
     const u=users.find(x=>x.id===b.dataset.cb);
     if(!u || u.id===activeUser.id) return;
     u.active = u.active===false;
-    await persist('users'); openCashiersModal();
+    users = _dedupeUsers(users); await persist('users'); openCashiersModal();
   });
 }
 function generateInviteCode(){
@@ -3701,7 +3732,7 @@ async function init(){
         }catch(e){}
       }
     }
-    await persist('users');
+    users = _dedupeUsers(users); await persist('users');
   }catch(e){ console.warn('[users dedup]', e && e.message); }
 
   /* Фаза 5: при первом старте заводим склад и точку по умолчанию. */
