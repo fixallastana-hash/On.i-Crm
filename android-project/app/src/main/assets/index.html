@@ -708,6 +708,8 @@ async function loginViaFirebase(login, password){
           _shopDeletedChecked = false;
           _employeeCheckedOnce = false;
         }catch(e){}
+        // SENIOR-PATCH: loginViaFirebase calls ensureUser to guarantee users/{authUid}
+        try{ await callCloudFn('ensureUser', {}); }catch(_e){ console.warn('[login] ensureUser failed:', _e && _e.message); }
         await _fbLoadActiveShop(u.uid);
         try{ startProductsWatcher(); }catch(e){}
         try{ _oniPushIdToken(); }catch(e){}
@@ -1588,7 +1590,23 @@ async function loginViaFirebase(login, password){
         try{
           var _empChk = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
           var _empRemoved = false;
-          if(!_empChk || !_empChk.exists){ _empRemoved = true; }
+          // SENIOR-PATCH: _employeeCheck fallback for legacy addEmployee users without global doc
+          if(!_empChk || !_empChk.exists){
+            var _foundInShop = false;
+            try {
+              var _byAuth = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('users')
+                .where('authUid','==',fbAuth.currentUser.uid).limit(1).get();
+              if(!_byAuth.empty) _foundInShop = true;
+            } catch(e){}
+            if(!_foundInShop && activeUser && activeUser.login){
+              try {
+                var _byLogin = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('users')
+                  .where('login','==',activeUser.login).limit(1).get();
+                if(!_byLogin.empty) _foundInShop = true;
+              } catch(e){}
+            }
+            _empRemoved = !_foundInShop;
+          }
           else { var _empD = _empChk.data()||{}; var _empMO = _empD.memberOf||{}; if(!_empMO[FB_SHOP_ID]) _empRemoved = true; }
           if(_empRemoved){
             showToast('Доступ отозван. Обратитесь к владельцу магазина.');
@@ -2247,6 +2265,13 @@ async function registerAsEmployee(code, email, password){
     var uid = u.uid;
     var display = emailLower.split('@')[0];
     try{ await u.updateProfile({displayName: display}); }catch(e){}
+    // SENIOR-PATCH: registerAsEmployee awaits token push; race-safe
+    try{
+      var _pushOk = false;
+      if(typeof _oniPushIdToken==='function'){ _pushOk = await _oniPushIdToken(); }
+      if(!_pushOk){ await new Promise(function(r){ setTimeout(r, 500); }); }
+      await new Promise(function(r){ setTimeout(r, 300); });
+    }catch(_e){ console.warn('[acceptInvite] token push failed', _e); }
     try{
       await callCloudFn('acceptInvite', {
         inviteCode: code,
@@ -3863,19 +3888,26 @@ const VIEW_META={
   orders:{title:'Касса',sub:'Оформление продаж'},
   clients:{title:'Клиенты',sub:'Клиентская база и история покупок'},
 };
+// SENIOR-PATCH: _oniPushIdToken returns Promise<boolean>, resolves AFTER setIdToken
 function _oniPushIdToken(_tries){
   _tries = _tries || 0;
-  try{
-    if(!fbAuth || !fbAuth.currentUser){
-      if(_tries < 6){ setTimeout(function(){ _oniPushIdToken(_tries+1); }, 1500); }
-      return;
-    }
-    fbAuth.currentUser.getIdToken(true).then(function(t){
-      if(window.Android && typeof window.Android.setIdToken === 'function'){
-        window.Android.setIdToken(t);
+  return new Promise(function(resolve){
+    try{
+      if(!fbAuth || !fbAuth.currentUser){
+        if(_tries < 6){ setTimeout(function(){ _oniPushIdToken(_tries+1).then(resolve); }, 1500); }
+        else { resolve(false); }
+        return;
       }
-    }).catch(function(e){ console.warn('[ai] getIdToken failed', e && e.message); });
-  }catch(e){ console.warn('[ai] pushIdToken error', e); }
+      fbAuth.currentUser.getIdToken(true).then(function(t){
+        try{
+          if(window.Android && typeof window.Android.setIdToken === 'function'){
+            window.Android.setIdToken(t);
+          }
+          resolve(true);
+        }catch(_e){ resolve(false); }
+      }).catch(function(e){ console.warn('[ai] getIdToken failed', e && e.message); resolve(false); });
+    }catch(e){ console.warn('[ai] pushIdToken error', e); resolve(false); }
+  });
 }
 window._oniPushIdToken = _oniPushIdToken;
 setInterval(_oniPushIdToken, 25 * 60 * 1000);

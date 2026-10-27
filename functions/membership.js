@@ -117,3 +117,29 @@ exports.deleteShop = onCall(async (request) => {
   );
   return { ok: true, shopId };
 });
+// SENIOR-PATCH: ensureUser creates users/{authUid} on every login.
+// Guarantees usersDocExists for _employeeCheck and rules.
+exports.ensureUser = onCall(async (request) => {
+  const callerUid = await requireAuth(request);
+  const userRef = db().collection("users").doc(callerUid);
+  const snap = await userRef.get();
+  if (snap.exists) {
+    const data = snap.data() || {};
+    if (data.active === false) {
+      throw new HttpsError("permission-denied", "Account disabled.");
+    }
+    return { ok: true, created: false, memberOf: data.memberOf || {}, uid: callerUid };
+  }
+  const auth = await admin.auth().getUser(callerUid).catch(() => null);
+  const email = auth && auth.email ? auth.email : "";
+  const displayName = auth && auth.displayName ? auth.displayName : (email ? email.split("@")[0] : "");
+  await userRef.set({
+    active: true,
+    email: email,
+    name: displayName,
+    login: email ? email.split("@")[0] : "",
+    memberOf: {},
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { ok: true, created: true, memberOf: {}, uid: callerUid };
+});
