@@ -7,9 +7,21 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.memberOf.size() == 1 && ((request.resource.data.memberOf.keys().hasOnly([('shop-' + request.auth.uid)]) && request.resource.data.memberOf[('shop-' + request.auth.uid)] == 'owner') || (request.resource.data.inviteCode is string && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)) && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.used == false));
+      // A1-create-v2: self-bootstrap owner (shopId deterministic from uid) OR invite-derived memberOf
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.memberOf.size() == 1
+        && (
+          (request.resource.data.memberOf.keys().hasOnly([('shop-' + request.auth.uid)])
+           && request.resource.data.memberOf[('shop-' + request.auth.uid)] == 'owner')
+          ||
+          (request.resource.data.inviteCode is string
+           && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
+           && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.used == false
+           && request.resource.data.memberOf.keys().hasOnly([get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.shopId])
+           && request.resource.data.memberOf[get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.shopId] == get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.role)
+        );
       // P0-3: 'role' removed from allowed keys — user cannot grant themselves admin UI
-      allow update: if request.auth != null && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','email','password','active','login','memberOf','authUid','authEmail']);
+      allow update: if request.auth != null && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','email','password','active','login','authUid','authEmail']);
       allow delete: if false;
     }
 

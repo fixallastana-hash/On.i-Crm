@@ -739,7 +739,8 @@ async function loginViaFirebase(login, password){
           _shopDeletedChecked = false;
           _employeeCheckedOnce = false;
         }catch(e){}
-        // SENIOR-PATCH: loginViaFirebase calls ensureUser to guarantee users/{authUid}
+        // SENIOR-PATCH: loginViaFirebase awaits token before ensureUser (aiIdToken was empty on first login)
+        try{ if(typeof _oniPushIdToken==='function'){ await _oniPushIdToken(); } }catch(_e){ console.warn('[login] token push failed:', _e && _e.message); }
         try{ await callCloudFn('ensureUser', {}); }catch(_e){ console.warn('[login] ensureUser failed:', _e && _e.message); }
         await _fbLoadActiveShop(u.uid);
         try{ startProductsWatcher(); }catch(e){}
