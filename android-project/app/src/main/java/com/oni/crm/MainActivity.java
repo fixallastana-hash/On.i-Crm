@@ -215,6 +215,26 @@ public class MainActivity extends Activity {
             }});
         }
         @JavascriptInterface
+        public void callCloudFunction(final String name, final String argsJson) {
+            new Thread(new Runnable() { public void run() {
+                String js;
+                try {
+                    String result = doCallCloudFunction(name, argsJson);
+                    js = "window.__oniCfCallback && window.__oniCfCallback(" + JSONObject.quote(result) + ")";
+                } catch (Exception e) {
+                    String msg = e.getMessage() == null ? "Cloud Function failed" : e.getMessage();
+                    JSONObject err = new JSONObject();
+                    try { err.put("__error", msg); } catch (Exception ignored) {}
+                    js = "window.__oniCfCallback && window.__oniCfCallback(" + JSONObject.quote(err.toString()) + ")";
+                }
+                final String fjs = js;
+                runOnUiThread(new Runnable() { public void run() {
+                    try { webView.evaluateJavascript(fjs, null); } catch (Exception ignored) {}
+                }});
+            }}).start();
+        }
+
+        @JavascriptInterface
         public void setReviewLang(String l) { if(l != null) reviewLang = l; }
         @JavascriptInterface
         public void toast(String m) { runOnUiThread(new Runnable() { public void run() { android.widget.Toast.makeText(MainActivity.this, "JS: "+m, android.widget.Toast.LENGTH_SHORT).show(); }}); }
@@ -1041,6 +1061,54 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     android.util.Log.i("On.i AI", "aiProxy OK via " + usedProvider);
     return text;
 }
+
+    private String doCallCloudFunction(String name, String argsJson) throws Exception {
+        if (aiIdToken == null || aiIdToken.isEmpty()) {
+            throw new IOException("Нет авторизации");
+        }
+        if (name == null || !name.matches("^[a-zA-Z][a-zA-Z0-9_]{0,63}$")) {
+            throw new IOException("Некорректное имя функции");
+        }
+        String urlStr = "https://us-central1-oni-crm-b4975.cloudfunctions.net/" + name;
+        URL url = new URL(urlStr);
+        HttpsURLConnection c = (HttpsURLConnection) url.openConnection();
+        c.setRequestMethod("POST");
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(60000);
+        c.setDoOutput(true);
+        c.setRequestProperty("Content-Type", "application/json");
+        c.setRequestProperty("Authorization", "Bearer " + aiIdToken);
+
+        JSONObject data;
+        try { data = new JSONObject(argsJson == null || argsJson.isEmpty() ? "{}" : argsJson); }
+        catch (Exception e) { data = new JSONObject(); }
+        JSONObject body = new JSONObject();
+        body.put("data", data);
+
+        try (OutputStream os = c.getOutputStream()) {
+            os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+        }
+
+        int code = c.getResponseCode();
+        InputStream is = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+        String response = MainActivity.readAll(is);
+
+        JSONObject r;
+        try { r = new JSONObject(response == null || response.isEmpty() ? "{}" : response); }
+        catch (Exception e) { r = new JSONObject(); }
+
+        if (code < 200 || code >= 300) {
+            String errMsg = "HTTP " + code;
+            JSONObject errorObj = r.optJSONObject("error");
+            if (errorObj != null) {
+                String m = errorObj.optString("message", "");
+                if (m != null && !m.isEmpty()) errMsg = m;
+            }
+            throw new IOException(errMsg);
+        }
+        JSONObject result = r.optJSONObject("result");
+        return result == null ? "{}" : result.toString();
+    }
 
 private String callSelectedProvider(String input, boolean webSearch) throws Exception {
     // 1. Пытаемся через серверный AI-прокси (ключи на сервере, безопасно)

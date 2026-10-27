@@ -652,3 +652,5 @@ exports.chatHistory = onCall(
     throw new HttpsError("invalid-argument", "Неизвестное действие: " + action);
   }
 );
+// A1: memberOf is writable ONLY through these callables.
+Object.assign(exports, require("./membership"));

@@ -2247,16 +2247,19 @@ async function registerAsEmployee(code, email, password){
     var uid = u.uid;
     var display = emailLower.split('@')[0];
     try{ await u.updateProfile({displayName: display}); }catch(e){}
-    var mo = {}; mo[inv.shopId] = inv.role;
-    await fbDb.collection('users').doc(uid).set({
-      email: emailLower,
-      name: display,
-      memberOf: mo,
-      inviteCode: code
-    });
     try{
-      await fbDb.collection('invites').doc(code).update({used:true, usedAt: nowISO(), usedBy: uid});
-    }catch(e){ console.warn('[invite] mark used failed:', e && e.message); }
+      await callCloudFn('acceptInvite', {
+        inviteCode: code,
+        email: emailLower,
+        name: display
+      });
+    }catch(e){
+      try{ await fbAuth.currentUser.delete(); }catch(_){}
+      var _m = (e && e.message) || 'invite-failed';
+      if(_m.indexOf('already used')>=0) return {ok:false, reason:'used'};
+      if(_m.indexOf('not found')>=0) return {ok:false, reason:'bad-code'};
+      return {ok:false, reason:'network', error:_m};
+    }
     try{ await fbAuth.signOut(); }catch(e){}
     return {ok:true, uid:uid, email:emailLower};
   }catch(err){
@@ -3093,13 +3096,17 @@ async function deleteEmployee(id){
   }catch(e){}
 
   try{
-    if(fbDb && uid){
-      try{ await fbDb.collection('users').doc(uid).delete(); }catch(e){ console.warn('[delete user fb]', e && e.message); }
-      // Also delete from shop-scoped users collection so pull won't see it.
+    if(fbDb && uid && fbAuth && fbAuth.currentUser){
       try{
-        var _safeId = String(u.id).replace(/[\/\s]+/g, '_');
-        await fbDb.collection('shops').doc(FB_SHOP_ID).collection('users').doc(_safeId).delete();
-      }catch(e){ console.warn('[delete user fb shop]', e && e.message); }
+        await callCloudFn('removeUserFromShop', {
+          targetUid: uid,
+          shopId: FB_SHOP_ID,
+          localId: u.id
+        });
+      }catch(e){
+        console.warn('[delete user cf]', e && e.message);
+        if(typeof showToast==='function') showToast('Не удалось удалить на сервере: '+((e&&e.message)||e));
+      }
     }
   }catch(e){}
   users=users.filter(x=>x.id!==id);
@@ -5838,9 +5845,12 @@ async function softDeleteShop(){
     return;
   }
   try{
-    var uid=fbAuth.currentUser.uid;
-    await fbDb.collection('users').doc(uid).update({ memberOf: {} });
-  }catch(e){ console.warn('[soft delete] memberOf clear failed', e && e.message); }
+    await callCloudFn('deleteShop', { shopId: FB_SHOP_ID });
+  }catch(e){
+    console.warn('[soft delete] cf failed', e && e.message);
+    if(typeof showToast==='function') showToast('Ошибка сервера: '+((e&&e.message)||e));
+    return;
+  }
   showToast('Магазин удалён. Доступ закрыт.');
   setTimeout(async function(){
     try{ await fbAuth.signOut(); }catch(e){}

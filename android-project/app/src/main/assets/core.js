@@ -370,6 +370,38 @@ async function persist(which){
 }
 
 
+// A1: Cloud Functions called through the Android bridge (native HTTPS).
+// firebase-functions-compat.js is not initialized; JS never calls CF directly.
+var _cfQueue = Promise.resolve();
+function callCloudFn(name, payload) {
+  var exec = function() {
+    return new Promise(function(resolve, reject) {
+      if (!window.Android || typeof window.Android.callCloudFunction !== "function") {
+        return reject(new Error("Native bridge unavailable (rebuild required)"));
+      }
+      var prevCb = window.__oniCfCallback;
+      window.__oniCfCallback = function(raw) {
+        window.__oniCfCallback = prevCb || null;
+        try {
+          var res = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (res && res.__error) return reject(new Error(String(res.__error)));
+          resolve(res || {});
+        } catch (e) { reject(e); }
+      };
+      try {
+        window.Android.callCloudFunction(String(name), JSON.stringify(payload || {}));
+      } catch (e) {
+        window.__oniCfCallback = prevCb || null;
+        reject(e);
+      }
+    });
+  };
+  var p = _cfQueue.then(exec, exec);
+  _cfQueue = p.catch(function(){});
+  return p;
+}
+window.callCloudFn = callCloudFn;
+
 // ===== Step 3a: product utilities (pure, no DOM) =====
 function getProductPhotos(p){
   if(!p) return [];
