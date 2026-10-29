@@ -34,3 +34,9 @@ cross_drawable.txt
 # Audit working files
 _audit_check/
 phase0-patch.ps1
+
+*.bak_before_c
+
+*.bak_before_c_v2
+
+iam_policy_before.json
