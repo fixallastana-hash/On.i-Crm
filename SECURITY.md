@@ -90,3 +90,37 @@
 - **CI:** Успешно собран APK (commit `e7b8928`), опубликован в `latest`.
 - **🚨 Выявлен баг среды (блокирует сохранение):** На устройстве Redmi 13 Pro (HyperOS, Android 14, WebView 156.0.8078.47) `indexedDB` возвращает `undefined`. Из-за этого `idbSet` и `idbDelete` падают с ошибкой `TypeError`, и данные не сохраняются после перезапуска приложения. 
 - **Следующий шаг (B.2):** Реализовать архитектуру устойчивого хранилища (Fallback: IndexedDB → localStorage → Firestore). Вынести Firebase init + auth.
+
+## B.2 - Storage fallback + Firebase alias module (`b2-complete`)
+
+### Storage (полностью реализовано)
+- `safeStorageSet/Get/Delete` в `app-storage.js`: IDB-first, `localStorage`
+  fallback под `oni_ls_*` namespace. Все callsites `core.js` (5) и
+  `index.html` (3) переименованы в `safeStorage*`; определения
+  `idbGet/Set/Delete` сохранены для обратной совместимости.
+  One-time `LS → IDB` migration через `migrateLsToIdb()` при возврате IDB.
+- **Verified:** Redmi 13 Pro (HyperOS, Android 14, WebView 156,
+  `indexedDB === undefined`) - товар `B2-TEST` persisted после force-stop.
+
+### Auth (отклонение от B.2-спеки - согласовано)
+- **Исходный план:** вынести `firebase.initializeApp` + `_oniPushIdToken` /
+  `_oniRefreshClaims` / `loginViaFirebase` в `app-auth.js`.
+- **Причина отклонения:**
+  - `const firebaseConfig` используется в **8 местах** inline.
+  - `let fbApp, fbDb, fbAuth` - lexical binding, на них 100+ мест inline.
+  - `loginViaFirebase` мутирует 18+ глобалов `core.js` и вызывает
+    `callCloudFn`, `_fbLoadActiveShop`, `startProductsWatcher`, `_fbSyncPull`.
+  - `_oniPushIdToken(_tries)` - retry-loop + `window.Android.setIdToken()`.
+  - `_oniRefreshClaims(force)` использует `_oniSetClaims`, `window._oniClaims`,
+    `safeRender`.
+  - Secondary app (`initializeApp(config,'secondary')`) + `setPersistence(LOCAL)` inline.
+- **Что сделано в `app-auth.js`:** alias-модуль (~50 строк). Загружается **после**
+  inline `<script>`, публикует `window.fbApp/fbAuth/fbDb` = `firebase.apps[0].*`.
+  Не инициализирует Firebase, не дублирует `firebaseConfig`.
+- **Script order (обязательный):**
+  firebase SDK → app-storage.js → core.js → inline <script> → app-auth.js → ui-extra.js
+- **Verified:** desktop Chrome (aliases, login, Custom Claims, secondary app) +
+  Redmi 13 Pro (`[B.2]` + `[app-auth]` в logcat, `already exists` отсутствует).
+
+### PII guard
+- `sa.json`, `users.json`, `*.bak_b2*` - в `.gitignore`, не в коммите.
