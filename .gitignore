@@ -12,7 +12,7 @@ Thumbs.db
 
 
 
-# Firebase Agent Skills (�� ����� � ����)
+# Firebase Agent Skills (пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ)
 .agents/
 skills-lock.json
 
@@ -42,3 +42,12 @@ phase0-patch.ps1
 iam_policy_before.json
 
 ci-check/
+# Phase 4a: backups contain PII, repo is PUBLIC
+functions/users.pre4a.*.json
+functions/*.pre4a.*.json
+*.pre4a.*
+sa.json
+**/sa.json
+functions/sa.json
+users.json
+functions/users.json

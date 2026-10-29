@@ -2,6 +2,7 @@
 // Phase A1: memberOf writable ONLY through Cloud Functions.
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const { syncClaimsFor } = require("./claims"); // SENIOR-PATCH-4a
 
 const db = () => admin.firestore();
 const OWNER_ROLES = ["owner", "admin"];
@@ -37,6 +38,7 @@ exports.setUserMembership = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Cannot change the shop owner's role.");
   }
   await db().collection("users").doc(targetUid).set({ memberOf: { [shopId]: role } }, { merge: true });
+  await syncClaimsFor(targetUid).catch((e) => console.error("[4a] syncClaimsFor failed", targetUid, e && e.message)); // SENIOR-PATCH-4a
   return { ok: true, targetUid, shopId, role };
 });
 
@@ -58,6 +60,7 @@ exports.removeUserFromShop = onCall(async (request) => {
       await db().collection("users").doc(targetUid).set({ memberOf: mo }, { merge: true });
     }
   }
+    await syncClaimsFor(targetUid).catch((e) => console.error("[4a] syncClaimsFor failed", targetUid, e && e.message)); // SENIOR-PATCH-4a
   const mirrorCol = db().collection("shops").doc(shopId).collection("users");
   if (localId && typeof localId === "string") {
     await mirrorCol.doc(localId.replace(/[\/\s]+/g, "_")).delete().catch(() => {});
@@ -97,6 +100,8 @@ exports.acceptInvite = onCall(async (request) => {
     tx.update(inviteRef, { used: true, usedAt: admin.firestore.FieldValue.serverTimestamp(), usedBy: callerUid });
     return { shopId: invite.shopId, role: invite.role };
   });
+  // SENIOR-PATCH-4a-B4: sync claims AFTER tx commit (setCustomUserClaims — не tx-op)
+  await syncClaimsFor(callerUid).catch((e) => console.error("[4a] syncClaimsFor failed", callerUid, e && e.message));
   return Object.assign({ ok: true }, result);
 });
 
@@ -177,6 +182,7 @@ exports.ensureUser = onCall(async (request) => {
     }
   }
 
+    await syncClaimsFor(callerUid).catch((e) => console.error("[4a] syncClaimsFor failed", callerUid, e && e.message)); // SENIOR-PATCH-4a
   return { ok: true, created: isNew, memberOf: mo, uid: callerUid };
 });
 

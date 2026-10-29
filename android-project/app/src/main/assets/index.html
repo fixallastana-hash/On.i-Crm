@@ -349,6 +349,40 @@ function canDisableModule(name){
 }
 var inventorySessions=[];
 var users=[], shifts=[], messages=[], activeUser=null, currentShiftId=null, adminReturnUser=null;
+// SENIOR-PATCH-4a-helpers: claims resolver (1-release fallback to memberOf)
+window._oniClaims = window._oniClaims || null;
+function _oniSetClaims(claims){
+  window._oniClaims = (claims && typeof claims === 'object') ? claims : null;
+}
+function _getRoleForShop(shopId){
+  if(!shopId) return null;
+  var shops = (window._oniClaims && window._oniClaims.shops) || {};
+  if(shops[shopId]) return shops[shopId];
+  try{
+    var myUid = (typeof fbAuth !== 'undefined' && fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid) || null;
+    if(myUid && typeof users !== 'undefined' && Array.isArray(users)){
+      var u = users.find(function(x){ return x && (x.authUid === myUid || x.id === myUid); });
+      if(u && u.memberOf && typeof u.memberOf === 'object' && u.memberOf[shopId]) return u.memberOf[shopId];
+    }
+  }catch(e){}
+  return null;
+}
+async function _oniRefreshClaims(force){
+  try{
+    if(typeof fbAuth === 'undefined' || !fbAuth || !fbAuth.currentUser){ _oniSetClaims(null); return null; }
+    var oldShops = JSON.stringify((window._oniClaims && window._oniClaims.shops) || {});
+    var idTok = await fbAuth.currentUser.getIdTokenResult(!!force);
+    _oniSetClaims((idTok && idTok.claims) || {});
+    var newShops = JSON.stringify((window._oniClaims && window._oniClaims.shops) || {});
+    if(oldShops !== newShops){
+      try{ if(typeof safeRender === 'function') safeRender(); }catch(e){}
+    }
+    return window._oniClaims;
+  }catch(e){
+    console.warn('[4a] _oniRefreshClaims failed', e && e.message);
+    return null;
+  }
+}
 var currentView='orders';
 // Restore the last opened section after browser refresh/reload.
 function _pointKeyForUser(){
@@ -742,6 +776,8 @@ async function loginViaFirebase(login, password){
         // SENIOR-PATCH: loginViaFirebase awaits token before ensureUser (aiIdToken was empty on first login)
         try{ if(typeof _oniPushIdToken==='function'){ await _oniPushIdToken(); } }catch(_e){ console.warn('[login] token push failed:', _e && _e.message); }
         try{ await callCloudFn('ensureUser', {}); }catch(_e){ console.warn('[login] ensureUser failed:', _e && _e.message); }
+        // SENIOR-PATCH-4a-login-hook: refresh claims after ensureUser (force=true)
+        try{ if(typeof _oniRefreshClaims==='function'){ await _oniRefreshClaims(true); } }catch(_e){ console.warn('[4a] refreshClaims after ensureUser failed', _e && _e.message); }
         await _fbLoadActiveShop(u.uid);
         try{ startProductsWatcher(); }catch(e){}
         try{ _oniPushIdToken(); }catch(e){}
@@ -1639,7 +1675,7 @@ async function loginViaFirebase(login, password){
             }
             _empRemoved = !_foundInShop;
           }
-          else { var _empD = _empChk.data()||{}; var _empMO = _empD.memberOf||{}; if(!_empMO[FB_SHOP_ID]) _empRemoved = true; }
+          else { var _empD = _empChk.data()||{}; var _empMO = _empD.memberOf||{}; var _empRole = (typeof _getRoleForShop==='function' ? _getRoleForShop(FB_SHOP_ID) : null) || _empMO[FB_SHOP_ID] || null; if(!_empRole) _empRemoved = true; } // SENIOR-PATCH-4a-empRole
           if(_empRemoved){
             showToast('Доступ отозван. Обратитесь к владельцу магазина.');
             try{ await fbAuth.signOut(); }catch(e){}
@@ -3972,6 +4008,20 @@ function _oniPushIdToken(_tries){
 }
 window._oniPushIdToken = _oniPushIdToken;
 setInterval(_oniPushIdToken, 25 * 60 * 1000);
+// SENIOR-PATCH-4a-token-hook: claims sync on every ID-token refresh (SDK ~1h + after setCustomUserClaims)
+try{
+  if(window.fbAuth && typeof fbAuth.onIdTokenChanged === 'function'){
+    fbAuth.onIdTokenChanged(function(user){
+      if(user && typeof user.getIdTokenResult === 'function'){
+        user.getIdTokenResult().then(function(r){ _oniSetClaims((r && r.claims) || {}); }).catch(function(){});
+      } else {
+        _oniSetClaims(null);
+      }
+    });
+  }
+}catch(e){ console.warn('[4a] onIdTokenChanged claims hook failed', e && e.message); }
+// SENIOR-PATCH-4a-token-hook: periodic refresh (5 min, cached - cheap)
+setInterval(function(){ if(typeof _oniRefreshClaims==='function'){ _oniRefreshClaims(false).catch(function(){}); } }, 5 * 60 * 1000);
 
 // Подписка на авто-обновление Firebase ID-токена.
 // Срабатывает при логине, логауте и когда Firebase сам обновляет токен (~раз в час).

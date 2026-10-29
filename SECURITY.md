@@ -1,4 +1,4 @@
-﻿# Security
+# Security
 
 ## Known issues
 
@@ -28,7 +28,7 @@
   project's server keys. Blast radius is limited to that user's quota.
 - Decision: accepted until Phase 4 (App Check + EncryptedSharedPreferences).
 
-### `memberOf` client-writable (accepted until Phase 4)
+### `memberOf` client-writable (RESOLVED in Phase 4a, 2026-10-29)
 - `users.update` allows `memberOf` in `affectedKeys().hasOnly([...])`.
 - A user with DevTools can self-grant `memberOf['shop-any'] = 'owner'`,
   and `isMemberOf()` / `hasRole()` will return true for that shop.
@@ -45,3 +45,37 @@
 - IAM: `firebase-adminsdk-fbsvc@oni-crm-b4975` + `oni-crm-b4975@appspot` in `roles/firebaseauth.admin` (required for `admin.auth().deleteUser`).
 - CI: `.github/workflows/android-build.yml` builds debug APK on push to `android-project/**`, publishes to Release `latest`.
 - Runtime verified: hard delete (Auth gone, users doc gone, mirror gone, invites invalidated, actionHistory `employee_deleted_permanently`), pull does not resurrect.
+
+
+
+## Phase 4a — Custom Claims (2026-10-29)
+
+### Done
+- `functions/claims.js`: `syncClaimsFor(uid)` + `syncClaims` onCall
+- `functions/membership.js`: `syncClaimsFor` вызывается в `setUserMembership`, `removeUserFromShop`, `acceptInvite`, `ensureUser` (маркер `SENIOR-PATCH-4a`, 5 вхождений)
+- `functions/index.js`: `exports.syncClaims = require("./claims").syncClaims;`
+- Клиент (`index.html`): `_oniClaims`, `_oniSetClaims`, `_getRoleForShop`, `_oniRefreshClaims`; hooks: login (force=true), onIdTokenChanged, 5-min cached refresh
+- `_employeeCheck`: claims-first, fallback `doc.memberOf`
+- Backfill: 7/7 users with claims, 0 fail; verify: total=11 auth, withClaims=7, without=4 (orphaned auth)
+
+### Accepted tech debt (→ 4a.1)
+1. `deleteShop` не синкает claims для caller; stale `shops[deletedShopId]` до следующего re-login. Rules не страдают (читают `memberOf`). Fix: 5 строк `await syncClaimsFor(callerUid)` в `deleteShop`.
+2. `_getRoleForShop` fallback на `memberOf` — снять после 1 релиза стабильности.
+3. `authUid` / `password` / `authEmail` в `users.update.hasOnly` — снять после проверки, что клиент их не пишет в Firestore. `password` — legacy candidate на удаление.
+4. 4 orphaned Auth-accounts без `users/{uid}` — `cleanup_orphans.js` в 4a.1.
+5. `index.js` moji=7 (pre-existing mojibake в русских комментариях) — cleanup при следующем крупном рефакторинге.
+6. CRLF warnings в `git diff` — добавить `.gitattributes` с `* text=auto`.
+7. `deleteShop` / `deleteEmployeePermanently` не трогали — по плану 4a.
+
+### Encoding rule (для будущих сессий)
+Редактирование `index.html` и `functions/*.js`:
+- Через Notepad: **Save As → UTF-8 без BOM**.
+- Через PowerShell: **только** `[IO.File]::ReadAllText($p, [Text.Encoding]::UTF8)` / `[IO.File]::WriteAllText($p, $c, (New-Object Text.UTF8Encoding($false)))`.
+- **Никогда**: `Get-Content -Raw` / `Set-Content` / `Out-File` (PS 5.1 → double-encode, +50% к размеру).
+- Вставляемый через PS код — **ASCII only** (комментарии по-английски).
+- Проверка после патча: `moji (D0 A0)` совпадает с pre-patch.
+- Инцидент 2026-10-29: первая попытка PS-патча нанесла урон (815996→1322850 chars), восстановлено `git checkout`.
+
+### Public repo — PII guard
+Репо **публичный**. `.gitignore` содержит: `*.pre4a.*`, `sa.json`, `**/sa.json`, `users.json`, `functions/users.json`. Не коммитить backup-файлы, не выкладывать service account.
+

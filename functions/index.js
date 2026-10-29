@@ -654,3 +654,5 @@ exports.chatHistory = onCall(
 );
 // A1: memberOf is writable ONLY through these callables.
 Object.assign(exports, require("./membership"));
+// SENIOR-PATCH-4a: Custom Claims (explicit export; syncClaimsFor is helper, not onCall)
+exports.syncClaims = require("./claims").syncClaims;
