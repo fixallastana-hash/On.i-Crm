@@ -59,4 +59,87 @@ const CRM_BACKUP_VERSION=6;
 window.addEventListener('pagehide',()=>{ try{ saveUiState(); }catch(e){} });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'){ try{ saveUiState(); }catch(e){} } });
 
+/* =========================================================================
+ * SENIOR-PATCH-b2-storage-fallback
+ * IndexedDB -> localStorage fallback. Namespace: oni_ls_*
+ * ========================================================================= */
+(function () {
+  'use strict';
+  var LS_PREFIX = 'oni_ls_';
+  var _idbProbe = (function () {
+    try { return typeof indexedDB !== 'undefined' && indexedDB !== null; }
+    catch (e) { return false; }
+  })();
+  function _lsKey(k) { return LS_PREFIX + k; }
+  function _notifySaveFail(key) {
+    try {
+      if (typeof window.oniToast === 'function') {
+        window.oniToast('\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f: ' + key);
+      } else if (window.console) { console.error('[safeStorageSet] failed', key); }
+    } catch (_) {}
+  }
+  function safeStorageSet(key, value) {
+    if (_idbProbe && typeof idbSet === 'function') {
+      try {
+        var r = idbSet(key, value);
+        if (r === true) { try { localStorage.removeItem(_lsKey(key)); } catch (_) {} return true; }
+        if (r && typeof r.then === 'function') {
+          try { localStorage.setItem(_lsKey(key), value); } catch (_) {}
+          r.then(function (ok) { if (ok === true) { try { localStorage.removeItem(_lsKey(key)); } catch (_) {} } }).catch(function () {});
+          return true;
+        }
+      } catch (e) {}
+    }
+    try { localStorage.setItem(_lsKey(key), value); return true; }
+    catch (e) { _notifySaveFail(key); return false; }
+  }
+  function safeStorageGet(key) {
+    if (_idbProbe && typeof idbGet === 'function') {
+      try {
+        var v = idbGet(key);
+        if (v !== null && v !== undefined && typeof v.then !== 'function') return v;
+      } catch (e) {}
+    }
+    try { return localStorage.getItem(_lsKey(key)); }
+    catch (e) { return null; }
+  }
+  function safeStorageDelete(key) {
+    var ok = true;
+    if (_idbProbe && typeof idbDelete === 'function') {
+      try {
+        var r = idbDelete(key);
+        if (r === false) ok = false;
+        else if (r && typeof r.then === 'function') r.catch(function () { ok = false; });
+      } catch (e) { ok = false; }
+    }
+    try { localStorage.removeItem(_lsKey(key)); } catch (e) { ok = false; }
+    return ok;
+  }
+  (function migrateLsToIdb() {
+    if (!_idbProbe || typeof idbSet !== 'function') return;
+    var keys = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(LS_PREFIX) === 0) keys.push(k);
+      }
+    } catch (e) { return; }
+    keys.forEach(function (k) {
+      try {
+        var rawKey = k.slice(LS_PREFIX.length);
+        var val = localStorage.getItem(k);
+        if (val == null) return;
+        var r = idbSet(rawKey, val);
+        var ack = function (ok) { if (ok === true) { try { localStorage.removeItem(k); } catch (_) {} } };
+        if (r === true) ack(true);
+        else if (r && typeof r.then === 'function') r.then(ack).catch(function () {});
+      } catch (e) {}
+    });
+  })();
+  if (!_idbProbe) { try { console.warn('[B.2] IndexedDB unavailable - using localStorage fallback'); } catch (_) {} }
+  window.safeStorageSet    = safeStorageSet;
+  window.safeStorageGet    = safeStorageGet;
+  window.safeStorageDelete = safeStorageDelete;
+})();
+/* end SENIOR-PATCH-b2-storage-fallback */
 /* end app-storage.js (SENIOR-PATCH-b1-storage) */

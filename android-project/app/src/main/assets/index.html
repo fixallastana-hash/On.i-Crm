@@ -1,3 +1,4 @@
+<!-- SENIOR-PATCH-b2-index-html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -204,7 +205,7 @@ html, body { touch-action: pan-x pan-y; -ms-touch-action: pan-x pan-y; }
 <div id="toast-root"></div>
 
 <script src="app-storage.js"></script>
-<script src="core.js"></script>
+    <script src="core.js"></script>
 <script>
   // ===== FIREBASE INIT =====
   const firebaseConfig = {
@@ -1728,7 +1729,7 @@ async function loginViaFirebase(login, password){
 async function loadProductPhotos(productId){
   if(_photoCache[productId]) return _photoCache[productId];
   try{
-    const raw=await idbGet('photo_'+productId);
+    const raw=await safeStorageGet('photo_'+productId);
     if(raw){
       const arr=JSON.parse(raw);
       if(Array.isArray(arr)){_photoCache[productId]=arr;return arr;}
@@ -1778,7 +1779,7 @@ async function deleteProductPhotos(productId){
       for(var i=0; i<p.photos.length; i++){ await _deleteStoragePhotoByUrl(p.photos[i]); }
     }
   }catch(e){}
-  try{ await idbDelete('photo_'+productId); }catch(e){}
+  try{ await safeStorageDelete('photo_'+productId); }catch(e){}
   delete _photoCache[productId];
 }
 
@@ -3675,7 +3676,7 @@ async function init(){
       var _mainIdx=_oldPhotos.indexOf(_mainSrc);
       if(_mainIdx<0) _mainIdx=0;
       var _okIdb=false;
-      try{ _okIdb=await idbSet('photo_'+_mp.id, JSON.stringify(_oldPhotos)); }catch(e){ _okIdb=false; }
+      try{ _okIdb=await safeStorageSet('photo_'+_mp.id, JSON.stringify(_oldPhotos)); }catch(e){ _okIdb=false; }
       if(!_okIdb) continue;
       _photoCache[_mp.id]=_oldPhotos;
       _mp.photos=[];
@@ -6470,6 +6471,7 @@ window.onAndroidBack=function(){
 window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
 try{ window.CORE_MODULES=CORE_MODULES; window.defaultModulesConfig=defaultModulesConfig; window.ROLE_ACCESS=ROLE_ACCESS; window.ROLE_NAV=ROLE_NAV; window.SEARCH_SYNONYMS=SEARCH_SYNONYMS; }catch(e){}
 </script>
+<script src="app-auth.js"></script>
 <script src="ui-extra.js"></script>
 </body>
 </html>

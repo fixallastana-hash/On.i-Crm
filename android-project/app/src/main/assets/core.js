@@ -1,3 +1,4 @@
+/* SENIOR-PATCH-b2-core-callsites */
 // ===== core.js =====
 // Shared utilities available to all CRM modules.
 // Step 2a: 9 clean utils extracted from index.html.
@@ -237,7 +238,7 @@ async function storageGet(key){
       }
     }
   }catch(e){}
-  try{ const v=await idbGet(key); if(v!==null && String(v).trim()!=='') return v; }catch(e){}
+  try{ const v=await safeStorageGet(key); if(v!==null && String(v).trim()!=='') return v; }catch(e){}
   return null;
 }
 
@@ -247,7 +248,7 @@ async function storageSet(key,value){
   try{ localStorage.setItem('sklad_crm_'+key,text); saved=true; }catch(e){}
   // Остальные хранилища — только дополнительно и никогда не должны блокировать UI.
   try{ if(window.storage && typeof window.storage.set==='function') { const r=await withTimeout(window.storage.set(key,text,false),700); saved=!!r||saved; } }catch(e){}
-  try{ if(await idbSet(key,text)) saved=true; }catch(e){}
+  try{ if(await safeStorageSet(key,text)) saved=true; }catch(e){}
   return saved;
 }
 
@@ -273,8 +274,8 @@ async function saveFullBackupNow(){
         }
         // H-9: secondary — IndexedDB (works on devices where the Phone B fix isn't needed)
         if(window.indexedDB){
-          try{ if(await idbSet(BACKUP_KEY,data)) ok=true; }catch(e){}
-          try{ await idbSet(BACKUP_TS_KEY,ts); }catch(e){}
+          try{ if(await safeStorageSet(BACKUP_KEY,data)) ok=true; }catch(e){}
+          try{ await safeStorageSet(BACKUP_TS_KEY,ts); }catch(e){}
         }
         if(ok){
           _backupFailCount=0;
@@ -304,7 +305,7 @@ function queueFullBackup(){
 async function getFullBackup(){
     // H-9: try IndexedDB first (legacy stores), then native file
     if(window.indexedDB){
-      try{ const v=await idbGet(BACKUP_KEY); if(v) return v; }catch(e){}
+      try{ const v=await safeStorageGet(BACKUP_KEY); if(v) return v; }catch(e){}
     }
     if(window.Android && typeof window.Android.loadBackupFromFile === 'function'){
       try{ const v=window.Android.loadBackupFromFile(); if(v && v.length > 0) return v; }catch(e){}

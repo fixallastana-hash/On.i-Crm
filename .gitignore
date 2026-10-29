@@ -51,3 +51,10 @@ sa.json
 functions/sa.json
 users.json
 functions/users.json
+*.bak_b2*
+*.bak_b2a
+*.bak_b2step3b
+*.bak_b2_wrong
+*.bak_b2_step2
+b2-extracted/
+android-project/build-debug.log
