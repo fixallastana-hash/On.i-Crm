@@ -1138,7 +1138,10 @@ function openCategoryManager(){
     const cat=b.dataset.catDel;
     const affected=products.filter(p=>p.category===cat);
     if(affected.length && !confirm(`В категории ${affected.length} товар(ов). Удалить категорию и перенести товары в «Без категории»?`))return;
-    products=products.filter(p=>!(p.isCategoryPlaceholder&&p.category===cat)); products.forEach(p=>{if(p.category===cat)p.category='Без категории';});
+    var __catPH = products.filter(p=>p.isCategoryPlaceholder&&p.category===cat);
+     products=products.filter(p=>!(p.isCategoryPlaceholder&&p.category===cat)); products.forEach(p=>{if(p.category===cat)p.category='Без категории';});
+     try{ if(fbDb&&fbAuth&&fbAuth.currentUser){ for(var __ci=0;__ci<__catPH.length;__ci++){ var __ph=__catPH[__ci]; var __pid=String(__ph.id).replace(/[\/\s]+/g,'_'); try{ await fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').doc(__pid).delete(); console.log('[catDelete] product doc deleted',__pid); }catch(__e){ console.warn('[catDelete] product del failed',__e&&__e.message); } try{ await fbDb.collection('shops').doc(FB_SHOP_ID).collection('productTombstones').doc(__pid).set({ id:String(__ph.id), deletedAt:Date.now(), byUser:(activeUser&&activeUser.id)||null }); console.log('[catDelete] tombstone written',__pid); }catch(__e){ console.warn('[catDelete] tombstone failed',__e&&__e.message); } } } }catch(__e){ console.error('[catDelete] firestore block error',__e&&__e.message); }
+     /* SENIOR-PATCH-b2.1-category-delete */
     await persist('products'); openCategoryManager(); safeRender(); showToast('Категория удалена');
   });
 }
