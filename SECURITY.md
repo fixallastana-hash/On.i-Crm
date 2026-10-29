@@ -78,4 +78,15 @@
 
 ### Public repo — PII guard
 Репо **публичный**. `.gitignore` содержит: `*.pre4a.*`, `sa.json`, `**/sa.json`, `users.json`, `functions/users.json`. Не коммитить backup-файлы, не выкладывать service account.
+## Phase B.1 — модуляризация, шаг 1
 
+- **ARCHITECTURE DECISION:** classic `<script src>`, без bundler и build-step.
+  Порядок загрузки: `app-storage.js` → `core.js` → `ui-extra.js` → inline.
+  `app-storage.js` грузится **перед** `core.js`, так как `core.js` использует IDB-переменные лениво.
+- **Вынесено:** STORAGE block (бывшие lines 244–302 `index.html`) → `app-storage.js` (2551 байт).
+  Содержит: `IDB_NAME`, `IDB_STORE`, `BACKUP_KEY`, `_lsShopId`, `_migrateP11Keys`, `CRM_BACKUP_VERSION` и обработчики `saveUiState`.
+- **Diff:** `index.html` 825 227 → 822 911 байт (−2 316). 
+- **moji invariant:** sum(index.html + app-storage.js) = 39 + 0 = 39. Mojibake не появилось.
+- **CI:** Успешно собран APK (commit `e7b8928`), опубликован в `latest`.
+- **🚨 Выявлен баг среды (блокирует сохранение):** На устройстве Redmi 13 Pro (HyperOS, Android 14, WebView 156.0.8078.47) `indexedDB` возвращает `undefined`. Из-за этого `idbSet` и `idbDelete` падают с ошибкой `TypeError`, и данные не сохраняются после перезапуска приложения. 
+- **Следующий шаг (B.2):** Реализовать архитектуру устойчивого хранилища (Fallback: IndexedDB → localStorage → Firestore). Вынести Firebase init + auth.
