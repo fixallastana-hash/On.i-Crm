@@ -40,3 +40,5 @@ phase0-patch.ps1
 *.bak_before_c_v2
 
 iam_policy_before.json
+
+ci-check/

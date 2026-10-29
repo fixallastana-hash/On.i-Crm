@@ -38,3 +38,10 @@
   Custom Claims requires `admin.auth().setCustomUserClaims()` + re-issue of
   ID tokens + client-side role reads from JWT. That is Phase 4 work.
 - Decision: accepted until Phase 4 (Custom Claims + App Check).
+
+### Phase C complete (tag c-complete)
+- CF `deleteEmployeePermanently` (v2, Node 24): guards (self, owner-role, multi-shop), mirror delete (localId or by authUid), users doc delete, invites invalidated, Auth delete with try/catch (`auth/user-not-found` -> `authDeleted: true`).
+- Client `deleteEmployee`: two-step confirm ("НАВСЕГДА" / "необратимо"), CF-first, no local changes on CF failure, alert on `authDeleted === false`.
+- IAM: `firebase-adminsdk-fbsvc@oni-crm-b4975` + `oni-crm-b4975@appspot` in `roles/firebaseauth.admin` (required for `admin.auth().deleteUser`).
+- CI: `.github/workflows/android-build.yml` builds debug APK on push to `android-project/**`, publishes to Release `latest`.
+- Runtime verified: hard delete (Auth gone, users doc gone, mirror gone, invites invalidated, actionHistory `employee_deleted_permanently`), pull does not resurrect.
