@@ -124,3 +124,31 @@
 
 ### PII guard
 - `sa.json`, `users.json`, `*.bak_b2*` - в `.gitignore`, не в коммите.
+## B.2.1 - Category delete pushes to Firestore (`b2.1-category-fix`)
+
+### Problem
+Удаление категории (`__CAT__` placeholder в products) в UI удаляло только локально.
+При следующем pull из Firestore запись возвращалась - категория "воскресала".
+
+### Root cause
+Функция удаления категории (в `openCategoryManager`) делала только
+`products = products.filter(...)` + `persist('products')`, без Firestore delete.
+Сравните: `deleteProduct(id)` (line 1146) уже имел `fbDb...doc(id).delete()` - а
+удаление категории нет.
+
+### Fix (SENIOR-PATCH-b2.1-category-delete)
+В `core.js` блок удаления категории теперь:
+1. Захватывает `isCategoryPlaceholder` записи до фильтра
+2. Для каждой - `fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').doc(id).delete()`
+3. Пишет tombstone в `productTombstones` (для pull-фильтра)
+4. Только потом `persist('products')`
+
+### Verified
+- logcat: `[catDelete] product doc deleted <id>` + `[catDelete] tombstone written <id>`
+- Console: `products.filter(p => p.category === 'Arman').length === 0`
+- Force-stop + restart: категория не вернулась, pull не воскрешает.
+
+### Still known
+- Обычная кнопка "Удалить товар" на категории **специально** блокируется
+  (`if(p.isCategoryPlaceholder) return`) - это by design, категории удаляются
+  только через "Управление категориями".
