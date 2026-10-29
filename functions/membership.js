@@ -179,3 +179,105 @@ exports.ensureUser = onCall(async (request) => {
 
   return { ok: true, created: isNew, memberOf: mo, uid: callerUid };
 });
+
+// SENIOR-PATCH: deleteEmployeePermanently (v2)
+exports.deleteEmployeePermanently = onCall(async (request) => {
+  const callerUid = await requireAuth(request);
+  const { targetUid, shopId, localId } = request.data || {};
+
+  if (typeof targetUid !== "string" || !targetUid) {
+    throw new HttpsError("invalid-argument", "targetUid is required.");
+  }
+  if (typeof shopId !== "string" || !shopId.startsWith("shop-")) {
+    throw new HttpsError("invalid-argument", "shopId must start with shop-.");
+  }
+  if (targetUid === callerUid) {
+    throw new HttpsError("permission-denied", "Cannot delete yourself.");
+  }
+
+  const callerRoleRaw = await readUserRole(callerUid, shopId);
+  const callerRole = typeof callerRoleRaw === "string" ? callerRoleRaw : (callerRoleRaw && callerRoleRaw.role) || null;
+  if (!OWNER_ROLES.includes(callerRole)) {
+    throw new HttpsError("permission-denied", "Only owner/admin can delete employees.");
+  }
+
+  const targetRef = db().collection("users").doc(targetUid);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) {
+    throw new HttpsError("not-found", "Target user not found.");
+  }
+
+  const memberOf = (targetSnap.data() || {}).memberOf || {};
+  const targetRoleRaw = memberOf[shopId];
+  const targetRole = typeof targetRoleRaw === "string" ? targetRoleRaw : (targetRoleRaw && targetRoleRaw.role) || null;
+  if (OWNER_ROLES.includes(targetRole)) {
+    throw new HttpsError("permission-denied", "Cannot delete the shop owner.");
+  }
+
+  const otherShops = Object.keys(memberOf).filter(k => k !== shopId);
+  if (otherShops.length > 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      "User still belongs to other shops: " + otherShops.join(", ") + ". Use removeUserFromShop first."
+    );
+  }
+
+  let mirrorDeleted = false;
+  if (typeof localId === "string" && localId) {
+    const mirrorRef = db().collection("shops").doc(shopId).collection("users").doc(localId);
+    const mirrorSnap = await mirrorRef.get();
+    if (mirrorSnap.exists) {
+      await mirrorRef.delete();
+      mirrorDeleted = true;
+    }
+  } else {
+    const mirrorQuery = await db().collection("shops").doc(shopId).collection("users")
+      .where("authUid", "==", targetUid).get();
+    if (!mirrorQuery.empty) {
+      const batch = db().batch();
+      mirrorQuery.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      mirrorDeleted = true;
+    }
+  }
+
+  await targetRef.delete();
+
+  const invitesSnap = await db().collection("invites").where("usedBy", "==", targetUid).get();
+  if (!invitesSnap.empty) {
+    const invBatch = db().batch();
+    invitesSnap.docs.forEach(d => {
+      invBatch.set(d.ref, {
+        invalidated: true,
+        invalidatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+    await invBatch.commit();
+  }
+
+  let authDeleted = false;
+  let authDeleteError = null;
+  try {
+    await admin.auth().deleteUser(targetUid);
+    authDeleted = true;
+  } catch (e) {
+    if (e && e.code === "auth/user-not-found") {
+      authDeleted = true;
+    } else {
+      authDeleteError = (e && (e.code || e.message)) || String(e);
+    }
+  }
+
+  await db().collection("shops").doc(shopId).collection("actionHistory").add({
+    actionType: "employee_deleted_permanently",
+    targetUid,
+    localId: localId || null,
+    mirrorDeleted,
+    deletedBy: callerUid,
+    authDeleted,
+    authDeleteError,
+    ts: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  return { ok: true, targetUid, mirrorDeleted, authDeleted, authDeleteError };
+});

@@ -3140,10 +3140,45 @@ async function deleteEmployee(id){
   if(!u){ showToast('Сотрудник не найден'); return; }
   if(u.login==='admin'){ showToast('Нельзя удалить встроенного admin'); return; }
   if(u.id===activeUser.id){ showToast('Нельзя удалить себя'); return; }
-  if(!confirm('Удалить сотрудника «'+(u.name||u.login||'')+'»?\nОн больше не сможет войти.')) return;
+
+  // SENIOR-PATCH-C: two-step confirm + hard delete via CF, no local changes on CF failure
+  const displayName = u.name || u.login || '';
+  if(!confirm('Удалить сотрудника «'+displayName+'» НАВСЕГДА?\n\nЭто действие необратимо:\n- аккаунт будет удалён из Firebase Auth\n- из Firestore (users, mirror, invites)\n- восстановление невозможно.\n\nПродолжить?')) return;
+  if(!confirm('Точно удалить «'+displayName+'»? Отменить это будет нельзя.')) return;
+
   const uid=u.authUid||u.id;
 
-  // P1-4: write tombstone BEFORE persist so sync + pull cannot resurrect.
+  if(!(fbDb && uid && fbAuth && fbAuth.currentUser)){
+    showToast('Firebase недоступен — удаление отменено');
+    return;
+  }
+
+  let cfRes;
+  try{
+    cfRes = await callCloudFn('deleteEmployeePermanently', {
+      targetUid: uid,
+      shopId: FB_SHOP_ID,
+      localId: u.id
+    });
+  }catch(e){
+    console.warn('[delete user cf]', e && e.code, e && e.message);
+    const code = (e && e.code) || '';
+    let msg = 'Не удалось удалить: '+((e && e.message) || e);
+    if(code.indexOf('failed-precondition') >= 0) msg = 'Пользователь ещё в других магазинах. Сначала уберите его из них.';
+    else if(code.indexOf('permission-denied') >= 0) msg = 'Нет прав на удаление этого пользователя.';
+    else if(code.indexOf('not-found') >= 0) msg = 'Пользователь уже удалён на сервере.';
+    showToast(msg);
+    alert(msg);
+    return;
+  }
+
+  if(!cfRes || cfRes.ok !== true){
+    const msg = 'Сервер не подтвердил удаление — локальные данные не тронуты.';
+    showToast(msg);
+    console.warn('[delete user cf] unexpected response', cfRes);
+    return;
+  }
+
   try{
     var _ud = JSON.parse(localStorage.getItem(_lsUserDelKey()) || '{}') || {};
     _ud[String(u.id)] = Date.now();
@@ -3152,23 +3187,17 @@ async function deleteEmployee(id){
     localStorage.setItem(_lsUserDelKey(), JSON.stringify(_ud));
   }catch(e){}
 
-  try{
-    if(fbDb && uid && fbAuth && fbAuth.currentUser){
-      try{
-        await callCloudFn('removeUserFromShop', {
-          targetUid: uid,
-          shopId: FB_SHOP_ID,
-          localId: u.id
-        });
-      }catch(e){
-        console.warn('[delete user cf]', e && e.message);
-        if(typeof showToast==='function') showToast('Не удалось удалить на сервере: '+((e&&e.message)||e));
-      }
-    }
-  }catch(e){}
   users=users.filter(x=>x.id!==id);
   users = _dedupeUsers(users); await persist('users');
-  showToast('Сотрудник удалён');
+
+  if(cfRes.authDeleted === false){
+    const msg = 'Firestore очищен, но Auth-аккаунт не удалён: '+(cfRes.authDeleteError || 'unknown')+'\n\nНужна IAM-роль Firebase Authentication Admin для CF runtime SA.';
+    console.error('[delete user cf] auth not deleted', cfRes.authDeleteError);
+    showToast('Firestore очищен, Auth-аккаунт не удалён');
+    alert(msg);
+  } else {
+    showToast('Сотрудник удалён навсегда');
+  }
   openCashiersModal();
 }
 function loginAsUser(id){
