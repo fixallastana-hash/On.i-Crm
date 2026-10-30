@@ -1,3 +1,6 @@
+/* SENIOR-PATCH-b2.3-edit-form */
+/* SENIOR-PATCH-b2.3-photo-fallback-extend */
+/* SENIOR-PATCH-b2.3-photo-fallback-card */
 /* SENIOR-PATCH-b2-core-callsites */
 // ===== core.js =====
 // Shared utilities available to all CRM modules.
@@ -693,8 +696,9 @@ function bindProducts(){
   document.querySelectorAll('[data-product-photo]').forEach(el=>el.onclick=e=>{
     e.preventDefault(); e.stopPropagation();
     const p=products.find(x=>x.id===el.dataset.productPhoto); if(!p)return;
-    const src=p.mainPhoto||p.photo||(Array.isArray(p.photos)?p.photos[0]:'');
-    if(src){const gallery=Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[src]);const idx=Math.max(0,gallery.indexOf(src));openProductPhotoLightbox(src,p.name||'Фото товара',gallery,idx);}
+    const gallery=(typeof getProductPhotos==='function')?getProductPhotos(p):(Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[]));
+    const src=(typeof getProductMainPhoto==='function')?getProductMainPhoto(p):(p.mainPhoto||p.photo||gallery[0]||'');
+    if(src){const idx=Math.max(0,gallery.indexOf(src));openProductPhotoLightbox(src,p.name||'Фото товара',gallery,idx);}
   });
   document.querySelectorAll('[data-product-info]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openProductInfoModal(b.dataset.productInfo);});
 
@@ -775,8 +779,7 @@ function _pfApplyFilters(list){
       if(hb)return false;
     }
     if(F.noPhoto){
-      var hp=!!p.photo;
-      if(!hp&&Array.isArray(p.photos)&&p.photos.length)hp=true;
+      var hp=(typeof getProductPhotos==='function')?getProductPhotos(p).length>0:(!!p.photo||(Array.isArray(p.photos)&&p.photos.length>0));
       if(hp)return false;
     }
     return true;
@@ -900,8 +903,8 @@ function openProductInfoModal(id){
   if(!requireAccess('products')) return;
   const p=products.find(x=>x.id===id); if(!p)return;
   const root=document.getElementById('modal-root');
-  const photos=Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[]);
-  const main=p.mainPhoto||p.photo||photos[0]||'';
+  const photos=(typeof getProductPhotos==='function')?getProductPhotos(p):(Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[]));
+  const main=(typeof getProductMainPhoto==='function')?getProductMainPhoto(p):(p.mainPhoto||p.photo||photos[0]||'');
   const available=productAvailable(p);
   const barcodes=productBarcodes(p);
   const packaging=Array.isArray(p.packaging)?p.packaging:[];
@@ -1243,9 +1246,9 @@ function openProductModal(id,options={}){
   const editing = id ? products.find(p=>p.id===id) : null;
   const generatedSku = editing ? editing.sku : generateUniqueSKU();
   const root=document.getElementById('modal-root');
-  const initialPhotos=Array.isArray(editing?.photos)?editing.photos.slice():(editing?.photo?[editing.photo]:[]);
+  const initialPhotos=(typeof getProductPhotos==='function')?getProductPhotos(editing).slice():(Array.isArray(editing?.photos)?editing.photos.slice():(editing?.photo?[editing.photo]:[]));
   if(editing?.mainPhoto && !initialPhotos.includes(editing.mainPhoto)) initialPhotos.unshift(editing.mainPhoto);
-  let photos=initialPhotos; let mainPhoto=editing?.mainPhoto||editing?.photo||photos[0]||'';
+  let photos=initialPhotos; let mainPhoto=(typeof getProductMainPhoto==='function')?getProductMainPhoto(editing):(editing?.mainPhoto||editing?.photo||photos[0]||'');
   let extraBarcodes=productBarcodes(editing).slice(1);
   let packaging=Array.isArray(editing?.packaging)?editing.packaging.map(x=>typeof x==='object'?{name:x.name||'',qty:Number(x.qty)||0,unit:x.unit||'шт'}:{name:String(x||''),qty:1,unit:'шт'}):[];
   root.innerHTML=`
@@ -2039,9 +2042,9 @@ function bindOrders(){
     el.onclick=e=>{
       e.preventDefault(); e.stopPropagation();
       const p=products.find(x=>x.id===el.dataset.productPhoto); if(!p) return;
-      const src=p.mainPhoto||p.photo||(Array.isArray(p.photos)?p.photos[0]:'');
+      const gallery=(typeof getProductPhotos==='function')?getProductPhotos(p):(Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[]));
+      const src=(typeof getProductMainPhoto==='function')?getProductMainPhoto(p):(p.mainPhoto||p.photo||gallery[0]||'');
       if(!src) return;
-      const gallery=Array.isArray(p.photos)&&p.photos.length?p.photos:(p.photo?[p.photo]:[src]);
       const idx=Math.max(0,gallery.indexOf(src));
       openProductPhotoLightbox(src,p.name||'Фото товара',gallery,idx);
     };
