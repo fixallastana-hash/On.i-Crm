@@ -3679,6 +3679,10 @@ async function init(){
       try{ _okIdb=await safeStorageSet('photo_'+_mp.id, JSON.stringify(_oldPhotos)); }catch(e){ _okIdb=false; }
       if(!_okIdb) continue;
       _photoCache[_mp.id]=_oldPhotos;
+      try{
+        var _bkKey = 'photo_backup_' + _mp.id + '_' + Date.now(); /* SENIOR-PATCH-b2.2-protect-1 */
+        await safeStorageSet(_bkKey, JSON.stringify({photos:_oldPhotos.slice(),photo:_mp.photo,mainPhoto:_mp.mainPhoto,at:Date.now()}));
+      }catch(_bke){}
       _mp.photos=[];
       _mp.photo='';
       _mp.mainPhoto='';

@@ -404,10 +404,37 @@ function callCloudFn(name, payload) {
 window.callCloudFn = callCloudFn;
 
 // ===== Step 3a: product utilities (pure, no DOM) =====
+/* SENIOR-PATCH-b2.2-protect-3 */
 function getProductPhotos(p){
   if(!p) return [];
   if(Array.isArray(p.photos) && p.photos.length) return p.photos;
   if(p.photo) return [p.photo];
+  if(p.photoUrl) return [p.photoUrl];
+  if(p.id){
+    try{ if(typeof _photoCache !== 'undefined' && Array.isArray(_photoCache[p.id]) && _photoCache[p.id].length) return _photoCache[p.id]; }catch(_e){}
+    try{
+      if(typeof safeStorageGet === 'function'){
+        var _raw = safeStorageGet('photo_' + p.id);
+        if(_raw && typeof _raw === 'string'){
+          var _arr = JSON.parse(_raw);
+          if(Array.isArray(_arr) && _arr.length){ try{ if(typeof _photoCache !== 'undefined') _photoCache[p.id] = _arr; }catch(_e){} return _arr; }
+        }
+      }
+    }catch(_e){}
+    try{
+      var _bkPrefix = 'photo_backup_' + p.id + '_';
+      for(var _li=0; _li<localStorage.length; _li++){
+        var _k = localStorage.key(_li);
+        if(_k && _k.indexOf(_bkPrefix)===0){
+          var _bkRaw = localStorage.getItem(_k);
+          if(_bkRaw){
+            var _bkObj = JSON.parse(_bkRaw);
+            if(_bkObj && Array.isArray(_bkObj.photos) && _bkObj.photos.length) return _bkObj.photos;
+          }
+        }
+      }
+    }catch(_e){}
+  }
   return [];
 }
 
