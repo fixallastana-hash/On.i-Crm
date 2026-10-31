@@ -152,3 +152,28 @@
 - Обычная кнопка "Удалить товар" на категории **специально** блокируется
   (`if(p.isCategoryPlaceholder) return`) - это by design, категории удаляются
   только через "Управление категориями".
+## B.3.5 - Dependabot CVE-2026-93753 (`deepmerge`) - Accepted risk
+
+### Alert
+- Package: `deepmerge` (npm)
+- Advisory: GHSA-gcqx-w48m-w2h4 / CVE-2026-93753
+- Affected: >= 4.2.0, <= 4.3.1
+- **Patched version: None** (no fix available as of 2026-10-31)
+- Severity: low (CVSS 4.0 - Integrity Low only)
+
+### Why accepted
+- **Transitive dev dependency**, not our code:
+  `functions` -> `firebase-functions-test@3.5.0` -> `jest@30.5.2`
+  -> `@jest/core@30.5.2` -> `jest-config@30.5.2` -> `deepmerge@4.3.1`
+- `"dev": true` in `functions/package-lock.json` - build/test only, not runtime
+- Not reachable in production Cloud Functions (no runtime import)
+- No patched version exists; `npm audit fix` cannot resolve
+- Cannot safely override to a fork (prototype poisoning itself is the risk)
+
+### Mitigation
+- Monitor `dependabot/4` - close when upstream releases patch
+- If `deepmerge` becomes runtime-reachable (user-supplied objects to mergeObject) - revisit immediately
+
+### Status
+- Accepted as of 2026-10-31 (tag `b3.5-dependabot-accepted`)
+- Re-evaluate: (1) when patched version published, (2) if deepmerge enters runtime path
