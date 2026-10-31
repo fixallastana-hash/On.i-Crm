@@ -1824,9 +1824,21 @@ async function saveProductPhotos(productId, photos){
 }
 async function deleteProductPhotos(productId){
   try{
+    /* SENIOR-PATCH-b3.3-photo-fields-delete */
     var p = products.find(function(x){ return x.id === productId; });
-    if(p && Array.isArray(p.photos)){
-      for(var i=0; i<p.photos.length; i++){ await _deleteStoragePhotoByUrl(p.photos[i]); }
+    if(p){
+      var _b33Urls = [];
+      if(Array.isArray(p.photos)){ for(var i=0; i<p.photos.length; i++){ if(p.photos[i]) _b33Urls.push(p.photos[i]); } }
+      if(p.photo && typeof p.photo === 'string') _b33Urls.push(p.photo);
+      if(p.photoUrl && typeof p.photoUrl === 'string') _b33Urls.push(p.photoUrl);
+      if(p.mainPhoto && typeof p.mainPhoto === 'string') _b33Urls.push(p.mainPhoto);
+      var _b33Seen = {};
+      for(var _b33i=0; _b33i<_b33Urls.length; _b33i++){
+        var _b33U = _b33Urls[_b33i];
+        if(!_b33U || _b33Seen[_b33U]) continue;
+        _b33Seen[_b33U] = true;
+        await _deleteStoragePhotoByUrl(_b33U);
+      }
     }
   }catch(e){}
   try{ await safeStorageDelete('photo_'+productId); }catch(e){}
