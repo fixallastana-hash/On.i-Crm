@@ -1535,6 +1535,17 @@ async function loginViaFirebase(login, password){
                 var sT = Date.parse(item.updatedAt || item.createdAt || 0) || 0;
                 var lT = Date.parse(localItem.updatedAt || localItem.createdAt || 0) || 0;
                 if(sT > lT){
+                  /* SENIOR-PATCH-b3.2b-pull-merge */
+                  var _b32bFields = ["photos","photo","photoUrl","mainPhoto"];
+                  for(var _b32bFi=0; _b32bFi<_b32bFields.length; _b32bFi++){
+                    var _b32bFk = _b32bFields[_b32bFi];
+                    var _b32bLv = localItem[_b32bFk];
+                    var _b32bLHas = (_b32bFk === "photos") ? (Array.isArray(_b32bLv) && _b32bLv.length > 0) : (_b32bLv != null && _b32bLv !== "");
+                    if(!_b32bLHas) continue;
+                    var _b32bSv = item[_b32bFk];
+                    var _b32bSHas = (_b32bFk === "photos") ? (Array.isArray(_b32bSv) && _b32bSv.length > 0) : (_b32bSv != null && _b32bSv !== "");
+                    if(!_b32bSHas){ item[_b32bFk] = _b32bLv; }
+                  }
                   Object.keys(item).forEach(function(k){ localItem[k] = item[k]; });
                   updated++;
                 }
