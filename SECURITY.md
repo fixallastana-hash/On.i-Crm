@@ -177,3 +177,38 @@
 ### Status
 - Accepted as of 2026-10-31 (tag `b3.5-dependabot-accepted`)
 - Re-evaluate: (1) when patched version published, (2) if deepmerge enters runtime path
+## B.3.4 - Namespace cleanup: `sklad_crm_*` -> `oni_ls_*`
+
+### Problem
+After B.2 migration, localStorage had both `sklad_crm_*` (legacy) and
+`oni_ls_*` (new) keys - 764 KB of duplicated data.
+
+### Audit (dry-run, 2026-10-31)
+- 26 IDENTICAL pairs (products 383KB, orders 46KB, movements 31KB,
+  shifts 6KB, purchases 2KB, contacts 1KB, 20× 0KB) - byte-for-byte equal.
+- 2 ACTIVE_TOMBSTONES (`_recent_deletes`, `_tombstones_synced`) - kept.
+- 2 UNKNOWN active in code - kept:
+  - `sklad_crm_ui_state` (core.js:82) - UI state writer
+  - `sklad_crm_last_uid` (index.html:702,718) - user-change detector
+
+### Action
+Browser Console script: for each `sklad_crm_*`, verify
+`skladVal === oniVal` byte-for-byte, delete only if identical.
+Immediate post-delete verification: `oni_ls_*` still exists.
+No backup needed - `oni_ls_*` is the identical copy.
+
+### Result
+- freed: ~468 KB (990 → 520 KB)
+- deleted: 26 IDENTICAL pairs
+- kept: 4 active (2 tombstones + 2 UNKNOWN)
+- failed: 0, skipped: 0
+- No code change, no data loss (data survived in oni_ls_*)
+
+### Verified
+- force-stop + restart: [B.2] + [app-auth], no ReferenceError
+- Baraka with photo, 271 products, categories visible
+- Deleted products not resurrected (tombstones intact)
+
+### Note
+Cleanup executed via browser console, NOT in code.
+Tag b3.4-namespace-cleanup documents the operation (no app file changes).
