@@ -408,6 +408,7 @@ window.callCloudFn = callCloudFn;
 
 // ===== Step 3a: product utilities (pure, no DOM) =====
 /* SENIOR-PATCH-b2.2-protect-3 */
+/* SENIOR-PATCH-b3.1-photo-cache-sync */
 function getProductPhotos(p){
   if(!p) return [];
   if(Array.isArray(p.photos) && p.photos.length) return p.photos;
@@ -416,8 +417,9 @@ function getProductPhotos(p){
   if(p.id){
     try{ if(typeof _photoCache !== 'undefined' && Array.isArray(_photoCache[p.id]) && _photoCache[p.id].length) return _photoCache[p.id]; }catch(_e){}
     try{
-      if(typeof safeStorageGet === 'function'){
-        var _raw = safeStorageGet('photo_' + p.id);
+      if(typeof localStorage !== 'undefined'){
+        var _raw = localStorage.getItem('oni_ls_photo_' + p.id);
+        if(!_raw) _raw = localStorage.getItem('photo_' + p.id);
         if(_raw && typeof _raw === 'string'){
           var _arr = JSON.parse(_raw);
           if(Array.isArray(_arr) && _arr.length){ try{ if(typeof _photoCache !== 'undefined') _photoCache[p.id] = _arr; }catch(_e){} return _arr; }
@@ -425,10 +427,12 @@ function getProductPhotos(p){
       }
     }catch(_e){}
     try{
+      /* SENIOR-PATCH-b3.1-backup-namespace */
       var _bkPrefix = 'photo_backup_' + p.id + '_';
+      var _lsBkPrefix = 'oni_ls_' + _bkPrefix;
       for(var _li=0; _li<localStorage.length; _li++){
         var _k = localStorage.key(_li);
-        if(_k && _k.indexOf(_bkPrefix)===0){
+        if(_k && (_k.indexOf(_bkPrefix)===0 || _k.indexOf(_lsBkPrefix)===0)){
           var _bkRaw = localStorage.getItem(_k);
           if(_bkRaw){
             var _bkObj = JSON.parse(_bkRaw);

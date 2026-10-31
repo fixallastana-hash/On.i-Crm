@@ -248,6 +248,8 @@ var _employeeCheckedOnce = false;
 /* ===================== STATE ===================== */
 var products=[], movements=[], orders=[], debts=[], consignments=[], contacts=[], suppliers=[], purchases=[], procurementRequests=[], meta={orderSeq:1}, sessions=[], warehouses=[], points=[];
 var _photoCache = {};
+/* SENIOR-PATCH-b3.1-idb-preload-count */
+var _photoPreloadIdbCount = 0;
 var reminders=[];
 var actionHistory=[];
 // ===== НОВОЕ: модульная архитектура =====
@@ -1726,15 +1728,29 @@ async function loginViaFirebase(login, password){
   }
 
 
+/* SENIOR-PATCH-b3.1-idb-preload */
 async function loadProductPhotos(productId){
-  if(_photoCache[productId]) return _photoCache[productId];
+  if(Array.isArray(_photoCache[productId]) && _photoCache[productId].length) return _photoCache[productId];
+  var _photoRaw=null,_photoArr=null,_photoFromIdb=false;
   try{
-    const raw=await safeStorageGet('photo_'+productId);
-    if(raw){
-      const arr=JSON.parse(raw);
-      if(Array.isArray(arr)){_photoCache[productId]=arr;return arr;}
+    if(typeof idbGet==='function'){
+      _photoRaw=await idbGet('photo_'+productId);
+      if(_photoRaw!==null && _photoRaw!==undefined && _photoRaw!==''){
+        try{ var _idbArr=JSON.parse(_photoRaw); if(Array.isArray(_idbArr) && _idbArr.length){ _photoArr=_idbArr; _photoFromIdb=true; } }catch(e){}
+      }
     }
   }catch(e){}
+  if(!_photoArr){
+    try{ _photoRaw=await safeStorageGet('photo_'+productId); }catch(e){}
+    if(_photoRaw){
+      try{ var _lsArr=JSON.parse(_photoRaw); if(Array.isArray(_lsArr) && _lsArr.length) _photoArr=_lsArr; }catch(e){}
+    }
+  }
+  if(_photoArr){
+    _photoCache[productId]=_photoArr;
+    if(_photoFromIdb) _photoPreloadIdbCount++;
+    return _photoArr;
+  }
   return [];
 }
 
@@ -3702,6 +3718,8 @@ async function init(){
       }
     }
   }catch(e){ console.error('photo preload failed',e); }
+  /* SENIOR-PATCH-b3.1-idb-preload-log */
+  console.log('photo preload: ' + _photoPreloadIdbCount + ' from IndexedDB');
  if(!Array.isArray(movements))movements=[]; if(!Array.isArray(orders))orders=[];
   if(!Array.isArray(debts))debts=[]; if(!Array.isArray(consignments))consignments=[]; if(!Array.isArray(contacts))contacts=[]; contacts.forEach(c=>{if(c.bonusBalance===undefined)c.bonusBalance=0;if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];});
   // Привязываем старые контакты поставщиков к новой карточке поставщика по телефону/имени.
