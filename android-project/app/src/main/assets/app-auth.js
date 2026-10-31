@@ -33,3 +33,24 @@
   }
 })();
 /* end SENIOR-PATCH-b2-auth-module */
+// SENIOR-PATCH-b3.6-token-sub: belt-and-suspenders token push
+// Runs AFTER inline (window.fbAuth is now set)
+if (window.fbAuth && typeof window.fbAuth.onIdTokenChanged === 'function') {
+  try {
+    window.fbAuth.onIdTokenChanged(function(user){
+      if (user) {
+        user.getIdToken().then(function(t){
+          if (window.Android && typeof window.Android.setIdToken === 'function') {
+            window.Android.setIdToken(t);
+            try { console.log('[app-auth] token pushed, len=' + t.length); } catch(_){}
+          }
+        }).catch(function(e){ try { console.warn('[app-auth] token push failed', e && e.message); } catch(_){} });
+      } else {
+        if (window.Android && typeof window.Android.setIdToken === 'function') {
+          window.Android.setIdToken('');
+        }
+      }
+    });
+    try { console.log('[app-auth] onIdTokenChanged subscribed (b3.6)'); } catch(_){}
+  } catch(e) { try { console.warn('[app-auth] onIdTokenChanged sub error', e && e.message); } catch(_){} }
+}

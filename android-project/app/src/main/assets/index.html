@@ -4022,7 +4022,7 @@ window._oniPushIdToken = _oniPushIdToken;
 setInterval(_oniPushIdToken, 25 * 60 * 1000);
 // SENIOR-PATCH-4a-token-hook: claims sync on every ID-token refresh (SDK ~1h + after setCustomUserClaims)
 try{
-  if(window.fbAuth && typeof fbAuth.onIdTokenChanged === 'function'){
+  if(fbAuth && typeof fbAuth.onIdTokenChanged === 'function'){
     fbAuth.onIdTokenChanged(function(user){
       if(user && typeof user.getIdTokenResult === 'function'){
         user.getIdTokenResult().then(function(r){ _oniSetClaims((r && r.claims) || {}); }).catch(function(){});
@@ -4038,7 +4038,7 @@ setInterval(function(){ if(typeof _oniRefreshClaims==='function'){ _oniRefreshCl
 // Подписка на авто-обновление Firebase ID-токена.
 // Срабатывает при логине, логауте и когда Firebase сам обновляет токен (~раз в час).
 try {
-  if (window.fbAuth && typeof fbAuth.onIdTokenChanged === 'function') {
+  if (fbAuth && typeof fbAuth.onIdTokenChanged === 'function') {
     fbAuth.onIdTokenChanged(function(user){
       if (user) {
         user.getIdToken().then(function(t){
