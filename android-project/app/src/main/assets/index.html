@@ -1164,6 +1164,14 @@ async function loginViaFirebase(login, password){
       if(!Array.isArray(data) || data.length === 0){
         return;
       }
+      /* SENIOR-PATCH-b3.2-push-merge-map */
+      var _b32RemotePhotoMap = {};
+      if(collectionName === 'products' && fbDb && fbAuth && fbAuth.currentUser){
+        try{
+          var _b32Snap = await fbDb.collection('shops').doc(FB_SHOP_ID).collection('products').get();
+          _b32Snap.forEach(function(doc){ _b32RemotePhotoMap[doc.id] = doc.data() || {}; });
+        }catch(e){ try{ console.warn('[b3.2] remote photo map failed:', e && e.message); }catch(_e){} }
+      }
       var CHUNK = 400;
       for(var i=0;i<data.length;i+=CHUNK){
         var batch=fbDb.batch();
@@ -1174,7 +1182,22 @@ async function loginViaFirebase(login, password){
           var id=String(item.id||('auto-'+i+'-'+j));
           var safeId=id.replace(/[\/\s]+/g,'_');
           var ref=fbDb.collection('shops').doc(FB_SHOP_ID).collection(collectionName).doc(safeId);
-          batch.set(ref, item);
+          /* SENIOR-PATCH-b3.2-push-merge */
+          var _b32Item = item;
+          if(collectionName === 'products' && _b32RemotePhotoMap[safeId]){
+            var _b32R = _b32RemotePhotoMap[safeId];
+            var _b32LocalHas = (Array.isArray(item.photos) && item.photos.length) || item.photo || item.photoUrl;
+            var _b32RemoteHas = (Array.isArray(_b32R.photos) && _b32R.photos.length) || _b32R.photo || _b32R.photoUrl;
+            if(!_b32LocalHas && _b32RemoteHas){
+              _b32Item = Object.assign({}, item);
+              if(Array.isArray(_b32R.photos) && _b32R.photos.length) _b32Item.photos = _b32R.photos;
+              if(_b32R.photo) _b32Item.photo = _b32R.photo;
+              if(_b32R.photoUrl) _b32Item.photoUrl = _b32R.photoUrl;
+              if(_b32R.mainPhoto) _b32Item.mainPhoto = _b32R.mainPhoto;
+              try{ console.log('[b3.2] preserving photo fields for ' + safeId); }catch(_e){}
+            }
+          }
+          batch.set(ref, _b32Item);
         }
         await batch.commit();
       }
