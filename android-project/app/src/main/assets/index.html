@@ -218,6 +218,11 @@ html, body { touch-action: pan-x pan-y; -ms-touch-action: pan-x pan-y; }
   };
   /* Фаза 2: shopId для записи в Firestore. Пока один магазин. */
   let FB_SHOP_ID = 'shop-default';
+var _shopReady = false;
+var _shopPendingSync = {};
+var _shopLoadPromise = null;
+var _shopLoadGeneration = 0;
+var _shopNotReadyLogged = false;
 var _shopDeletedChecked = false;
 var _employeeCheckedOnce = false;
   let fbApp=null, fbDb=null, fbAuth=null;
@@ -433,7 +438,13 @@ var sessionTimer=null;
 var sessionLocked=false;
 function saveAuthSession(){ try{ if(activeUser){ activeSession={ id:(activeSession&&activeSession.id)||uid(), userId:activeUser.id, loginAt:(activeSession&&activeSession.loginAt)||nowISO(), lastActivityAt:nowISO(), shiftId:currentShiftId||null, device:(navigator.userAgent||'').slice(0,120) }; localStorage.setItem(AUTH_SESSION_KEY,JSON.stringify(activeSession)); } }catch(e){} }
 function touchAuthSession(){ try{ if(activeSession){ activeSession.lastActivityAt=nowISO(); activeSession.shiftId=currentShiftId||activeSession.shiftId||null; localStorage.setItem(AUTH_SESSION_KEY,JSON.stringify(activeSession)); } }catch(e){} }
-function clearAuthSession(){ try{ activeSession=null; localStorage.removeItem(AUTH_SESSION_KEY); try{ if(window.Android && typeof window.Android.setIdToken === 'function'){ window.Android.setIdToken(''); } }catch(_){} }catch(e){} }
+function clearAuthSession(){
+  _shopLoadGeneration++;
+  _shopLoadPromise = null;
+  _shopReady = false;
+  _shopPendingSync = {};
+  _shopNotReadyLogged = false;
+  FB_SHOP_ID = 'shop-default'; try{ activeSession=null; localStorage.removeItem(AUTH_SESSION_KEY); try{ if(window.Android && typeof window.Android.setIdToken === 'function'){ window.Android.setIdToken(''); } }catch(_){} }catch(e){} }
 function logSessionEvent(kind,extra){ try{ const s=Object.assign({ id:uid(), userId:(activeUser&&activeUser.id)||null, userName:(activeUser&&activeUser.name)||'', role:(activeUser&&activeUser.role)||'', kind, at:nowISO(), shiftId:currentShiftId||null, device:(navigator.userAgent||'').slice(0,120) },extra||{}); sessions.push(s); if(sessions.length>500)sessions=sessions.slice(-500); persist('sessions').catch(()=>{}); }catch(e){} }
 function stopSessionTimer(){ if(sessionTimer){ clearInterval(sessionTimer); sessionTimer=null; } sessionLocked=false; }
 function startSessionTimer(){ stopSessionTimer(); if(!cashSettings.sessionLockEnabled){ stopSessionTimer(); return; } const lockMin=Math.max(0,Number(cashSettings.sessionLockMinutes)||0), logoutMin=Math.max(lockMin,Number(cashSettings.sessionLogoutMinutes)||0); if(!lockMin&&!logoutMin)return; sessionTimer=setInterval(function(){ if(!activeUser||!activeSession){ stopSessionTimer(); return; } const last=new Date(activeSession.lastActivityAt||activeSession.loginAt).getTime(); const mins=(Date.now()-last)/60000; if(logoutMin&&mins>=logoutMin){ stopSessionTimer(); showToast('Сессия завершена по таймауту'); logoutAccount(true); return; } if(lockMin&&mins>=lockMin&&!sessionLocked){ sessionLocked=true; lockSessionScreen(); } },30000); }
@@ -628,57 +639,102 @@ async function testFirebaseConnection(){
   }
 
   async function _fbLoadActiveShop(uid){
+  if(!uid) return {ok:false, reason:'no-user', shopId:null};
+
+  if(_shopLoadPromise && _shopLoadPromise.uid === uid){
+    return _shopLoadPromise.promise;
+  }
+
+  var gen = ++_shopLoadGeneration;
+
+  var p = _doLoadActiveShop(uid, gen);
+
+  _shopLoadPromise = {
+    uid:uid,
+    promise:p
+  };
+
+  return p;
+}
+
+async function _attemptLoadActiveShop(uid){
   try{
-    if(!fbDb || !uid) return;
-    var snap=await fbDb.collection('users').doc(uid).get();
-    if(!snap || !snap.exists) return;
-    var data=snap.data()||{};
-    var mo=data.memberOf||{};
-    var keys=Object.keys(mo);
-    if(keys.length>0){
-      FB_SHOP_ID=keys[0];
-      try{
-        var _shp=await fbDb.collection('shops').doc(FB_SHOP_ID).get();
-        if(_shp && _shp.exists){
-          var _shd=_shp.data()||{};
-          if(_shd.deleted===true){
-            showToast('Магазин удалён. Обратитесь к владельцу.');
-            try{ await fbAuth.signOut(); }catch(e){}
-            setTimeout(function(){ location.reload(); }, 1500);
-            return;
-          }
-        }
-      }catch(e){}
+    if(!fbDb || !uid){
+      return {ok:false, reason:'no-user', shopId:null};
     }
-    var em=data.email||'';
-    var login=em.indexOf('@')>0 ? em.slice(0,em.indexOf('@')) : em;
-    var role='owner';
-    if(keys.length>0 && mo[keys[0]]) role=mo[keys[0]];
-    if(role==='owner') role='admin';
-    // SENIOR-PATCH: case-insensitive match — no dup creation
+
+    var uDoc = await fbDb.collection('users').doc(uid).get();
+
+    if(!uDoc || !uDoc.exists){
+      return {ok:false, reason:'no-user', shopId:null};
+    }
+
+    var data = uDoc.data() || {};
+    var memberOf = data.memberOf || {};
+    var keys = Object.keys(memberOf);
+
+    if(!keys.length){
+      return {ok:false, reason:'no-member', shopId:null};
+    }
+
+    var shopId = keys[0];
+
+    if(!shopId || typeof shopId !== 'string'){
+      return {ok:false, reason:'no-member', shopId:null};
+    }
+
+    var shopDoc = await fbDb.collection('shops').doc(shopId).get();
+
+    if(shopDoc && shopDoc.exists){
+      var shopData = shopDoc.data() || {};
+
+      if(shopData.deleted === true){
+        console.warn('[shop] shop deleted');
+        try{ await fbAuth.signOut(); }catch(e){}
+        setTimeout(function(){ location.reload(); }, 1500);
+
+        return {ok:false, reason:'deleted', shopId:null};
+      }
+    } else {
+      console.warn('[shop] root doc missing');
+    }
+
+    var em = data.email || '';
+    var login = em.indexOf('@') > 0 ? em.slice(0, em.indexOf('@')) : em;
+
+    var role = memberOf[shopId] || 'owner';
+
+    if(role === 'owner') role = 'admin';
+
     var _ln = login ? String(login).toLowerCase() : '';
     var _em = em ? String(em).toLowerCase() : '';
-    var exists=users.find(function(x){
+
+    var exists = users.find(function(x){
       if(!x) return false;
-      if(x.id===uid || x.authUid===uid) return true;
-      if(_ln && x.login && String(x.login).toLowerCase()===_ln) return true;
-      if(_em && x.email && String(x.email).toLowerCase()===_em) return true;
+      if(x.id === uid || x.authUid === uid) return true;
+      if(_ln && x.login && String(x.login).toLowerCase() === _ln) return true;
+      if(_em && x.email && String(x.email).toLowerCase() === _em) return true;
       return false;
     });
+
     if(exists){
-      if(exists.role==='owner') exists.role='admin';
-      if(!exists.authUid) exists.authUid=uid;
-      if(!exists.authEmail) exists.authEmail=em;
-      if(!exists.email) exists.email=em;
-      if(!exists.memberOf) exists.memberOf=mo;
-      try{ users = _dedupeUsers(users); await persist('users'); }catch(e){}
+      if(exists.role === 'owner') exists.role = 'admin';
+      if(!exists.authUid) exists.authUid = uid;
+      if(!exists.authEmail) exists.authEmail = em;
+      if(!exists.email) exists.email = em;
+      if(!exists.memberOf) exists.memberOf = memberOf;
+
+      try{
+        users = _dedupeUsers(users);
+        await persist('users');
+      }catch(e){}
     } else {
       users.push({
         id:uid,
-        name:data.name||login||'Владелец',
+        name:data.name || login || 'Владелец',
         login:login,
         email:em,
-        memberOf:mo,
+        memberOf:memberOf,
         password:'',
         role:role,
         active:true,
@@ -686,9 +742,160 @@ async function testFirebaseConnection(){
         authEmail:em,
         createdAt:nowISO()
       });
-      try{ users = _dedupeUsers(users); await persist('users'); }catch(e){}
+
+      try{
+        users = _dedupeUsers(users);
+        await persist('users');
+      }catch(e){}
     }
-  }catch(e){ console.warn('[shop] load active failed', e && e.message || e); }
+
+    return {ok:true, reason:'ok', shopId:shopId};
+
+  }catch(e){
+    var code = e && e.code ? String(e.code) : '';
+
+    if(
+      code === 'unavailable' ||
+      code === 'deadline-exceeded' ||
+      (typeof navigator !== 'undefined' && navigator.onLine === false)
+    ){
+      return {ok:false, reason:'network', shopId:null};
+    }
+
+    console.warn('[shop] load fail reason=load-error', e && e.message || e);
+
+    return {ok:false, reason:'load-error', shopId:null};
+  }
+}
+
+function _shopUidIsCurrent(uid, gen){
+  if(gen !== _shopLoadGeneration) return false;
+  if(!fbAuth || !fbAuth.currentUser) return false;
+  if(fbAuth.currentUser.uid !== uid) return false;
+  return true;
+}
+
+function _activateLoadedShop(uid, gen, result){
+  if(!_shopUidIsCurrent(uid, gen)) {
+    return {ok:false, reason:'superseded', shopId:null};
+  }
+
+  if(!result || !result.ok){
+    return result || {ok:false, reason:'load-error', shopId:null};
+  }
+
+  FB_SHOP_ID = result.shopId;
+
+  _shopReady = true;
+
+  console.log('[shop] load ok shop=' + FB_SHOP_ID);
+
+  try{
+    startProductsWatcher();
+  }catch(e){
+    console.warn('[shop] watcher start failed', e && e.message);
+  }
+
+  var names = Object.keys(_shopPendingSync);
+
+  ['products','users','warehouses','points'].forEach(function(c){
+    if(names.indexOf(c) < 0) names.push(c);
+  });
+
+  _shopPendingSync = {};
+
+  names.forEach(function(c){
+    _fbScheduleSync(c);
+  });
+
+  _shopNotReadyLogged = false;
+  _shopLoadPromise = null;
+
+  return {ok:true, reason:'ok', shopId:FB_SHOP_ID};
+}
+
+async function _doLoadActiveShop(uid, gen){
+  console.log('[shop] load start uid=' + uid);
+
+  var r = await _attemptLoadActiveShop(uid);
+
+  if(gen !== _shopLoadGeneration){
+    return {ok:false, reason:'superseded', shopId:null};
+  }
+
+  if(!_shopUidIsCurrent(uid, gen)){
+    return {ok:false, reason:'uid-changed', shopId:null};
+  }
+
+  if(r.ok){
+    return _activateLoadedShop(uid, gen, r);
+  }
+
+  if(
+    r.reason === 'no-user' ||
+    r.reason === 'no-member' ||
+    r.reason === 'deleted'
+  ){
+    _shopLoadPromise = null;
+    console.warn('[shop] load fail reason=' + r.reason);
+    return r;
+  }
+
+  if(r.reason !== 'network'){
+    _shopLoadPromise = null;
+    console.warn('[shop] load fail reason=' + r.reason);
+    return r;
+  }
+
+  console.warn('[shop] load fail reason=network-retry');
+  _scheduleShopRetry(uid, gen, 1);
+
+  return {ok:false, reason:'retrying', shopId:null};
+}
+
+function _scheduleShopRetry(uid, gen, attempt){
+  if(attempt > 3){
+    if(_shopLoadPromise && _shopLoadPromise.uid === uid){
+      _shopLoadPromise = null;
+    }
+    console.warn('[shop] retries exhausted');
+    return;
+  }
+
+  console.log('[shop] retry ' + attempt + ' in 3s');
+
+  setTimeout(async function(){
+    if(gen !== _shopLoadGeneration) return;
+    if(!fbAuth || !fbAuth.currentUser || fbAuth.currentUser.uid !== uid) return;
+
+    var r = await _attemptLoadActiveShop(uid);
+
+    if(gen !== _shopLoadGeneration) return;
+    if(!fbAuth || !fbAuth.currentUser || fbAuth.currentUser.uid !== uid) return;
+
+    if(r.ok){
+      _activateLoadedShop(uid, gen, r);
+      return;
+    }
+
+    if(
+      r.reason === 'no-user' ||
+      r.reason === 'no-member' ||
+      r.reason === 'deleted'
+    ){
+      _shopLoadPromise = null;
+      console.warn('[shop] retry stopped reason=' + r.reason);
+      return;
+    }
+
+    if(r.reason !== 'network'){
+      _shopLoadPromise = null;
+      console.warn('[shop] retry stopped reason=' + r.reason);
+      return;
+    }
+
+    _scheduleShopRetry(uid, gen, attempt + 1);
+  }, 3000);
 }
 async function loginViaFirebase(login, password){
       if(!login || !password) return {ok:false, reason:'empty'};
@@ -701,6 +908,12 @@ async function loginViaFirebase(login, password){
         try{
           var _prevUid=localStorage.getItem('sklad_crm_last_uid');
           if(_prevUid && _prevUid!==u.uid){
+            _shopLoadGeneration++;
+            _shopLoadPromise = null;
+            _shopReady = false;
+            _shopPendingSync = {};
+            _shopNotReadyLogged = false;
+            FB_SHOP_ID = 'shop-default';
             try{
               var _toDel=[];
               for(var _i=0;_i<localStorage.length;_i++){
@@ -1059,6 +1272,10 @@ async function loginViaFirebase(login, password){
   };
 
   function _fbScheduleSync(collectionName){
+    if(_shopReady !== true){
+      if(collectionName){ _shopPendingSync[collectionName]=true; }
+      return;
+    }
     if(!fbDb) return;
     if(_fbSync.timers[collectionName]){
       clearTimeout(_fbSync.timers[collectionName]);
@@ -1070,6 +1287,15 @@ async function loginViaFirebase(login, password){
   }
 
   async function _fbRunSync(collectionName){
+    if(!_shopReady){
+      if(collectionName){ _shopPendingSync[collectionName]=true; }
+      if(!_shopNotReadyLogged){
+        _shopNotReadyLogged=true;
+        console.log('[sync] deferred until shop ready');
+      }
+      return;
+    }
+    _shopNotReadyLogged=false;
     /* Фаза 1c-1: не пишем в Firestore без авторизации.
        Rules требуют request.auth != null. */
     if(!fbAuth || !fbAuth.currentUser){
@@ -1249,6 +1475,7 @@ async function loginViaFirebase(login, password){
   /* Фаза 2: односторонняя подгрузка данных из Firestore в localStorage.
      Вызывается только при пустом localStorage — при холодном старте. */
   async function _fbPullFromFirestore(){
+    if(!_shopReady) return false;
     if(!fbAuth || !fbAuth.currentUser) return false;
     if(!fbDb) return false;
     var pulled=0;
@@ -1315,6 +1542,7 @@ async function loginViaFirebase(login, password){
     /* onSnapshot: Firestore сам присылает изменения в products.
        Когда данные меняются — дёргаем pull немедленно (не ждём таймер). */
     function startProductsWatcher(){
+      if(!_shopReady) return;
       try{
         if(!fbAuth || !fbAuth.currentUser) return;
         if(!fbDb) return;
@@ -1355,6 +1583,13 @@ async function loginViaFirebase(login, password){
 
     async function _fbSyncPull(){
       if(_fbSyncPullRunning) return;
+      if(!_shopReady){
+        if(!_shopNotReadyLogged){
+          _shopNotReadyLogged=true;
+          console.log('[sync:pull] deferred until shop ready');
+        }
+        return;
+      }
       var _log = function(msg){ try{ var s=String(msg); if(/^(FAILED|.*failed|\u043e\u0448\u0438\u0431\u043a\u0430)/.test(s)) console.warn('[sync:pull] ' + s); else console.log('[sync:pull] ' + s); }catch(_){} };
       _log('start, products=' + (products?products.length:'?') + ', lastPersist=' + Math.round((Date.now()-_lastPersistAt)) + 'ms ago');
       if(!fbAuth || !fbAuth.currentUser) return;
@@ -3937,7 +4172,16 @@ async function init(){
   document.getElementById('app').style.display='none';
   try{
     fbAuth.onAuthStateChanged(function(u){
-      if(u){ setTimeout(function(){ try{ _oniPushIdToken(); }catch(e){} }, 500); }
+      if(u){
+        if(activeSession){
+          try{
+            _fbLoadActiveShop(u.uid).catch(function(e){
+              console.warn('[shop] load failed', e && e.message);
+            });
+          }catch(e){}
+        }
+        setTimeout(function(){ try{ _oniPushIdToken(); }catch(e){} }, 500);
+      }
     });
   }catch(e){}
 

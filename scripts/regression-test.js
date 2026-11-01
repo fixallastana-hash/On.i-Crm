@@ -38,7 +38,7 @@ const GLOBAL_FUNCS = [
   '_fbSyncPull', '_fbPullFromFirestore', '_fbRunSync', '_fbLoadActiveShop',
   'startProductsWatcher', 'callCloudFn'
 ];
-const GLOBAL_VARS = ['FB_SHOP_ID'];
+const GLOBAL_VARS = ['FB_SHOP_ID', '_shopReady', '_shopPendingSync', '_shopLoadPromise', '_shopLoadGeneration', '_shopNotReadyLogged'];
 
 // Summed over ALL runtime JS (inline + every external script). Definitions are
 // not counted as calls.
