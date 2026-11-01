@@ -16,6 +16,12 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Regression test (b5.0)
+        env:
+          ONI_INDEX_PATH: ${{ github.workspace }}/android-project/app/src/main/assets/index.html
+          ONI_ASSETS_DIR: ${{ github.workspace }}/android-project/app/src/main/assets
+        run: node scripts/regression-test.js
+
       - name: Run smoke test
         shell: pwsh
         env:

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 $path = $env:ONI_INDEX_PATH
 $assets = $env:ONI_ASSETS_DIR
 if(-not $path){ $path = 'C:\oni\Index.html' }
@@ -58,7 +58,8 @@ foreach($fn in $movedFns){
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if($node){
-  $tmp = [IO.Path]::GetTempFileName() + ".js"
+  $tmpBase = [IO.Path]::GetTempFileName()
+  $tmp = $tmpBase + ".js"
   try {
     if(Test-Path $corePath){
       $checks += @{ name = "node --check core.js"; test = {
@@ -74,8 +75,21 @@ if($node){
         $LASTEXITCODE -eq 0
       }.GetNewClosure() }
     }
+    # b5.0: static regression checks (scripts/regression-test.js)
+    $rtPath = Join-Path $PSScriptRoot "regression-test.js"
+    if(Test-Path $rtPath){
+      $checks += @{ name = "node regression-test.js"; test = {
+        $ErrorActionPreference = "Continue"
+        $env:ONI_INDEX_PATH = $path
+        $env:ONI_ASSETS_DIR = $assets
+        $rtOut = & node $rtPath 2>&1
+        $rtOk = ($LASTEXITCODE -eq 0)
+        if(-not $rtOk){ $rtOut | ForEach-Object { Write-Host ("    " + $_) } }
+        $rtOk
+      }.GetNewClosure() }
+    }
   } finally {
-    if(Test-Path $tmp){ Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+    foreach($t in @($tmpBase, $tmp)){ if(Test-Path $t){ Remove-Item $t -Force -ErrorAction SilentlyContinue } }
   }
 } else {
   Write-Host "node not available — skipping syntax checks" -ForegroundColor Yellow
