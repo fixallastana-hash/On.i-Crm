@@ -245,3 +245,37 @@ localStorage (URL photos, not lost — just relocated).
 ### Conclusion
 B.3.2 + B.3.2b + CORS are **not preventive** — they are **actively protecting 167 live photos**
 against future loss. Keep them.
+## B.2 — AUTH MODULE EXTRACTION: PARTIAL / DEFER
+
+### Current state
+- `app-auth.js` publishes Firebase aliases (`window.fbApp/fbAuth/fbDb`)
+  and subscribes to `onIdTokenChanged`.
+- `_oniPushIdToken`, `_oniRefreshClaims` and `loginViaFirebase` remain inline in `index.html`.
+- `loginViaFirebase` depends on **33 globals** (products/movements/orders/...,
+  callCloudFn, _fbLoadActiveShop, startProductsWatcher, _fbSyncPull,
+  _oniPushIdToken, _oniRefreshClaims, localStorage, console).
+- `app-auth.js` loads **after** the main inline script. But `_oniPushIdToken`
+  is called from inline session-restore (index.html:3949) before `app-auth.js`
+  loads — so it cannot be moved without restructuring auth bootstrap.
+- `onIdTokenChanged` currently has **three** subscriptions:
+  - inline L4029-4038: update `_oniClaims`
+  - inline L4045-4064: push token to `window.Android.setIdToken`
+  - `app-auth.js:36-56`: push token to `window.Android.setIdToken` (dup)
+
+### Decision: DEFER full extraction
+Full extraction of auth functions requires:
+1. Explicit auth bootstrap/lifecycle boundary (load order redesign).
+2. Merging of 3 `onIdTokenChanged` subscriptions into one (claims + Android token).
+3. Regression tests covering: login, claims (Phase 4a), session restore, Android token delivery.
+
+### Rules
+- Do NOT move `loginViaFirebase` by copying function bodies alone (33 deps).
+- Do NOT remove claims subscription when deduplicating token listeners.
+- Do NOT change `firebaseConfig` or Firebase initialization in B.2.
+
+### Keep as-is
+- `window.fbApp/fbAuth/fbDb` aliases (app-auth.js)
+- `_oniPushIdToken` / `_oniRefreshClaims` / `loginViaFirebase` inline
+- All 3 `onIdTokenChanged` subscriptions (deduplication deferred to B.5)
+
+Verified audit: Claude Code 2026-11-01, HEAD df41349.
