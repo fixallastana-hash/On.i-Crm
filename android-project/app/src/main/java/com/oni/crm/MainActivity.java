@@ -4275,13 +4275,13 @@ private void injectAIChat() {
         "      var price=Math.round(Number(p.price||0));" +
         "      var qty=Number(p.qty||0);" +
         "      var unit=String(p.unit||'шт');" +
-        "      byCat[cat].push('- '+name+' | '+price+'тг | '+qty+' '+unit);" +
+        "      byCat[cat].push(name+'|'+price+'|'+qty);" +
         "      total++;" +
         "    }" +
         "    if(total===0)return '';" +
         "    var lines=[];" +
         "    var cats=order.slice().sort();" +
-        "    lines.push('ДОСТУПНЫЕ КАТЕГОРИИ: '+cats.join(', '));" +
+        "    lines.push('КАТЕГОРИИ: '+cats.join(','));" +
         "    lines.push('');" +
         "    for(var c=0;c<cats.length;c++){" +
         "      var ct=cats[c];" +
