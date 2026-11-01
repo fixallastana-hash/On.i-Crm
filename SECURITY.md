@@ -212,3 +212,36 @@ No backup needed - `oni_ls_*` is the identical copy.
 ### Note
 Cleanup executed via browser console, NOT in code.
 Tag b3.4-namespace-cleanup documents the operation (no app file changes).
+## Correction 2026-11-01: 175 photos were NOT lost (diagnostic error)
+
+### What was claimed (wrong)
+"~175 photos lost during B.2 migration. PITR was OFF, unrecoverable."
+
+### Real facts (verified via Firestore full scan, 271 products)
+- products with photos in Firestore: **167** (URL in `photos[]` array, 1 in `photoUrl`)
+- products with `hasPhotos=true` flag but empty photo fields: **0**
+- products that never had photos: **104**
+- **Actual photos lost: 0**
+
+### Root cause of diagnostic error
+Earlier diagnostic used `snap.docs.slice(0, 15)` — a non-representative sample
+of 15 products, all happened to have empty photo fields (never had photos).
+Concluded "all 271 empty" — wrong. Full scan via `snap.forEach` shows 167 with photos.
+
+Also misinterpreted `withPhotosFlag: 175` (B.2 migration flag) as "175 photos lost",
+but flag was set on products whose photos were migrated to `photo_<id>` in
+localStorage (URL photos, not lost — just relocated).
+
+### What actually protected the photos
+1. **b3.2 push-merge** (index.html L1187-1199): `_b32RemotePhotoMap` — when local
+   `photos` is empty, merge remote `photos`/`photoUrl`/`mainPhoto` from Firestore
+   before `batch.set`. Without this, uninstall + login + push would have wiped all
+   167 photos from Firestore.
+2. **b3.2b pull-merge** (L1537-1548): `_b32bFields` — preserve local non-empty
+   photo fields when server returns empty.
+3. **CORS on bucket** (`gsutil cors set`, 2026-10-30): `Access-Control-Allow-Origin: *`
+   for WebView `<img src>` to render Firebase Storage URLs.
+
+### Conclusion
+B.3.2 + B.3.2b + CORS are **not preventive** — they are **actively protecting 167 live photos**
+against future loss. Keep them.
