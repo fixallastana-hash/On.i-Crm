@@ -1075,7 +1075,7 @@ async function loginViaFirebase(login, password){
     if(!fbAuth || !fbAuth.currentUser){
       return;
     }
-    var _log = function(){};
+    var _log = function(msg){ try{ var s=String(msg); if(/^(FAILED|.*failed|\u043e\u0448\u0438\u0431\u043a\u0430)/.test(s)) console.warn('[sync:push] ' + s); else console.log('[sync:push] ' + s); }catch(_){} };
     _log('start, items=' + ((_fbGetCollectionData(collectionName)||[]).length));
     if(_fbSync.running[collectionName]){
       _fbSync.queued[collectionName]=true;
@@ -1355,7 +1355,7 @@ async function loginViaFirebase(login, password){
 
     async function _fbSyncPull(){
       if(_fbSyncPullRunning) return;
-      var _log = function(){};
+      var _log = function(msg){ try{ var s=String(msg); if(/^(FAILED|.*failed|\u043e\u0448\u0438\u0431\u043a\u0430)/.test(s)) console.warn('[sync:pull] ' + s); else console.log('[sync:pull] ' + s); }catch(_){} };
       _log('start, products=' + (products?products.length:'?') + ', lastPersist=' + Math.round((Date.now()-_lastPersistAt)) + 'ms ago');
       if(!fbAuth || !fbAuth.currentUser) return;
       if(!fbDb) return;
@@ -1423,7 +1423,9 @@ async function loginViaFirebase(login, password){
         var before = JSON.stringify({
           p:products, m:movements, o:orders, d:debts, c:consignments,
           ct:contacts, s:suppliers, pu:purchases, gc:giftCards,
-          wh:warehouses, pt:points
+          wh:warehouses, pt:points,
+          pr:procurementRequests, rm:reminders, sh:shifts,
+          ms:messages, us:users
         });
 
         var mapping = [
@@ -1563,7 +1565,9 @@ async function loginViaFirebase(login, password){
         var after = JSON.stringify({
           p:products, m:movements, o:orders, d:debts, c:consignments,
           ct:contacts, s:suppliers, pu:purchases, gc:giftCards,
-          wh:warehouses, pt:points
+          wh:warehouses, pt:points,
+          pr:procurementRequests, rm:reminders, sh:shifts,
+          ms:messages, us:users
         });
         changed = (before !== after);
 
@@ -1576,7 +1580,7 @@ async function loginViaFirebase(login, password){
               persist('suppliers'), persist('purchases'),
               persist('procurementRequests'), persist('giftCards'),
               persist('reminders'), persist('shifts'), persist('messages'),
-              persist('warehouses'), persist('points')
+              persist('warehouses'), persist('points'), persist('users')
             ]);
           }catch(e){}
           // Перерисовка без сброса позиции скролла.
