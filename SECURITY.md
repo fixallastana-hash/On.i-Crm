@@ -279,3 +279,30 @@ Full extraction of auth functions requires:
 - All 3 `onIdTokenChanged` subscriptions (deduplication deferred to B.5)
 
 Verified audit: Claude Code 2026-11-01, HEAD df41349.
+
+## B5.2.0 — UPDATED AT UPDATE PATHS
+
+### Покрыто (11 paths)
+
+- orders: getOrderReturnTotal, showHalykRefundWaiting, openReturnModal — после mutation, до persist
+- debts: payDebt — после mutation
+- contacts: openSupplierContactModal edit, openClientModal edit, openClientBonusManager, openReturnModal refund bonus, findOrCreateContact (conditional по 6 полям), finalizePreparedSale bonus mutations (conditional по order.bonusUsed/order.bonusEarned) — 6 paths
+- suppliers: openSupplierModal edit
+
+### Не покрыто и почему
+
+- purchases, movements — журнальная семантика (append/delete), update paths отсутствуют
+- messages — специальная схема, требует отдельного аудита
+- users — специальная ветка с защитой паролей и tombstones
+
+### Условия допуска к B5.2 (merge:true + compare)
+
+- 5 Firestore-проверок пройдены на Redmi (см. чек-лист пользователя)
+- #5 (no-op sale → updatedAt не меняется) особенно критичен
+- merge:true включается только для orders/debts/contacts/suppliers
+
+### Не тронуто
+
+- products/warehouses/points — b3.2b photo merge
+- _fbSyncPull guard b5.1, _shopReady, _shopPendingSync, _shopLoadGeneration, _shopNotReadyLogged
+- clearAuthSession

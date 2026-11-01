@@ -5570,7 +5570,7 @@ async function payDebt(id){
   const d=debts.find(x=>x.id===id);if(!d)return;
   const v=prompt(`Сколько погасить? Остаток: ${fmtMoney(d.remaining)}`,String(d.remaining));if(v===null)return;
   const amount=Math.min(d.remaining,Math.max(0,Number(String(v).replace(',','.'))||0));if(!amount){showToast('Введите сумму больше нуля');return;}
-  d.paid=(d.paid||0)+amount;d.remaining=Math.max(0,d.amount-d.paid);d.status=d.remaining<=0?'paid':'open';d.payments=d.payments||[];d.payments.push({id:uid(),date:todayISO(),amount});
+  d.paid=(d.paid||0)+amount;d.remaining=Math.max(0,d.amount-d.paid);d.status=d.remaining<=0?'paid':'open';d.payments=d.payments||[];d.payments.push({id:uid(),date:todayISO(),amount});d.updatedAt = nowISO();
   await persist('debts');safeRender();showToast(`Погашено: ${fmtMoney(amount)}`);
 }
 function viewConsignments(){
@@ -6317,6 +6317,7 @@ window.onKaspiRefundResult=async function(raw){
   order.returns.push({id:uid(),date:todayISO(),reason,total,method:returnMethod,needsKaspiRefund:false,kaspiTransactionId:result.transactionId||'',items:selected.map(({it,qty})=>({productId:it.productId,name:it.name,sku:it.sku,qty,price:it.price}))});
   const returnedTotal=getOrderReturnTotal(order);
   if(returnedTotal>=order.total)order.status='Возврат';
+  order.updatedAt = nowISO();
   const saveResults=await Promise.all([persist('products'),persist('movements'),persist('orders')]);
   if(saveResults.some(r=>r===false)){
     products=snapshot.products;movements=snapshot.movements;orders=snapshot.orders;
@@ -6368,6 +6369,7 @@ window.onHalykRefundResult=async function(raw){
   order.returns.push({id:uid(),date:todayISO(),reason,total,method:returnMethod,needsHalykRefund:false,halykRrn:d.tagRRN||'',items:selected.map(({it,qty})=>({productId:it.productId,name:it.name,sku:it.sku,qty,price:it.price}))});
   const returnedTotal=getOrderReturnTotal(order);
   if(returnedTotal>=order.total)order.status='Возврат';
+  order.updatedAt = nowISO();
   const saveResults=await Promise.all([persist('products'),persist('movements'),persist('orders')]);
   if(saveResults.some(x=>x===false)){
     products=snapshot.products;movements=snapshot.movements;orders=snapshot.orders;
@@ -6581,7 +6583,7 @@ function openReturnModal(order){
       const c=contacts.find(x=>x.id===order.contactId);
       if(c){
         if(!Array.isArray(c.bonusHistory)) c.bonusHistory=[];
-        c.bonusBalance=(Number(c.bonusBalance)||0)+total;
+        c.bonusBalance=(Number(c.bonusBalance)||0)+total;c.updatedAt = nowISO();
         c.bonusHistory.push({id:uid(),type:'in',amount:total,date:todayISO(),orderId:order.id,note:`Возврат по чеку ${order.number}`});
       }
       await persist('contacts');
@@ -6600,6 +6602,7 @@ function openReturnModal(order){
     const returnedTotal=getOrderReturnTotal(order);
     if(returnedTotal>=order.total) order.status='Возврат';
 
+    order.updatedAt = nowISO();
     const saveResults=await Promise.all([
       persist('products'),
       persist('movements'),

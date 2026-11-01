@@ -1538,7 +1538,7 @@ function openSupplierModal(id){
     const address=document.getElementById('s-address').value.trim();
     const note=document.getElementById('s-note').value.trim();
     if(!name){showToast('Укажите поставщика');return;}
-    if(editing) Object.assign(editing,{name,phone,whatsapp,address,note});
+    if(editing){Object.assign(editing,{name,phone,whatsapp,address,note});editing.updatedAt = nowISO();}
     else suppliers.push({id:uid(),name,phone,whatsapp,address,note});
     await persist('suppliers');close();safeRender();showToast(editing?'Поставщик сохранён':'Поставщик добавлен');
   };
@@ -1618,7 +1618,7 @@ function openSupplierContactModal(supplierId, contactId=null){
     const whatsapp=document.getElementById('sc-wa').value.trim()||phone;
     const note=document.getElementById('sc-note').value.trim();
     if(!name){showToast('Укажите имя контакта');return;}
-    if(editing) Object.assign(editing,{name,role,phone,whatsapp,note,supplierId,type:'supplier'});
+    if(editing){Object.assign(editing,{name,role,phone,whatsapp,note,supplierId,type:'supplier'});editing.updatedAt = nowISO();}
     else contacts.push({id:uid(),name,role,phone,whatsapp,note,supplierId,type:'supplier'});
     await persist('contacts'); close(); openSupplierDetail(supplierId); showToast(editing?'Контакт сохранён':'Контакт добавлен');
   };
@@ -2460,6 +2460,7 @@ async function finalizePreparedSale(order){
     if(order.bonusUsed>0&&order.contactId){const c=contacts.find(x=>x.id===order.contactId);if(c){if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];c.bonusBalance=Math.max(0,(Number(c.bonusBalance)||0)-Number(order.bonusUsed));c.bonusHistory.push({id:uid(),type:'out',amount:order.bonusUsed,date:todayISO(),orderId:order.id,note:`Списано по чеку ${order.number}`});}}
     if(cashSettings.bonusEnabled&&order.contactId){const c=contacts.find(x=>x.id===order.contactId);if(c){if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];const earned=Math.max(0,Math.round((Number(order.total||0)*Number(cashSettings.bonusPercent||0)/100)*100)/100);if(earned>0){c.bonusBalance=(Number(c.bonusBalance)||0)+earned;c.bonusHistory.push({id:uid(),type:'in',amount:earned,date:todayISO(),orderId:order.id,note:`Начислено за чек ${order.number}`});order.bonusEarned=earned;}}}
     if(order.giftCardId&&Number(order.giftCardSpent)>0){const card=giftCards.find(c=>c.id===order.giftCardId);if(!card)throw new Error('gift card not found');const available=Math.max(0,(Number(card.amount)||0)-(Number(card.used)||0));if(Number(order.giftCardSpent)>available)throw new Error('gift card balance changed');card.used=Math.min(Number(card.amount)||0,Math.max(0,Number(card.used)||0)+Number(order.giftCardSpent));if(!Array.isArray(card.history))card.history=[];card.history.push({id:uid(),type:'use',amount:Number(order.giftCardSpent),date:nowISO(),orderNumber:number||'',byUserId:activeUser?.id||null});}
+    if(order.contactId){const _fc=contacts.find(x=>x.id===order.contactId);if(_fc&&((Number(order.bonusUsed)||0)>0||(Number(order.bonusEarned)||0)>0))_fc.updatedAt = nowISO();}
     const persistResults={};
     const keysToSave=['products','movements','orders','debts','contacts','meta','giftCards'];
     for(const k of keysToSave){
@@ -2591,7 +2592,7 @@ function openClientModal(id){
     const normalized=normalizeWhatsApp(phone||whatsapp);
     const duplicate=contacts.find(c=>c.type==='client'&&c.id!==(editing?.id||'')&&normalized&&normalizeWhatsApp(c.phone||c.whatsapp)===normalized);
     if(duplicate){showToast('Клиент с таким номером уже есть');return;}
-    if(editing)Object.assign(editing,{name,phone,whatsapp,company,note}); else contacts.push({id:uid(),name,phone,whatsapp,type:'client',company,note});
+    if(editing){Object.assign(editing,{name,phone,whatsapp,company,note});editing.updatedAt = nowISO();} else contacts.push({id:uid(),name,phone,whatsapp,type:'client',company,note});
     await persist('contacts');close();safeRender();showToast(editing?'Клиент сохранён':'Клиент добавлен');
   };
 }
@@ -2632,7 +2633,7 @@ function openClientBonusManager(id){
       <div class="form-field"><label class="form-label">Комментарий</label><input class="form-input" id="cbm-note" placeholder="Причина"></div><button class="btn btn-primary btn-block" id="cbm-apply">Применить</button>
       <div class="panel" style="margin-top:12px;"><div class="panel-head"><div class="panel-title">История</div></div>${hist.length?hist.slice(0,50).map(x=>`<div class="list-row"><div class="row-icon ${x.type==='in'?'in':'out'}">${x.type==='in'?'+':'−'}</div><div class="row-main"><div class="row-title">${x.type==='in'?'Начисление':'Списание'}</div><div class="row-sub">${localDateTime(x.date||todayISO())} · ${escapeHtml(x.note||'—')}</div></div><div class="row-right"><div class="row-value ${x.type==='in'?'pos':'neg'}">${Number(x.amount||0).toFixed(0)}</div></div></div>`).join(''):'<div class="panel-body"><div class="empty">История пуста</div></div>'}</div>
     </div></div></div>`;
-  const close=()=>root.innerHTML=''; document.getElementById('cbm-close').onclick=close; document.getElementById('cbm-ov').onclick=e=>{if(e.target.id==='cbm-ov')close();}; document.getElementById('cbm-apply').onclick=async()=>{const amount=Math.max(0,Number(document.getElementById('cbm-amount').value)||0);const type=document.getElementById('cbm-type').value;const note=document.getElementById('cbm-note').value.trim()||'Ручное изменение';if(!amount){showToast('Введите сумму');return;}if(type==='out'&&amount>(c.bonusBalance||0)){showToast('Недостаточно бонусов');return;}if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];c.bonusBalance=(Number(c.bonusBalance)||0)+(type==='in'?amount:-amount);c.bonusHistory.push({id:uid(),type,amount,date:todayISO(),note});await persist('contacts');openClientBonusManager(id);showToast(type==='in'?'Начислено':'Списано');};
+  const close=()=>root.innerHTML=''; document.getElementById('cbm-close').onclick=close; document.getElementById('cbm-ov').onclick=e=>{if(e.target.id==='cbm-ov')close();}; document.getElementById('cbm-apply').onclick=async()=>{const amount=Math.max(0,Number(document.getElementById('cbm-amount').value)||0);const type=document.getElementById('cbm-type').value;const note=document.getElementById('cbm-note').value.trim()||'Ручное изменение';if(!amount){showToast('Введите сумму');return;}if(type==='out'&&amount>(c.bonusBalance||0)){showToast('Недостаточно бонусов');return;}if(!Array.isArray(c.bonusHistory))c.bonusHistory=[];c.bonusBalance=(Number(c.bonusBalance)||0)+(type==='in'?amount:-amount);c.bonusHistory.push({id:uid(),type,amount,date:todayISO(),note});c.updatedAt = nowISO();await persist('contacts');openClientBonusManager(id);showToast(type==='in'?'Начислено':'Списано');};
 }
 
 function clientOrders(id){ return orders.filter(o=>o.contactId===id || (!o.contactId && contacts.find(c=>c.id===id && (c.name||'').trim().toLowerCase()===(o.customer||'').trim().toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date)); }
@@ -2644,7 +2645,7 @@ function getClientContacts(){
 function findOrCreateContact(d){
   const phone=(d.phone||'').replace(/\D/g,'');
   let c=phone?contacts.find(x=>x.type===d.type&&(x.phone||'').replace(/\D/g,'')===phone):null;
-  if(c){Object.assign(c,d);return c;}
+  if(c){var _b=[c.name,c.phone,c.whatsapp,c.type,c.company,c.note];Object.assign(c,d);if(_b[0]!==c.name||_b[1]!==c.phone||_b[2]!==c.whatsapp||_b[3]!==c.type||_b[4]!==c.company||_b[5]!==c.note)c.updatedAt = nowISO();return c;}
   c={id:uid(),name:d.name||'',phone:d.phone||'',whatsapp:d.whatsapp||'',type:d.type||'client',company:d.company||'',note:d.note||'',bonusBalance:0,bonusHistory:[]};
   contacts.push(c);return c;
 }
