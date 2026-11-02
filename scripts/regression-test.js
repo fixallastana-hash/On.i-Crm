@@ -356,6 +356,27 @@ function main() {
   else if (delta > MOJI_TOLERANCE) warn('moji total', mmsg + ' - grew >5%, update baseline if intended');
   else pass('moji total', mmsg);
 
+  // b5.x: guard against Java code in .github/*.txt
+  const ghDir = path.join(__dirname, '..', '.github');
+  if (fs.existsSync(ghDir)) {
+    fs.readdirSync(ghDir).filter(function(f){ return /\.txt$/i.test(f); }).forEach(function(f){
+      const c = fs.readFileSync(path.join(ghDir, f), 'utf8');
+      if (/private\s+(void|String|int|boolean|JSONObject|JSONArray|static)\s+\w+\s*\(/.test(c)) {
+        fail('Java code in .github/' + f, 'must be in MainActivity.java, not in .txt');
+      } else {
+        pass('.github/' + f + ' has no Java code');
+      }
+    });
+  }
+
+  // b5.x: injectAIChat() должен быть ровно 1 раз (нет дублей метода)
+  const javaPath = path.join(__dirname, '..', 'android-project', 'app', 'src', 'main', 'java', 'com', 'oni', 'crm', 'MainActivity.java');
+  if (fs.existsSync(javaPath)) {
+    const javaCode = fs.readFileSync(javaPath, 'utf8');
+    const injectCount = (javaCode.match(/private\s+void\s+injectAIChat\s*\(\s*\)/g) || []).length;
+    if (injectCount === 1) pass('MainActivity.java: injectAIChat() unique');
+    else fail('MainActivity.java: injectAIChat()', 'count=' + injectCount + ', expected 1');
+  }
   finish();
 }
 
