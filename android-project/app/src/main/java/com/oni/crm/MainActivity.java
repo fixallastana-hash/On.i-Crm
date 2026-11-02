@@ -1111,11 +1111,15 @@ private String callAiProxy(String prompt, String provider, String imageBase64, S
     }
 
 private String callSelectedProvider(String input, boolean webSearch) throws Exception {
+        return callSelectedProvider(input, webSearch, null);
+    }
+
+    private String callSelectedProvider(String input, boolean webSearch, String mode) throws Exception {
     // 1. Пытаемся через серверный AI-прокси (ключи на сервере, безопасно)
     if (aiIdToken != null && !aiIdToken.isEmpty()) {
         try {
             android.util.Log.i("On.i AI", "Using aiProxy (server)");
-            String r = callAiProxy(input, "auto", null, null, null);
+            String r = callAiProxy(input, "auto", null, null, mode);
             if (r != null && !r.trim().isEmpty()) {
                 return r;
             }
@@ -1415,10 +1419,11 @@ public void testAIConnection() {
 }
 
 @JavascriptInterface
-public void askAIChat(final String message, final String historyJson, final String webSearchFlag, final String catalogJson) {
+public void askAIChat(final String message, final String historyJson, final String webSearchFlag, final String catalogJson, final String modeFlag) {
     final String msg = message == null ? "" : message.trim();
     final boolean useSearch = "1".equals(webSearchFlag) || "true".equalsIgnoreCase(webSearchFlag);
     final String catalog = catalogJson == null ? "" : catalogJson.trim();
+        final String mode = modeFlag == null ? "" : modeFlag.trim();
     final String hist = historyJson == null ? "" : historyJson.trim();
     if (msg.isEmpty()) {
         postAIChatResult("{\"status\":\"fail\",\"message\":\"Пустое сообщение\"}");
@@ -1454,7 +1459,7 @@ public void askAIChat(final String message, final String historyJson, final Stri
 
             prompt.append("ВОПРОС ПОКУПАТЕЛЯ: ").append(msg);
 
-            String raw = callSelectedProvider(prompt.toString(), useSearch);
+            String raw = callSelectedProvider(prompt.toString(), useSearch, mode);
             String answer = extractAnswerText(raw);
 
             JSONObject out = new JSONObject();
@@ -1462,6 +1467,7 @@ public void askAIChat(final String message, final String historyJson, final Stri
             out.put("answer", answer == null ? "" : answer);
             out.put("provider", lastUsedProvider == null ? "" : lastUsedProvider);
             out.put("model", lastUsedModel == null ? "" : lastUsedModel);
+            out.put("reasoning", lastUsedReasoning == null ? "" : lastUsedReasoning);
             postAIChatResult(out.toString());
         } catch (Exception e) {
             try {
@@ -4239,21 +4245,20 @@ private void injectProductHandlers() {
 private void injectAIChat() {
     String js =
         "(function(){" +
+        "if(document.readyState==='loading'){return;}" +
         "if(window.__aiChatInjected){return;}" +
+        "window.__aiChatInjected=true;" +
 
         "var history=[];" +
         "var webSearchOn=(localStorage.getItem('oni_websearch')==='1');" +
-        "var catalogOn=(localStorage.getItem('oni_catalog')!=='0');" +
+        "var catalogOn=(localStorage.getItem('oni_catalog')==='1');" +
+"var reasoningOn=(localStorage.getItem('oni_reasoning')==='1');" +
+"var aiMode=(localStorage.getItem('oni_ai_mode')||'auto');" +
 
         "function checkAIStatus(){" +
         "  try{" +
-        "    var st={};" +
-        "    if(window.Android&&typeof window.Android.getAIState==='function'){st=JSON.parse(window.Android.getAIState()||'{}');}" +
-        "    else if(window.__oniAIState){st=window.__oniAIState;}" +
-        "    var g = st.gemini && st.gemini.enabled && st.gemini.keySet;" +
-        "    var oa = st.openai && st.openai.enabled && st.openai.keySet;" +
-        "    var ds = st.deepseek && st.deepseek.enabled && st.deepseek.keySet;" +
-        "    return !!(g||oa||ds);" +
+        "    var u = (window.firebase && firebase.auth && firebase.auth().currentUser) ? true : false;" +
+        "    return u;" +
         "  }catch(e){return false;}" +
         "}" +
 
@@ -4275,13 +4280,13 @@ private void injectAIChat() {
         "      var price=Math.round(Number(p.price||0));" +
         "      var qty=Number(p.qty||0);" +
         "      var unit=String(p.unit||'шт');" +
-        "      byCat[cat].push(name+'|'+price+'|'+qty);" +
+        "      byCat[cat].push('- '+name+' | '+price+'тг | '+qty+' '+unit);" +
         "      total++;" +
         "    }" +
         "    if(total===0)return '';" +
         "    var lines=[];" +
         "    var cats=order.slice().sort();" +
-        "    lines.push('КАТЕГОРИИ: '+cats.join(','));" +
+        "    lines.push('ДОСТУПНЫЕ КАТЕГОРИИ: '+cats.join(', '));" +
         "    lines.push('');" +
         "    for(var c=0;c<cats.length;c++){" +
         "      var ct=cats[c];" +
@@ -4352,8 +4357,9 @@ private void injectAIChat() {
         "    html+='<span id=\"oni-ai-status-text\" style=\"font-size:11px;color:#888;\">отключено</span>';" +
         "    html+='</div>';" +
         "    html+='<div style=\"display:flex;gap:8px;align-items:center;\">';" +
-
-        "    html+='<button id=\"oni-chat-catalog\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;\"><span style=\"font-size:14px;\">📋</span><span id=\"oni-chat-catalog-label\" style=\"font-weight:600;\">Каталог</span></button>';" +
+        "    html+='<button id=\"oni-chat-provider\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600;\">Auto</button>';" +
+"    html+='<button id=\"oni-chat-catalog\" style=\"height:32px;padding:0 12px;border:1px solid #E5E5E5;background:#FFFFFF;border-radius:16px;color:#666;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;\"><span style=\"font-size:14px;\">📋</span><span id=\"oni-chat-catalog-label\" style=\"font-weight:600;\">Каталог</span></button>';" +
+        "    html+='<button id=\"oni-chat-clear\" style=\"width:34px;height:34px;border:0;background:#F4F4F4;border-radius:50%;color:#666;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-right:6px;\">🗑</button>';" +
         "    html+='<button id=\"oni-chat-close\" style=\"width:34px;height:34px;border:0;background:#F4F4F4;border-radius:50%;color:#666;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;\">✕</button>';" +
         "    html+='</div>';" +
         "    html+='</div>';" +
@@ -4363,7 +4369,8 @@ private void injectAIChat() {
         "    html+='<div style=\"padding:10px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid #ECECEC;background:#FFFFFF;\">';" +
         "    html+='<div style=\"display:flex;gap:8px;align-items:flex-end;background:#F4F4F4;border-radius:26px;padding:5px 5px 5px 16px;\">';" +
         "    html+='<textarea id=\"oni-chat-input\" rows=\"1\" placeholder=\"Спросите что угодно…\" style=\"flex:1;resize:none;min-height:36px;max-height:120px;border:0;outline:none;background:transparent;font:inherit;font-size:15px;color:#0D0D0D;padding:8px 0;line-height:1.5;letter-spacing:-0.005em;\"></textarea>';" +
-        "    html+='<button id=\"oni-chat-send\" style=\"width:34px;height:34px;border-radius:50%;background:#0A84FF;border:0;color:#fff;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19 V5\"/><path d=\"M5 12 L12 5 L19 12\"/></svg></button>';" +
+        "    html+='<button id=\"oni-chat-reasoning\" style=\"width:34px;height:34px;border-radius:50%;background:#F4F4F4;border:0;color:#666;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;margin-right:6px;\">🧠</button>';" +
+"    html+='<button id=\"oni-chat-send\" style=\"width:34px;height:34px;border-radius:50%;background:#0A84FF;border:0;color:#fff;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19 V5\"/><path d=\"M5 12 L12 5 L19 12\"/></svg></button>';" +
         "    html+='</div>';" +
         "    html+='</div>';" +
         "    html+='</div>';" +
@@ -4373,8 +4380,8 @@ private void injectAIChat() {
         "    var body=document.getElementById('oni-chat-body');" +
         "    var input=document.getElementById('oni-chat-input');" +
         "    var sendBtn=document.getElementById('oni-chat-send');" +
-
         "    var catalogBtn=document.getElementById('oni-chat-catalog');" +
+"    var providerBtn=document.getElementById('oni-chat-provider');" +
         "    var catalogLabel=document.getElementById('oni-chat-catalog-label');" +
 
         "    function paintStatus(){" +
@@ -4390,7 +4397,6 @@ private void injectAIChat() {
         "    var statusTimer=setInterval(paintStatus,5000);" +
 
 
-
         "    function paintCatalog(){" +
         "      if(catalogOn){" +
         "        catalogBtn.style.background='#0A84FF';catalogBtn.style.borderColor='#0A84FF';catalogBtn.style.color='#FFFFFF';" +
@@ -4400,6 +4406,9 @@ private void injectAIChat() {
         "        catalogLabel.textContent='Каталог';" +
         "      }" +
         "    }" +
+        "    function paintProvider(){if(!providerBtn)return;var _pl={auto:'Auto',groq:'Groq',cerebras:'Cerebras',openrouter:'OpenRouter',mistral:'Mistral',gemini:'Gemini',deepseek:'DeepSeek',cloudflare:'Cloudflare','nemotron-ultra':'Nemotron-550B','qwen-coder':'Qwen-Coder'};providerBtn.textContent=_pl[aiMode]||'Auto';if(aiMode==='auto'){providerBtn.style.background='#FFFFFF';providerBtn.style.borderColor='#E5E5E5';providerBtn.style.color='#666';}else{providerBtn.style.background='#0A84FF';providerBtn.style.borderColor='#0A84FF';providerBtn.style.color='#FFFFFF';}}" +
+        "    paintProvider();" +
+        "    if(providerBtn){providerBtn.onclick=function(){var _order=['auto','groq','cerebras','openrouter','mistral','gemini','deepseek','cloudflare','nemotron-ultra','qwen-coder'];var _i=_order.indexOf(aiMode);if(_i<0)_i=0;aiMode=_order[(_i+1)%_order.length];try{localStorage.setItem('oni_ai_mode',aiMode);}catch(e){}paintProvider();};}" +
         "    paintCatalog();" +
         "    catalogBtn.onclick=function(){ catalogOn=!catalogOn; try{localStorage.setItem('oni_catalog',catalogOn?'1':'0');}catch(e){} paintCatalog(); };" +
 
@@ -4409,6 +4418,10 @@ private void injectAIChat() {
         "    function addAI(text){var d=document.createElement('div');d.style.cssText='display:flex;margin-bottom:20px;';d.innerHTML='<div style=\"max-width:86%;padding:11px 15px;background:#F7F7F8;border-radius:18px;font-size:15px;line-height:1.65;letter-spacing:-0.005em;color:#0D0D0D;word-break:break-word;\">'+esc(text).replace(/\\n/g,'<br>')+'</div>';body.appendChild(d);scrollDown();}" +
         "    function addLoading(){var d=document.createElement('div');d.id='oni-chat-loading';d.style.cssText='display:flex;margin-bottom:20px;';d.innerHTML='<div style=\"padding:11px 15px;background:#F7F7F8;border-radius:18px;font-size:15px;color:#999;letter-spacing:2px;\">● ● ●</div>';body.appendChild(d);scrollDown();}" +
         "    function removeLoading(){var l=document.getElementById('oni-chat-loading');if(l)l.remove();}" +
+        "    function _chatHistory(){if(!window.firebase||!firebase.app)return null;try{return firebase.app().functions('us-central1').httpsCallable('chatHistory');}catch(e){console.warn('[chat] fn',e);return null;}}" +
+        "    function saveChatMsg(role,text,provider){var fn=_chatHistory();if(!fn)return;try{fn({action:'append',message:{r:role,t:String(text||'').slice(0,8000),p:provider||''}}).catch(function(e){console.warn('[chat] save',e);});}catch(e){console.warn('[chat] save throw',e);}}" +
+        "    function loadChatHistory(){var fn=_chatHistory();if(!fn)return;fn({action:'load'}).then(function(r){var msgs=(r&&r.data&&r.data.messages)||[];if(!msgs.length)return;body.innerHTML='';for(var i=0;i<msgs.length;i++){var m=msgs[i];if(m.r==='a'){addAI(m.t||'');}else{addUser(m.t||'');}}}).catch(function(e){console.warn('[chat] load',e);});}" +
+        "    function clearChatHistory(){var fn=_chatHistory();if(!fn)return;fn({action:'clear'}).then(function(){body.innerHTML='';}).catch(function(e){console.warn('[chat] clear',e);});}" +
 
         "    window.onAIChatResult=function(raw){" +
         "      removeLoading();" +
@@ -4419,7 +4432,14 @@ private void injectAIChat() {
         "        addAI('Ошибка: '+(d.message||'не удалось получить ответ'));return;" +
         "      }" +
         "      try{if(d.provider){var _lbl=d.provider+(d.model?(' · '+d.model):'');localStorage.setItem('oni_ai_last_provider',_lbl);if(_sd)_sd.style.background='#34c759';if(_st)_st.textContent=_lbl;}}catch(_e){}" +
+        "      if(d.reasoning && d.reasoning.length>10){" +
+        "        var _r=document.createElement('details');" +
+        "        _r.style.cssText='margin:8px 0;padding:8px 12px;background:#F9F9FB;border-radius:12px;font-size:13px;color:#666;';" +
+        "        _r.innerHTML='<summary style=\\'cursor:pointer;font-weight:600;\\'>🤔 Размышления AI</summary><div style=\\'margin-top:6px;white-space:pre-wrap;line-height:1.5;\\'>'+String(d.reasoning).replace(/</g,'&lt;').slice(0,4000)+'</div>';" +
+        "        body.appendChild(_r);" +
+        "      }" +
         "      addAI(d.answer||'');" +
+"      saveChatMsg('a',d.answer||'',(d.provider||'')+(d.model?(' '+d.model):''));" +
         "      history.push({q:window.__oniLastQ||'',a:d.answer||''});" +
         "      if(history.length>5)history.shift();" +
         "      var act=d.action;" +
@@ -4437,25 +4457,32 @@ private void injectAIChat() {
         "      var q=String(input.value||'').trim();" +
         "      if(!q)return;" +
         "      addUser(q);" +
+"      saveChatMsg('u',q,'');" +
         "      window.__oniLastQ=q;" +
         "      input.value='';input.style.height='auto';" +
         "      addLoading();" +
         "      var hist='';" +
         "      for(var i=0;i<history.length;i++){hist+='Покупатель: '+history[i].q+'\\nПродавец: '+history[i].a+'\\n\\n';}" +
         "      var catalog='';" +
-        "      if(catalogOn){ catalog=buildCatalog(); if(!catalog)catalog='__EMPTY__'; }else{ catalog='__OFF__'; }" +
+        "      if(catalogOn){ catalog=buildCatalog(); }" +
         "      if(window.Android&&typeof window.Android.askAIChat==='function'){" +
-        "        window.Android.askAIChat(q,hist,'0',catalog);" +
+        "        window.Android.askAIChat(q,hist,'0',catalog,reasoningOn?'reasoning':aiMode);" +
         "      }else{" +
         "        removeLoading();addAI('AI доступен только в Android-приложении.');" +
         "      }" +
         "    }" +
 
+        "    var reasoningBtn=document.getElementById('oni-chat-reasoning');" +
+        "    function paintReasoning(){if(!reasoningBtn)return;if(reasoningOn){reasoningBtn.style.background='#0A84FF';reasoningBtn.style.color='#FFFFFF';}else{reasoningBtn.style.background='#F4F4F4';reasoningBtn.style.color='#666';}}" +
+        "    paintReasoning();" +
+        "    if(reasoningBtn){reasoningBtn.onclick=function(){reasoningOn=!reasoningOn;try{localStorage.setItem('oni_reasoning',reasoningOn?'1':'0');}catch(e){}paintReasoning();};}" +
         "    sendBtn.onclick=send;" +
         "    input.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};" +
         "    input.oninput=function(){input.style.height='auto';input.style.height=Math.min(120,input.scrollHeight)+'px';};" +
+        "    document.getElementById('oni-chat-clear').onclick=function(){if(confirm('Очистить историю чата?')){clearChatHistory();}};" +
         "    document.getElementById('oni-chat-close').onclick=function(){clearInterval(statusTimer);ov.remove();};" +
         "    setTimeout(function(){input.focus();},200);" +
+"    loadChatHistory();" +
         "  }catch(err){" +
         "    try{alert('AI chat error: '+err.message);}catch(_){}" +
         "    console.error('openAIChat error', err);" +
@@ -4489,11 +4516,11 @@ private void injectAIChat() {
         "};" +
         "addNavButton();" +
         "setInterval(addNavButton, 1500);" +
-        "window.__aiChatInjected=true;" +
         "console.log('[On.i] AI chat v15 (seller + catalog toggle)');" +
         "})();";
     webView.evaluateJavascript(js, null);
 }
+
 private void injectGuideChat() {
     String js =
         "(function(){" +
