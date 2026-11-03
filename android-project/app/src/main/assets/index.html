@@ -1820,6 +1820,26 @@ async function loginViaFirebase(login, password){
         changed = (before !== after);
 
         if(changed){
+          /* b5.3 v2.2: pull=source of truth. If no user push pending, sync lastHash to skip echo push. */
+          try{
+            var _v22Pending = false;
+            for(var _v22i=0; _v22i<mapping.length; _v22i++){
+              var _v22n = mapping[_v22i].name;
+              if(_fbSync.timers[_v22n] || _fbSync.running[_v22n] || _fbSync.queued[_v22n]){ _v22Pending = true; break; }
+            }
+            if(!_v22Pending){
+              for(var _v22j=0; _v22j<mapping.length; _v22j++){
+                var _v22m = mapping[_v22j];
+                if(_v22m.merge){
+                  var _v22d = _fbGetCollectionData(_v22m.name);
+                  if(Array.isArray(_v22d) && _v22d.length){
+                    _fbSync.lastHash[_v22m.name] = FB_SHOP_ID + '|' + _v22d.length + '|' + _syncHash(JSON.stringify(_v22d));
+                  }
+                }
+              }
+              try{ localStorage.setItem('oni_sync_last_hash', JSON.stringify(_fbSync.lastHash)); }catch(e){}
+            }
+          }catch(e){}
           // Сохраняем в localStorage и перерисовываем UI.
           try{
             await Promise.all([
