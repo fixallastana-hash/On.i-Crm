@@ -1,7 +1,10 @@
 ﻿$ErrorActionPreference = "Stop"
 $path = $env:ONI_INDEX_PATH
 $assets = $env:ONI_ASSETS_DIR
-if(-not $path){ $path = 'C:\oni\Index.html' }
+if(-not $path){
+  $try = Join-Path (Split-Path -Parent $PSScriptRoot) 'android-project\app\src\main\assets\index.html'
+  if (Test-Path -LiteralPath $try) { $path = $try } else { $path = 'C:\oni\Index.html' }
+}
 if(-not $assets){ $assets = (Split-Path -Parent $path) }
 if(-not (Test-Path -LiteralPath $path)){ Write-Host "Index.html not found: $path" -ForegroundColor Red; exit 2 }
 
