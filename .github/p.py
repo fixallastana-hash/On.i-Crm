@@ -1,0 +1,307 @@
+import re, pathlib
+
+gem = pathlib.Path(".github/GeminiClient.java")
+dst = pathlib.Path("android-project/app/src/main/java/com/oni/crm/GeminiClient.java")
+if gem.exists():
+    dst.write_text(gem.read_text(encoding="utf-8"), encoding="utf-8")
+    print("  GeminiClient.java copied")
+else:
+    print("  WARNING: GeminiClient.java not found")
+
+p = pathlib.Path("android-project/app/src/main/java/com/oni/crm/MainActivity.java")
+if not p.exists():
+    print("WARNING: MainActivity.java not found")
+    raise SystemExit(0)
+
+s = p.read_text(encoding="utf-8")
+
+s = re.sub(r'\\{2,}"', r'\\"', s)
+s = s.replace('getBoolean("assistantAutoApply", true)', 'getBoolean("assistantAutoApply", false)')
+s = s.replace("snippet|text-container|organic__snippet|b_caption",
+              "snippet|text-container|organic__snippet|b_caption|VwiC3b|aCOpRe|yXK7lf|IsZvec|MUxGbd|kno-rdesc")
+s = re.sub(r'\n[ \t]*private String firstRegex\([^)]*\)\s*\{.*?\n[ \t]*\}\n', '\n', s, count=1, flags=re.DOTALL)
+for d in ("import android.os.Environment;\n", "import java.text.SimpleDateFormat;\n", "import java.util.Date;\n"):
+    s = s.replace(d, "")
+s = s.replace('"deepseek-v4-flash"', '"deepseek-chat"')
+s = s.replace('"deepseek-v4-flash-vision-exp"', '"deepseek-chat"')
+
+s = re.sub(r'^[ \t]*import\s+(cz\.adaptech\.tesseract4android|com\.googlecode\.tesseract\.android)\.TessBaseAPI;[ \t]*\r?\n',
+           '', s, flags=re.MULTILINE)
+pkg_match = re.search(r'^package\s+[^;]+;[ \t]*\r?\n', s, flags=re.MULTILINE)
+if pkg_match:
+    ins = pkg_match.end()
+    if 'import com.googlecode.tesseract.android.TessBaseAPI;' not in s:
+        s = s[:ins] + '\nimport com.googlecode.tesseract.android.TessBaseAPI;' + s[ins:]
+print("  import tess-two")
+
+
+def remove_method(src, name):
+    pattern = re.compile(
+        r'(?<![\w\.])(?:public|private|protected)\s+(?:static\s+)?'
+        r'(?:void|String|boolean|int|long|double|float|char|byte|short|JSONObject|JSONArray|InputStream)\s+'
+        + re.escape(name) + r'\s*\(',
+        re.MULTILINE
+    )
+    m = pattern.search(src)
+    if not m:
+        return src, False
+    idx = m.start()
+    line_start = src.rfind('\n', 0, idx) + 1
+    while True:
+        prev_nl = src.rfind('\n', 0, line_start - 1)
+        if prev_nl < 0:
+            break
+        prev_line = src[prev_nl + 1:line_start].strip()
+        if prev_line.startswith('@'):
+            line_start = prev_nl + 1
+        else:
+            break
+    brace = src.find('{', idx)
+    if brace < 0:
+        return src, False
+    depth = 1
+    i = brace + 1
+    in_str = False
+    esc = False
+    while i < len(src) and depth > 0:
+        c = src[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == '\\':
+                esc = True
+            elif c == '"':
+                in_str = False
+        else:
+            if c == '"':
+                in_str = True
+            elif c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+        i += 1
+    return src[:line_start] + src[i:], True
+
+
+names = [
+    'getAIState','saveAIState',
+    'saveGeminiSettings','getGeminiSettings','saveProviderFlags','getProviderFlags',
+    'lookupProductByAI','lookupProductByName','resolveExplicitProductCategory',
+    'detectCategoryFromProductName','detectCategoryFromResults','detectProductSubtype',
+    'buildRussianProductInfoQueries','buildForeignProductInfoQueries','addUniqueResults',
+    'hasUsefulProductInfo','searchWeb','searchSingleEngine','parseSearchHtml',
+    'normalizeSearchName','similarPerfumeTitle','fetchUrlText','htmlMetaContent',
+    'parseFragranticaStructured','fetchFragranticaPerfume','structuredFieldCount',
+    'mergeStructured','translateToRussian','triggerVisionFromUri','doTriggerVision',
+    'recognizeProductPhoto','lookupProductDescriptionFull',
+    'callSelectedProvider','callDeepSeekReasoner','callGemini','callDeepSeek',
+    'callOpenAI','callGeminiWithSearch','callDeepSeekWithSearch','extractAnswerText',
+    'pickStringFromJson','pickStringFromArray','askAIChat','postAIChatResult','injectAIChat',
+    'askGuide','postGuideResult','injectGuideChat',
+    'scanBarcode','_oniStartScanner','_oniLaunchScanner','_oniHandleScanResult',
+    'testAIConnection','postOcrResult','postProductLookupResult',
+    'callOpenAIWithImage','callDeepSeekWithImage','extractJsonObject',
+    'askAIAssistant','buildAIProductPrompt',
+    'sendProductOcrResult','sendProductLookupResult','cleanWebText','firstRegex',
+]
+removed = 0
+for n in names:
+    s, ok = remove_method(s, n)
+    if ok:
+        removed += 1
+print("  removed methods: {}".format(removed))
+
+s = s.replace(
+    'throw new IOException("Включите OpenAI или DeepSeek и добавьте API-ключ")',
+    'throw new IOException("Все AI-провайдеры отключены. Включите Gemini или DeepSeek в разделе AI.")'
+)
+s = s.replace(
+    'throw new IOException("Нет включённого ИИ-провайдера с API-ключом")',
+    'throw new IOException("Все AI-провайдеры отключены. Включите Gemini или DeepSeek в разделе AI.")'
+)
+
+anchor_re = re.compile(
+    r'([ \t]*@JavascriptInterface[ \t]*\r?\n'
+    r'[ \t]*public[ \t]+void[ \t]+closeApp[ \t]*\([ \t]*\)[ \t]*\{)',
+    re.MULTILINE
+)
+anchor_match = anchor_re.search(s)
+if not anchor_match:
+    print("  WARNING: closeApp anchor not found")
+    raise SystemExit(0)
+insert_pos = anchor_match.start(1)
+print("  [dbg] closeApp anchor found at", insert_pos)
+
+hf = pathlib.Path(".github/deepseek_helpers.txt")
+gb = pathlib.Path(".github/gemini_bridge.txt")
+bf = pathlib.Path(".github/bridge_method.txt")
+gh = pathlib.Path(".github/guide_helpers.txt")
+sb = pathlib.Path(".github/scanner_bridge.txt")
+sa = pathlib.Path(".github/scanner_activity.txt")
+ph = pathlib.Path(".github/product_handlers.txt")
+acf = pathlib.Path(".github/ai_chat.txt")
+gcf = pathlib.Path(".github/guide_chat.txt")
+
+combined = ""
+for path in (hf, gb, bf, gh, sb):
+    if path.exists():
+        combined += path.read_text(encoding="utf-8").rstrip() + "\n\n"
+    else:
+        print("  WARNING:", path.name, "not found")
+
+if combined:
+    s = s[:insert_pos] + combined + s[insert_pos:]
+    print("  helpers inserted (before closeApp)")
+
+pause = "    @Override protected void onPause() {"
+
+if ph.exists() and pause in s and "private void injectProductHandlers()" not in s:
+    block = ph.read_text(encoding="utf-8")
+    s = s.replace(pause, block + pause, 1)
+    print("  product_handlers inserted (in MainActivity)")
+else:
+    if not ph.exists(): print("  WARNING: product_handlers.txt not found")
+
+if acf.exists() and pause in s and "private void injectAIChat()" not in s:
+    block = acf.read_text(encoding="utf-8")
+    s = s.replace(pause, block + pause, 1)
+    print("  ai_chat inserted (in MainActivity)")
+else:
+    if not acf.exists(): print("  WARNING: ai_chat.txt not found")
+
+if gcf.exists() and pause in s and "private void injectGuideChat()" not in s:
+    block = gcf.read_text(encoding="utf-8")
+    s = s.replace(pause, block + pause, 1)
+    print("  guide_chat inserted (in MainActivity)")
+else:
+    if not gcf.exists(): print("  WARNING: guide_chat.txt not found")
+
+if sa.exists() and pause in s and "private void _oniStartScanner()" not in s:
+    block = sa.read_text(encoding="utf-8")
+    s = s.replace(pause, block + pause, 1)
+    print("  scanner_activity inserted (in MainActivity)")
+else:
+    if not sa.exists(): print("  WARNING: scanner_activity.txt not found")
+
+# Врезаем вызов _oniHandleScanResult внутрь уже существующего onActivityResult
+if "_oniHandleScanResult" not in s:
+    print("  WARNING: _oniHandleScanResult not found, skip hook")
+else:
+    actres_pat = re.compile(
+        r'(protected\s+void\s+onActivityResult\s*\(\s*int\s+requestCode\s*,\s*int\s+resultCode\s*,\s*(?:android\.content\.)?Intent\s+)(\w+)(\s*\)\s*\{)',
+        re.MULTILINE
+    )
+    m2 = actres_pat.search(s)
+    if m2:
+        param = m2.group(2)
+        insert_at = m2.end()
+        hook = '\n        try { _oniHandleScanResult(requestCode, resultCode, ' + param + '); } catch (Exception ignored) {}\n'
+        s = s[:insert_at] + hook + s[insert_at:]
+        print("  _oniHandleScanResult hooked into existing onActivityResult")
+    else:
+        print("  WARNING: existing onActivityResult not found, scanner result hook skipped")
+
+# Чистим старые вызовы inject* и initScanner от прошлых прогонов
+for _m in ('injectProductHandlers', 'injectAIChat', 'injectGuideChat'):
+    s = re.sub(
+        r'[ \t]*webView\.postDelayed\(new Runnable\(\) \{ public void run\(\) \{ '
+        + _m + r'\(\); \} \}, \d+\);\n?',
+        '', s)
+s = re.sub(r'[ \t]*initScanner\(\);\s*\n?', '', s)
+
+base_load = 'webView.loadUrl("file:///android_asset/index.html");'
+if s.count(base_load) > 1:
+    first_idx = s.find(base_load)
+    before = s[:first_idx]
+    after = s[first_idx + len(base_load):].replace(base_load, '')
+    s = before + base_load + after
+
+new_load = (
+    'webView.loadUrl("https://appassets.androidplatform.net/assets/index.html");\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 1500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 3500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 1500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectAIChat(); } }, 3500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 1500);\n'
+    '        webView.postDelayed(new Runnable() { public void run() { injectGuideChat(); } }, 3500);'
+)
+
+if base_load in s:
+    s = s.replace(base_load, new_load, 1)
+    print("  inject scheduled")
+
+before = len(re.findall(r'\btess\s*\.\s*recycle\s*\(\s*\)', s))
+s = re.sub(r'\btess\s*\.\s*recycle\s*\(\s*\)\s*;?', 'tess.end();', s)
+after = len(re.findall(r'\btess\s*\.\s*recycle\s*\(\s*\)', s))
+print("  tess.recycle() replaced:", before, "remaining:", after)
+
+# === Asset Loader: отдавать assets через https://appassets.androidplatform.net/ ===
+_asset_loader = (
+    '                Uri _reqUrl = request.getUrl();\n'
+    '                if (_reqUrl != null && "appassets.androidplatform.net".equalsIgnoreCase(_reqUrl.getHost())) {\n'
+    '                    String _path = _reqUrl.getPath();\n'
+    '                    if (_path != null && _path.startsWith("/assets/")) {\n'
+    '                        String _assetPath = _path.substring("/assets/".length());\n'
+    '                        if (_assetPath.contains("..") || _assetPath.isEmpty()) {\n'
+    '                            return new WebResourceResponse("text/plain", "utf-8", 400, "Bad Request", null, null);\n'
+    '                        }\n'
+    '                        try {\n'
+    '                            String _mime = android.webkit.MimeTypeMap.getSingleton()\n'
+    '                                .getMimeTypeFromExtension(android.webkit.MimeTypeMap.getFileExtensionFromUrl(_assetPath));\n'
+    '                            if (_mime == null) {\n'
+    '                                if (_assetPath.endsWith(".html") || _assetPath.endsWith(".htm")) _mime = "text/html";\n'
+    '                                else if (_assetPath.endsWith(".js") || _assetPath.endsWith(".mjs")) _mime = "application/javascript";\n'
+    '                                else if (_assetPath.endsWith(".css")) _mime = "text/css";\n'
+    '                                else if (_assetPath.endsWith(".json") || _assetPath.endsWith(".webmanifest")) _mime = "application/json";\n'
+    '                                else if (_assetPath.endsWith(".svg")) _mime = "image/svg+xml";\n'
+    '                                else if (_assetPath.endsWith(".png")) _mime = "image/png";\n'
+    '                                else if (_assetPath.endsWith(".woff2")) _mime = "font/woff2";\n'
+    '                                else _mime = "application/octet-stream";\n'
+    '                            }\n'
+    '                            java.io.InputStream _assetStream = getAssets().open(_assetPath);\n'
+    '                            return new WebResourceResponse(_mime, null, _assetStream);\n'
+    '                        } catch (java.io.IOException _e) {\n'
+    '                            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, null);\n'
+    '                        }\n'
+    '                    }\n'
+    '                }\n'
+)
+
+_sit_re = re.compile(
+    r'(public\s+WebResourceResponse\s+shouldInterceptRequest\s*'
+    r'\(\s*WebView\s+\w+\s*,\s*WebResourceRequest\s+\w+\s*\)\s*\{\s*\n)',
+    re.MULTILINE
+)
+_sit_m = _sit_re.search(s)
+if _sit_m:
+    s = s[:_sit_m.end()] + _asset_loader + s[_sit_m.end():]
+    print("  asset loader inserted into shouldInterceptRequest")
+else:
+    print("  WARNING: shouldInterceptRequest not found")
+
+_ovr_re = re.compile(
+    r'(public\s+boolean\s+shouldOverrideUrlLoading\s*'
+    r'\(\s*WebView\s+\w+\s*,\s*WebResourceRequest\s+\w+\s*\)\s*\{\s*\n'
+    r'[ \t]*Uri\s+(\w+)\s*=\s*\w+\.getUrl\(\);\s*\n)',
+    re.MULTILINE
+)
+_ovr_m = _ovr_re.search(s)
+if _ovr_m:
+    _ovr_uri_var = _ovr_m.group(2)
+    _ovr_guard = (
+        '                String _host = ' + _ovr_uri_var + '.getHost()==null?"":' + _ovr_uri_var + '.getHost().toLowerCase(java.util.Locale.ROOT);\n'
+        '                if ("appassets.androidplatform.net".equals(_host)) return false;\n'
+    )
+    s = s[:_ovr_m.end()] + _ovr_guard + s[_ovr_m.end():]
+    print("  shouldOverrideUrlLoading guard inserted")
+else:
+    print("  WARNING: shouldOverrideUrlLoading not found")
+# === END Asset Loader ===
+
+s = re.sub(r';\s*;', ';', s)
+
+p.write_text(s, encoding="utf-8", newline="\n")
+print("java patched")
