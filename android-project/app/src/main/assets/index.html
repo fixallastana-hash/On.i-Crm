@@ -4617,7 +4617,7 @@ function openBarcodeEdit(productId){
   codeEl.oninput=updatePrev;
   document.getElementById('bce-gen').onclick=()=>{ codeEl.value=ean13GenerateFromSku(p.sku||p.id); updatePrev(); };
   const scanBtn=document.getElementById('bce-scan');
-  if(scanBtn) scanBtn.onclick=()=>{ if(window.Android&&typeof Android.scanBarcode==='function') Android.scanBarcode(); else showToast('Сканер недоступен'); };
+  if(scanBtn) scanBtn.onclick=()=>{ if(window._scannerBridge) _scannerBridge(); else if(window.Android&&typeof Android.scanBarcode==='function') Android.scanBarcode(); else showToast('Сканер недоступен'); };
   window.onBarcodeScanned=function(json){ try{ const d=typeof json==='string'?JSON.parse(json):json; const code=String(d?.barcode||d?.code||d?.value||'').trim(); if(code){ codeEl.value=code; updatePrev(); } }catch(e){} };
   document.getElementById('bce-save').onclick=async()=>{ const v=codeEl.value.trim(); if(!v){ p.barcode=''; } else if(!ean13Validate(v)){ showToast('Штрихкод должен быть валидным EAN-13'); return; } else { p.barcode=v; } await persist('products'); close(); showToast('Штрихкод сохранён'); };
   const clr=document.getElementById('bce-clear'); if(clr) clr.onclick=async()=>{ p.barcode=''; await persist('products'); close(); showToast('Штрихкод удалён'); };
@@ -6721,7 +6721,7 @@ function openInventorySessionScreen(sessionId){
     const results=document.getElementById('inv-search-results'), search=document.getElementById('inv-search');
     const showResults=()=>{const q=search.value.trim();const list=inventoryProductSearch(q);results.style.display='block';results.innerHTML=list.map(p=>`<button type="button" class="list-row" data-inv-add="${escapeHtml(p.id)}" style="width:100%;text-align:left;background:none;border:0"><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div><div class="row-sub">${escapeHtml(p.sku||'')} · ${escapeHtml(p.barcode||'')} · остаток ${Number(p.qty)||0}</div></div></button>`).join('')||'<div class="panel-body"><div class="empty">Ничего не найдено</div></div>';results.querySelectorAll('[data-inv-add]').forEach(b=>b.onclick=()=>{const p=products.find(x=>x.id===b.dataset.invAdd);results.style.display='none';addProduct(p);});};
     search.oninput=showResults;
-    const scan=()=>{if(window.Android&&typeof window.Android.scanBarcode==='function')window.Android.scanBarcode();else showToast('Сканер недоступен');}; document.getElementById('inv-scan').onclick=scan;
+    const scan=()=>{if(window._scannerBridge)window._scannerBridge();else if(window.Android&&typeof window.Android.scanBarcode==='function')window.Android.scanBarcode();else showToast('Сканер недоступен');}; document.getElementById('inv-scan').onclick=scan;
     window.onBarcodeScanned=function(json){try{const d=typeof json==='string'?JSON.parse(json):json;const code=String(d?.barcode||d?.code||d?.value||json||'').trim();if(!code)return;const p=products.find(x=>String(x.barcode||'').trim()===code);if(!p){showToast('Товар со штрихкодом не найден');return;}addProduct(p);}catch(e){showToast('Не удалось обработать штрихкод');}};
     const finish=()=>finishInventorySession(session.id); document.getElementById('inv-finish').onclick=finish; document.getElementById('inv-finish-bottom').onclick=finish;
   };
@@ -6820,10 +6820,281 @@ window.onAndroidBack=function(){
 
 
 
-window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};A.scanBarcode();}catch(e){}};
+window.oniScanToSearch=function(){try{var A=window.Android;if(!A||typeof A.scanBarcode!=='function'){if(typeof showToast==='function')showToast('\u0421\u043a\u0430\u043d\u0435\u0440 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d');return;}var prev=window.onBarcodeScanned;window.onBarcodeScanned=function(j){try{var d=typeof j==='string'?JSON.parse(j):j;var c=String((d&&(d.barcode||d.code||d.value))||'').trim();if(c){var i=document.getElementById('product-search');if(i){i.value=c;try{if(i.oninput)i.oninput();}catch(e){}try{i.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}}}}catch(e){}window.onBarcodeScanned=prev;};if(window._scannerBridge){_scannerBridge();}else{A.scanBarcode();}}catch(e){}};
 try{ window.CORE_MODULES=CORE_MODULES; window.defaultModulesConfig=defaultModulesConfig; window.ROLE_ACCESS=ROLE_ACCESS; window.ROLE_NAV=ROLE_NAV; window.SEARCH_SYNONYMS=SEARCH_SYNONYMS; }catch(e){}
 </script>
 <script src="app-auth.js"></script>
+
+<!-- === POS floating scanner (b5.4-pos-drag) === -->
+<div id="pos-scanner-mini" style="display:none; position:fixed; bottom:80px; right:12px; width:52px; height:52px; border-radius:50%; background:#0A84FF; color:#fff; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,0.35); z-index:9000; font-size:22px; user-select:none;">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+        <path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>
+    </svg>
+</div>
+<div id="pos-scanner-float" style="display:none; position:fixed; bottom:80px; right:12px; width:200px; height:220px; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:9000; background:#000; border:2px solid #fff;">
+    <div id="pos-scanner-header" style="position:absolute; top:0; left:0; right:0; height:22px; background:rgba(0,0,0,0.55); color:#fff; display:flex; align-items:center; justify-content:space-between; padding:0 6px; cursor:move; z-index:9005; font-size:11px; touch-action:none;">
+        <span style="opacity:0.8;">⠿</span>
+        <span id="pos-scanner-close" style="width:20px; height:20px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px;">✕</span>
+    </div>
+    <video id="pos-scanner-video" autoplay playsinline muted style="position:absolute; top:22px; left:0; right:0; bottom:0; width:100%; height:calc(100% - 22px); object-fit:cover;"></video>
+    <div style="position:absolute; top:calc(50% + 11px); left:10%; right:10%; height:2px; background:#ff3b30; box-shadow:0 0 8px #ff3b30; z-index:9002; pointer-events:none;"></div>
+    <div style="position:absolute; top:calc(22px + 15%); left:10%; width:18px; height:18px; border-top:2px solid #fff; border-left:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+    <div style="position:absolute; top:calc(22px + 15%); right:10%; width:18px; height:18px; border-top:2px solid #fff; border-right:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+    <div style="position:absolute; bottom:15%; left:10%; width:18px; height:18px; border-bottom:2px solid #fff; border-left:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+    <div style="position:absolute; bottom:15%; right:10%; width:18px; height:18px; border-bottom:2px solid #fff; border-right:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+    <div id="pos-scanner-resize" style="position:absolute; bottom:0; right:0; width:20px; height:20px; cursor:nwse-resize; z-index:9006; background:linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.6) 50%); touch-action:none;"></div>
+    <div id="pos-scanner-status" style="position:absolute; bottom:6px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); color:#fff; padding:2px 8px; border-radius:8px; font-size:10px; white-space:nowrap; pointer-events:none;">Сканирую…</div>
+</div>
+<script>
+(function(){
+    var _ps = { stream: null, detector: null, running: false, lastCode: '', lastAt: 0, hidden: false, onDemand: false, savedHandler: null };
+    window._posScanner = _ps;
+
+    var floatEl = function(){ return document.getElementById('pos-scanner-float'); };
+    var miniEl  = function(){ return document.getElementById('pos-scanner-mini'); };
+
+    function loadLayout() {
+        try {
+            var l = JSON.parse(localStorage.getItem('posScannerLayout') || 'null');
+            if (!l) return;
+            var f = floatEl(); if (!f) return;
+            if (l.width)  f.style.width = l.width + 'px';
+            if (l.height) f.style.height = l.height + 'px';
+            if (l.left != null) { f.style.left = l.left + 'px'; f.style.right = 'auto'; }
+            if (l.top  != null) { f.style.top  = l.top  + 'px'; f.style.bottom = 'auto'; }
+        } catch(e){}
+    }
+    function saveLayout() {
+        var f = floatEl(); if (!f) return;
+        var r = f.getBoundingClientRect();
+        localStorage.setItem('posScannerLayout', JSON.stringify({
+            left: Math.round(r.left), top: Math.round(r.top),
+            width: Math.round(r.width), height: Math.round(r.height)
+        }));
+    }
+
+    window._posScannerStart = function() {
+        if (_ps.running || _ps.hidden) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+        .then(function(stream) {
+            _ps.stream = stream;
+            var video = document.getElementById('pos-scanner-video');
+            if (!video) return;
+            video.srcObject = stream;
+            video.play();
+            if (typeof BarcodeDetector !== 'undefined') {
+                _ps.detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'upc_a', 'upc_e'] });
+            }
+            floatEl().style.display = 'block';
+            miniEl().style.display = 'none';
+            loadLayout();
+            _ps.running = true;
+            _posScannerLoop();
+            console.log('[pos-scanner] started');
+        }).catch(function(e){ console.warn('[pos-scanner] start failed', e.message); });
+    };
+
+    window._scannerBridge = function() {
+        console.log('[pos-scanner] bridge CALLED');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            if (typeof showToast === 'function') showToast('Сканер недоступен');
+            return;
+        }
+        _ps.hidden = false;
+        _ps.savedHandler = window.onBarcodeScanned;
+        _ps.onDemand = true;
+        if (!_ps.running) {
+            _posScannerStart();
+        } else {
+            if (typeof showToast === 'function') showToast('Наведите на штрихкод');
+        }
+        console.log('[pos-scanner] bridge ON, onDemand=' + _ps.onDemand + ', running=' + _ps.running);
+    };
+
+    window._posScannerStop = function() {
+        if (!_ps.running) return;
+        _ps.running = false;
+        if (_ps.stream) { _ps.stream.getTracks().forEach(function(t){ t.stop(); }); _ps.stream = null; }
+        var f = floatEl(); if (f) f.style.display = 'none';
+        if (_ps.hidden) { var m = miniEl(); if (m) m.style.display = 'flex'; }
+        console.log('[pos-scanner] stopped');
+    };
+
+    function _posScannerLoop() {
+        if (!_ps.running) return;
+        var video = document.getElementById('pos-scanner-video');
+        if (!video || video.readyState < 2 || !_ps.detector) { requestAnimationFrame(_posScannerLoop); return; }
+        _ps.detector.detect(video).then(function(codes) {
+            if (codes && codes.length > 0) {
+                var code = codes[0].rawValue;
+                var now = Date.now();
+                if (code !== _ps.lastCode || (now - _ps.lastAt) > 2000) {
+                    _ps.lastCode = code;
+                    _ps.lastAt = now;
+                    _posScannerOnBarcode(code);
+                }
+            }
+        }).catch(function(){}).finally(function(){ requestAnimationFrame(_posScannerLoop); });
+    }
+
+    function _posScannerOnBarcode(code) {
+        try {
+            var raw = String(code).trim();
+            if (_ps.onDemand) {
+                var h = _ps.savedHandler;
+                _ps.onDemand = false;
+                _ps.savedHandler = null;
+                var isPos = (typeof currentView !== 'undefined' && currentView === 'orders' && typeof ordersSubView !== 'undefined' && ordersSubView === 'pos');
+                if (!isPos) _posScannerStop();
+                if (typeof h === 'function') {
+                    try { h(JSON.stringify({ barcode: raw })); } catch(e){ console.warn('[pos-scanner] handler error', e.message); }
+                }
+                console.log('[pos-scanner] on-demand delivered:', raw);
+                return;
+            }
+            if (typeof products === 'undefined' || typeof cart === 'undefined') return;
+            var clean = raw.replace(/^0+/, '');
+            var p = products.find(function(x){
+                var b = String(x.barcode || '').trim();
+                if (!b) return false;
+                return b === raw || b.replace(/^0+/, '') === clean;
+            });
+            if (!p) { if (typeof showToast === 'function') showToast('Товар не найден: ' + raw); console.log('[pos-scanner] not found:', raw); return; }
+            var line = cart.find(function(c){ return c.productId === p.id; });
+            if (line) { if (line.emergencySale || line.qty < p.qty) line.qty++; }
+            else cart.push({ productId: p.id, qty: 1, price: p.price, emergencySale: false });
+            if (typeof renderCartBar === 'function') renderCartBar();
+            if (typeof feedbackAddToCart === 'function') feedbackAddToCart();
+            if (typeof showPosNotice === 'function') showPosNotice(p.name + ' добавлен в чек');
+            else if (typeof showToast === 'function') showToast('✓ ' + p.name);
+            if (navigator.vibrate) navigator.vibrate(50);
+            console.log('[pos-scanner] ADDED:', p.name, '| cart.length=' + cart.length);
+        } catch(e) { console.warn('[pos-scanner] add error:', e.message); }
+    }
+
+    window._posScannerToggle = function() {
+        if (_ps.onDemand) {
+            _ps.onDemand = false;
+            _ps.savedHandler = null;
+            _posScannerStop();
+            return;
+        }
+        if (_ps.running) {
+            _posScannerStop();
+            _ps.hidden = true;
+            var m1 = miniEl(); if (m1) m1.style.display = 'flex';
+        } else {
+            _ps.hidden = false;
+            var m2 = miniEl(); if (m2) m2.style.display = 'none';
+            _posScannerStart();
+        }
+    };
+
+    function _checkPos() {
+        if (_ps.onDemand) return;
+        var isPos = (typeof currentView !== 'undefined' && currentView === 'orders' && typeof ordersSubView !== 'undefined' && ordersSubView === 'pos');
+        var m = miniEl();
+        if (!isPos) {
+            if (_ps.running) _posScannerStop();
+            _ps.hidden = true;
+            if (m) m.style.display = 'none';
+            return;
+        }
+        if (typeof _shopReady === 'undefined' || !_shopReady) { if (_ps.running) _posScannerStop(); if (m) m.style.display = 'none'; return; }
+        if (typeof products === 'undefined' || !products.length) { if (_ps.running) _posScannerStop(); if (m) m.style.display = 'none'; return; }
+        if (m) m.style.display = _ps.running ? 'none' : 'flex';
+    }
+    window._checkPos = _checkPos;
+
+    _ps.hidden = true;
+    var closeBtn = document.getElementById('pos-scanner-close');
+    if (closeBtn) {
+        var _cbTap = function(ev){
+            if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+            _posScannerToggle();
+        };
+        closeBtn.addEventListener('click', _cbTap);
+        closeBtn.addEventListener('touchstart', _cbTap, {passive:false});
+    }
+    var miniBtn = document.getElementById('pos-scanner-mini');
+    if (miniBtn) { miniBtn.onclick = function(){ _posScannerToggle(); }; }
+
+    // === DRAG ===
+    var drag = null;
+    var header = document.getElementById('pos-scanner-header');
+    function startDrag(e) {
+        var t = e.target;
+        if (t && (t.id === 'pos-scanner-close' || (t.closest && t.closest('#pos-scanner-close')))) return;
+        e.preventDefault(); e.stopPropagation();
+        var f = floatEl(); if (!f) return;
+        var pt = e.touches ? e.touches[0] : e;
+        var r = f.getBoundingClientRect();
+        drag = { startX: pt.clientX, startY: pt.clientY, startLeft: r.left, startTop: r.top };
+        f.style.left = r.left + 'px'; f.style.top = r.top + 'px';
+        f.style.right = 'auto'; f.style.bottom = 'auto';
+    }
+    function onDrag(e) {
+        if (!drag) return;
+        e.preventDefault();
+        var f = floatEl(); if (!f) return;
+        var pt = e.touches ? e.touches[0] : e;
+        f.style.left = (drag.startLeft + (pt.clientX - drag.startX)) + 'px';
+        f.style.top  = (drag.startTop  + (pt.clientY - drag.startY)) + 'px';
+    }
+    function endDrag() { if (drag) { drag = null; saveLayout(); } }
+    if (header) {
+        header.addEventListener('mousedown', startDrag);
+        header.addEventListener('touchstart', startDrag, {passive:false});
+    }
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('touchmove', onDrag, {passive:false});
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchend', endDrag);
+
+    // === RESIZE ===
+    var resize = null;
+    var resizer = document.getElementById('pos-scanner-resize');
+    function startResize(e) {
+        e.preventDefault(); e.stopPropagation();
+        var f = floatEl(); if (!f) return;
+        var pt = e.touches ? e.touches[0] : e;
+        var r = f.getBoundingClientRect();
+        resize = { startX: pt.clientX, startY: pt.clientY, startW: r.width, startH: r.height };
+    }
+    function onResize(e) {
+        if (!resize) return;
+        e.preventDefault();
+        var f = floatEl(); if (!f) return;
+        var pt = e.touches ? e.touches[0] : e;
+        var w = Math.max(120, Math.min(400, resize.startW + (pt.clientX - resize.startX)));
+        var h = Math.max(120, Math.min(500, resize.startH + (pt.clientY - resize.startY)));
+        f.style.width = w + 'px';
+        f.style.height = h + 'px';
+    }
+    function endResize() { if (resize) { resize = null; saveLayout(); } }
+    if (resizer) {
+        resizer.addEventListener('mousedown', startResize);
+        resizer.addEventListener('touchstart', startResize, {passive:false});
+    }
+    document.addEventListener('mousemove', onResize);
+    document.addEventListener('touchmove', onResize, {passive:false});
+    document.addEventListener('mouseup', endResize);
+    document.addEventListener('touchend', endResize);
+
+    setInterval(_checkPos, 1000);
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            if (_ps.onDemand) { _ps.onDemand = false; _ps.savedHandler = null; }
+            _posScannerStop();
+        } else {
+            _checkPos();
+        }
+    });
+    loadLayout();
+})();
+</script>
+<!-- === /POS floating scanner === -->
 <script src="ui-extra.js"></script>
 </body>
 </html>

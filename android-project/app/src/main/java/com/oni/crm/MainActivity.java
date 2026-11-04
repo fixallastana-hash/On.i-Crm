@@ -18,6 +18,7 @@ import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -153,6 +154,7 @@ public class MainActivity extends Activity {
     private void configureWebView() {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true);
@@ -192,6 +194,27 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override public void onPermissionRequest(final PermissionRequest request) {
+                android.util.Log.i("On.i.Scan", "onPermissionRequest CALLED, resources=" + java.util.Arrays.toString(request != null ? request.getResources() : null));
+                if (request == null) return;
+                runOnUiThread(new Runnable() { public void run() {
+                    try {
+                        String[] resources = request.getResources();
+                        if (resources != null) {
+                            for (String r : resources) {
+                                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) {
+                                    request.grant(new String[]{ PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+                                    return;
+                                }
+                            }
+                        }
+                        request.deny();
+                    } catch (Exception e) {
+                        android.util.Log.w("On.i.Scan", "onPermissionRequest failed", e);
+                        try { request.deny(); } catch (Exception ignored) {}
+                    }
+                }});
+            }
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
