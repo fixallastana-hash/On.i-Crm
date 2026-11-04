@@ -306,3 +306,16 @@ Verified audit: Claude Code 2026-11-01, HEAD df41349.
 - products/warehouses/points — b3.2b photo merge
 - _fbSyncPull guard b5.1, _shopReady, _shopPendingSync, _shopLoadGeneration, _shopNotReadyLogged
 - clearAuthSession
+
+## Dependencies — accepted risks
+
+### firebase-admin transitive (8 moderate, deferred)
+`npm audit` reports 8 moderate `uuid <11.1.1` vulns (GHSA-w5hq-g745-h8pq) via
+`firebase-admin@^13.6.0` → `@google-cloud/firestore` → `google-gax` → `uuid`.
+
+- **Real-world risk: 0.** `uuid` CVE requires `buf` parameter, `firebase-admin` doesn't use it.
+- **Fix path:** `firebase-admin@14.5.0` (breaking). Requires Cloud Functions testing before deploy.
+- **Do NOT:** `npm audit fix --force` (installs firebase-admin@14), `overrides` for uuid (breaks firebase-admin@13).
+- **Trigger to revisit:** firebase-admin@14 stable + 2-3h window for Cloud Functions regression test.
+
+Verified 2026-11-04. 2 Dependabot vulns (deepmerge, minimatch) resolved by removing `firebase-functions-test` devDependency.
