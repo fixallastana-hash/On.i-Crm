@@ -6950,7 +6950,21 @@ try{ window.CORE_MODULES=CORE_MODULES; window.defaultModulesConfig=defaultModule
         .catch(function(e){ console.warn('[scan-start] FAILED:', e.name, e.message); });
     };
 
-    window._scannerBridge = function() {
+    window.testNativeScanner = function() {
+    if (window.Android && typeof window.Android.scanBarcodeNative === 'function') {
+        window.Android.scanBarcodeNative();
+    } else if (typeof showToast === 'function') {
+        showToast('scanBarcodeNative unavailable');
+    } else {
+        alert('scanBarcodeNative unavailable');
+    }
+};
+window._testBarcodeResult = function(value) {
+    console.log('[native-scan] RESULT: ' + value);
+    if (typeof showToast === 'function') showToast('\u0428\u0442\u0440\u0438\u0445\u043a\u043e\u0434: ' + value);
+    else alert('\u0428\u0442\u0440\u0438\u0445\u043a\u043e\u0434: ' + value);
+};
+window._scannerBridge = function() {
         console.log('[pos-scanner] bridge CALLED');
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             if (typeof showToast === 'function') showToast('Сканер недоступен');

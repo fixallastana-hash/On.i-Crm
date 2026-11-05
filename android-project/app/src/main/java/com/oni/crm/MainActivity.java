@@ -225,6 +225,18 @@ public class MainActivity extends Activity {
     }
 
     private final class AndroidBridge {
+
+        @JavascriptInterface
+        public void scanBarcodeNative() {
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    Intent intent = new Intent(MainActivity.this, BarcodeScannerActivity.class);
+                    startActivityForResult(intent, 1002);
+                } catch (Exception e) {
+                    android.util.Log.e("On.i.Scan", "scanBarcodeNative failed", e);
+                }
+            }});
+        }
         @JavascriptInterface
         public void saveGeminiQuery(String q) { pendingGeminiQuery = q; }
         @JavascriptInterface
@@ -3956,6 +3968,22 @@ private static String readAll(InputStream in) throws IOException {
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 1002) {
+            final String value = (resultCode == RESULT_OK && data != null)
+                    ? data.getStringExtra(BarcodeScannerActivity.EXTRA_RESULT) : null;
+            if (value != null) {
+                final String js = "if(window._testBarcodeResult)window._testBarcodeResult('"
+                        + value.replace("\\", "\\\\").replace("'", "\\'") + "');";
+                webView.post(new Runnable() { public void run() {
+                    try {
+                        android.util.Log.i("On.i.Scan", "barcode -> JS: " + value);
+                        webView.evaluateJavascript(js, null);
+                    } catch (Exception e) {
+                        android.util.Log.e("On.i.Scan", "js fail", e);
+                    }
+                }});
+            }
+        }
         super.onActivityResult(requestCode,resultCode,data);
         if(requestCode == com.google.zxing.integration.android.IntentIntegrator.REQUEST_CODE){
             try{

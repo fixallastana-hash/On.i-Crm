@@ -22,7 +22,12 @@
             android:exported="false"
             android:grantUriPermissions="true" />
 
-        <activity
+                <activity
+            android:name=".BarcodeScannerActivity"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+<activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
             android:screenOrientation="portrait"
             tools:replace="android:screenOrientation" />
