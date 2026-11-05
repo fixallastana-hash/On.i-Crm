@@ -6966,6 +6966,11 @@ window._testBarcodeResult = function(value) {
 };
 window._scannerBridge = function() {
         console.log('[pos-scanner] bridge CALLED');
+        if (window.Android && typeof window.Android.startFloatingScanner === 'function') {
+            console.log('[pos-scanner] native-floating-scanner');
+            window.Android.startFloatingScanner();
+            return;
+        }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             if (typeof showToast === 'function') showToast('Сканер недоступен');
             return;
@@ -7042,7 +7047,7 @@ window._scannerBridge = function() {
         } catch(e) { console.warn('[pos-scanner] add error:', e.message); }
     }
 
-    window._posScannerToggle = function() {
+    window._posScannerToggle = function() { if (window.Android && typeof window.Android.startFloatingScanner === 'function') { console.log('[pos-scanner] toggle-native'); window.Android.startFloatingScanner(); return; }
         if (_ps.onDemand) {
             _ps.onDemand = false;
             _ps.savedHandler = null;

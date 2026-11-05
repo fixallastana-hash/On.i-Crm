@@ -5,6 +5,7 @@ import com.googlecode.tesseract.android.TessBaseAPI;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.widget.FrameLayout;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -138,6 +139,7 @@ public class MainActivity extends Activity {
         configureWebView();
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
         webView.loadUrl("file:///android_asset/index.html");
+        try { setupFloatingScanner(); } catch (Exception ignored) {}
         webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 500);
         webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 1500);
         webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 3500);
@@ -194,7 +196,14 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
-            @Override public void onPermissionRequest(final PermissionRequest request) {
+                        @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage cm) {
+                try {
+                    android.util.Log.i("On.i.Console", cm.messageLevel() + " " + cm.message() + " @" + cm.sourceId() + ":" + cm.lineNumber());
+                } catch (Exception ignored) {}
+                return true;
+            }
+@Override public void onPermissionRequest(final PermissionRequest request) {
                 android.util.Log.i("On.i.Scan", "onPermissionRequest CALLED, resources=" + java.util.Arrays.toString(request != null ? request.getResources() : null));
                 if (request == null) return;
                 runOnUiThread(new Runnable() { public void run() {
@@ -224,7 +233,99 @@ public class MainActivity extends Activity {
         });
     }
 
-    private final class AndroidBridge {
+        // ===== Phase 2: floating scanner =====
+    private ScannerFloatingView floatingScanner;
+    private boolean pendingFloatingStart = false;
+
+    private void setupFloatingScanner() {
+        if (floatingScanner != null) return;
+        floatingScanner = new ScannerFloatingView(this);
+        float d = getResources().getDisplayMetrics().density;
+        int w = Math.round(320 * d), h = Math.round(240 * d);
+        int left = Math.round(40 * d), top = Math.round(120 * d);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w, h);
+        lp.leftMargin = left;
+        lp.topMargin = top;
+        addContentView(floatingScanner, lp);
+        floatingScanner.setVisibility(View.GONE);
+    }
+
+    private void showFloatingScanner() {
+        if (floatingScanner == null) setupFloatingScanner();
+        if (floatingScanner == null) return;
+        floatingScanner.start(MainActivity.this, new ScannerFloatingView.Callback() {
+            @Override public void onBarcodeDetected(String value) {
+                final String js = "if(window.onBarcodeScanned){try{window.onBarcodeScanned({barcode:"
+                        + org.json.JSONObject.quote(value) + "});}catch(e){}}";
+                runOnUiThread(new Runnable() { public void run() {
+                    try {
+                        android.util.Log.i("On.i.Scan", "floating barcode -> JS: " + value);
+                        if (webView != null) webView.evaluateJavascript(js, null);
+                    } catch (Exception e) {
+                        android.util.Log.e("On.i.Scan", "js fail", e);
+                    }
+                }});
+            }
+            @Override public void onClose() {
+                android.util.Log.i("On.i.Scan", "floating scanner closed");
+            }
+        });
+    }
+
+    private void hideFloatingScanner() {
+        if (floatingScanner != null) floatingScanner.hide();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == 1001 && pendingFloatingStart) {
+            pendingFloatingStart = false;
+            boolean _granted = grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (_granted) { showFloatingScanner(); }
+            else {
+                try { android.widget.Toast.makeText(MainActivity.this,
+                    "\u041a\u0430\u043c\u0435\u0440\u0430 \u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d\u0430. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445.",
+                    android.widget.Toast.LENGTH_LONG).show(); } catch (Exception ignored) {}
+            }
+            return;
+        }
+    }
+
+private final class AndroidBridge {
+
+        @JavascriptInterface
+        public void startFloatingScanner() {
+            android.util.Log.i("On.i.Scan", "startFloatingScanner ENTER");
+            try { android.widget.Toast.makeText(MainActivity.this, "startFloatingScanner", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    if (floatingScanner != null && floatingScanner.isActive()) {
+                        hideFloatingScanner();
+                        return;
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= 23) {
+                        if (checkSelfPermission(android.Manifest.permission.CAMERA)
+                                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            pendingFloatingStart = true;
+                            requestPermissions(new String[]{ android.Manifest.permission.CAMERA }, 1001);
+                            return;
+                        }
+                    }
+                    showFloatingScanner();
+                } catch (Exception e) {
+                    android.util.Log.e("On.i.Scan", "startFloatingScanner failed", e);
+                }
+            }});
+        }
+
+        @JavascriptInterface
+        public void stopFloatingScanner() {
+            runOnUiThread(new Runnable() { public void run() {
+                try { hideFloatingScanner(); } catch (Exception ignored) {}
+            }});
+        }
 
         @JavascriptInterface
         public void scanBarcodeNative() {
