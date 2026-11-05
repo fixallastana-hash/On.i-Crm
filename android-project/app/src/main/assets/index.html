@@ -6847,7 +6847,50 @@ try{ window.CORE_MODULES=CORE_MODULES; window.defaultModulesConfig=defaultModule
 </div>
 <script>
 (function(){
+    // Если HTML-блока нет в DOM (из-за перезаписи body или ошибки парсера) — создаём принудительно
+    if (!document.getElementById('pos-scanner-float')) {
+        var _scannerHtml = `
+        <div id="pos-scanner-mini" style="display:none; position:fixed; bottom:80px; right:12px; width:52px; height:52px; border-radius:50%; background:#0A84FF; color:#fff; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,0.35); z-index:9000; user-select:none;">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+                <path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>
+            </svg>
+        </div>
+        <div id="pos-scanner-float" style="display:none; position:fixed; bottom:80px; right:12px; width:200px; height:220px; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:9000; background:#000; border:2px solid #fff;">
+            <div id="pos-scanner-header" style="position:absolute; top:0; left:0; right:0; height:22px; background:rgba(0,0,0,0.55); color:#fff; display:flex; align-items:center; justify-content:space-between; padding:0 6px; cursor:move; z-index:9005; font-size:11px; touch-action:none;">
+                <span style="opacity:0.8;">⠿</span>
+                <span id="pos-scanner-close" style="width:20px; height:20px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px;">✕</span>
+            </div>
+            <video id="pos-scanner-video" autoplay playsinline muted style="position:absolute; top:22px; left:0; right:0; bottom:0; width:100%; height:calc(100% - 22px); object-fit:cover;"></video>
+            <div style="position:absolute; top:calc(50% + 11px); left:10%; right:10%; height:2px; background:#ff3b30; box-shadow:0 0 8px #ff3b30; z-index:9002; pointer-events:none;"></div>
+            <div style="position:absolute; top:calc(22px + 15%); left:10%; width:18px; height:18px; border-top:2px solid #fff; border-left:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+            <div style="position:absolute; top:calc(22px + 15%); right:10%; width:18px; height:18px; border-top:2px solid #fff; border-right:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+            <div style="position:absolute; bottom:15%; left:10%; width:18px; height:18px; border-bottom:2px solid #fff; border-left:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+            <div style="position:absolute; bottom:15%; right:10%; width:18px; height:18px; border-bottom:2px solid #fff; border-right:2px solid #fff; z-index:9002; pointer-events:none;"></div>
+            <div id="pos-scanner-resize" style="position:absolute; bottom:0; right:0; width:20px; height:20px; cursor:nwse-resize; z-index:9006; background:linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.6) 50%); touch-action:none;"></div>
+            <div id="pos-scanner-status" style="position:absolute; bottom:6px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); color:#fff; padding:2px 8px; border-radius:8px; font-size:10px; white-space:nowrap; pointer-events:none;">Сканирую…</div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', _scannerHtml);
+        console.log('[pos-scanner] HTML dynamically injected');
+    }
+
     var _ps = { stream: null, detector: null, running: false, lastCode: '', lastAt: 0, hidden: false, onDemand: false, savedHandler: null };
+
+    // Автодобавление кнопки сканера в POS search
+    function _ensurePosScanBtn() {
+        var posInput = document.getElementById('pos-search');
+        if (!posInput) return;
+        var parent = posInput.parentElement;
+        if (!parent) return;
+        if (parent.querySelector('.oni-scan-btn')) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'oni-scan-btn';
+        btn.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;padding:0;cursor:pointer;line-height:1;z-index:2;';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="vertical-align:middle;display:inline-block;"><rect x="2" y="5" width="2" height="14"></rect><rect x="5" y="5" width="1" height="14"></rect><rect x="7" y="5" width="3" height="14"></rect><rect x="11" y="5" width="1" height="14"></rect><rect x="13" y="5" width="2" height="14"></rect><rect x="16" y="5" width="1" height="14"></rect><rect x="18" y="5" width="1" height="14"></rect><rect x="20" y="5" width="2" height="14"></rect></svg>';
+        btn.onclick = function(){ window._scannerBridge(); };
+        parent.appendChild(btn);
+    }
+    setInterval(_ensurePosScanBtn, 1000);
     window._posScanner = _ps;
 
     var floatEl = function(){ return document.getElementById('pos-scanner-float'); };
@@ -6874,25 +6917,37 @@ try{ window.CORE_MODULES=CORE_MODULES; window.defaultModulesConfig=defaultModule
     }
 
     window._posScannerStart = function() {
-        if (_ps.running || _ps.hidden) return;
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        console.log('[scan-start] called, hidden=' + _ps.hidden + ', running=' + _ps.running + ', stream=' + (!!_ps.stream));
+        if (_ps.running || _ps.hidden) { console.log('[scan-start] early return'); return; }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { console.log('[scan-start] no mediaDevices'); return; }
+        // Остановить старый stream если висит
+        if (_ps.stream) {
+            try { _ps.stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+            _ps.stream = null;
+        }
+        var vOld = document.getElementById('pos-scanner-video');
+        if (vOld && vOld.srcObject) {
+            try { vOld.srcObject.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+            vOld.srcObject = null;
+        }
+        console.log('[scan-start] calling getUserMedia...');
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
         .then(function(stream) {
+            console.log('[scan-start] getUserMedia RESOLVED, tracks=' + stream.getVideoTracks().length);
             _ps.stream = stream;
             var video = document.getElementById('pos-scanner-video');
-            if (!video) return;
+            if (!video) { console.log('[scan-start] NO video element'); stream.getTracks().forEach(function(t){t.stop();}); _ps.stream = null; return; }
             video.srcObject = stream;
-            video.play();
-            if (typeof BarcodeDetector !== 'undefined') {
-                _ps.detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'upc_a', 'upc_e'] });
-            }
-            floatEl().style.display = 'block';
-            miniEl().style.display = 'none';
-            loadLayout();
+            video.play().catch(function(e){ console.log('[scan-start] play error:', e.message); });
+            try { if (typeof BarcodeDetector !== 'undefined') { _ps.detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code','upc_a','upc_e'] }); } } catch(e){ console.log('[scan-start] detector error:', e.message); }
+            var fe = floatEl(); if (fe) { fe.style.display = 'block'; console.log('[scan-start] float display=block'); }
+            var me = miniEl(); if (me) me.style.display = 'none';
+            try { loadLayout(); } catch(e){}
             _ps.running = true;
             _posScannerLoop();
-            console.log('[pos-scanner] started');
-        }).catch(function(e){ console.warn('[pos-scanner] start failed', e.message); });
+            console.log('[scan-start] STARTED OK');
+        })
+        .catch(function(e){ console.warn('[scan-start] FAILED:', e.name, e.message); });
     };
 
     window._scannerBridge = function() {

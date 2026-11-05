@@ -12,6 +12,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.webkit.JavascriptInterface;
 import android.provider.MediaStore;
 import android.view.View;
@@ -137,6 +139,13 @@ public class MainActivity extends Activity {
         setContentView(webView);
         configureWebView();
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 23) {
+                if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{ Manifest.permission.CAMERA }, 1001);
+                }
+            }
+        } catch (Exception _e) {}
         webView.loadUrl("file:///android_asset/index.html");
         webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 500);
         webView.postDelayed(new Runnable() { public void run() { injectProductHandlers(); } }, 1500);
