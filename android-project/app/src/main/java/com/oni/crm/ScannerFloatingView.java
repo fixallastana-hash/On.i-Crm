@@ -54,6 +54,8 @@ public class ScannerFloatingView extends FrameLayout {
     private FloatingLifecycle lifecycle;
     private Callback callback;
     private boolean detected = false;
+    private int currentLensFacing = CameraSelector.LENS_FACING_BACK;
+    private ImageView switchBtn;
     private String lastBarcode = "";
     private long lastBarcodeTime = 0;
     private static final long DUPLICATE_WINDOW_MS = 2000;
@@ -91,6 +93,16 @@ public class ScannerFloatingView extends FrameLayout {
         label.setTextSize(12);
         label.setPadding(dp(12), dp(10), 0, 0);
         headerBar.addView(label, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
+
+        switchBtn = new ImageView(getContext());
+        switchBtn.setImageResource(android.R.drawable.ic_menu_rotate);
+        switchBtn.setColorFilter(Color.WHITE);
+        LayoutParams swl = new LayoutParams(dp(40), dp(40));
+        swl.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        swl.rightMargin = dp(44);
+        switchBtn.setLayoutParams(swl);
+        switchBtn.setOnClickListener(v -> switchCamera());
+        headerBar.addView(switchBtn);
 
         ImageView close = new ImageView(getContext());
         close.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
@@ -158,6 +170,10 @@ public class ScannerFloatingView extends FrameLayout {
     public void start(Activity activity, Callback cb) {
         this.callback = cb;
         this.detected = false;
+        try {
+            android.content.SharedPreferences sp = getContext().getSharedPreferences("oni_scanner", 0);
+            currentLensFacing = sp.getInt("lens_facing", CameraSelector.LENS_FACING_BACK);
+        } catch (Exception ignored) {}
         setVisibility(VISIBLE);
 
         BarcodeScannerOptions options = new BarcodeScannerOptions.Builder()
@@ -182,12 +198,73 @@ public class ScannerFloatingView extends FrameLayout {
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build();
                 analysis.setAnalyzer(executor, this::analyzeFrame);
                 provider.unbindAll();
-                provider.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis);
+                CameraSelector selector = new CameraSelector.Builder().requireLensFacing(currentLensFacing).build();
+                if (!provider.hasCamera(selector)) { selector = CameraSelector.DEFAULT_BACK_CAMERA; currentLensFacing = CameraSelector.LENS_FACING_BACK; }
+                provider.bindToLifecycle(lifecycle, selector, preview, analysis);
                 Log.i(TAG, "camera bound OK");
             } catch (Exception e) {
                 Log.e(TAG, "camera bind failed", e);
             }
         }, ContextCompat.getMainExecutor(activity));
+    }
+
+    private void switchCamera() {
+        currentLensFacing = (currentLensFacing == CameraSelector.LENS_FACING_BACK)
+                ? CameraSelector.LENS_FACING_FRONT
+                : CameraSelector.LENS_FACING_BACK;
+        try {
+            android.content.SharedPreferences sp = getContext().getSharedPreferences("oni_scanner", 0);
+            sp.edit().putInt("lens_facing", currentLensFacing).apply();
+        } catch (Exception ignored) {}
+        Log.i(TAG, "switchCamera -> " + (currentLensFacing == CameraSelector.LENS_FACING_BACK ? "BACK" : "FRONT"));
+
+        // Reset detection state so we can scan immediately after switch
+        detected = false;
+        lastBarcode = "";
+        lastBarcodeTime = 0;
+
+        if (provider == null || executor == null || lifecycle == null) {
+            Log.w(TAG, "switchCamera: provider not ready, will use pref next start()");
+            return;
+        }
+
+        try {
+            provider.unbindAll();
+
+            Preview preview = new Preview.Builder().build();
+            preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+            ImageAnalysis analysis = new ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build();
+            analysis.setAnalyzer(executor, this::analyzeFrame);
+
+            CameraSelector selector = new CameraSelector.Builder()
+                    .requireLensFacing(currentLensFacing).build();
+
+            if (!provider.hasCamera(selector)) {
+                Log.w(TAG, "no camera for lensFacing=" + currentLensFacing + ", fallback to BACK");
+                currentLensFacing = CameraSelector.LENS_FACING_BACK;
+                selector = CameraSelector.DEFAULT_BACK_CAMERA;
+            }
+
+            provider.bindToLifecycle(lifecycle, selector, preview, analysis);
+            Log.i(TAG, "switchCamera rebound OK");
+        } catch (Exception e) {
+            Log.e(TAG, "switchCamera failed", e);
+            // Fallback to back
+            try {
+                currentLensFacing = CameraSelector.LENS_FACING_BACK;
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+                ImageAnalysis analysis = new ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build();
+                analysis.setAnalyzer(executor, this::analyzeFrame);
+                provider.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis);
+            } catch (Exception e2) {
+                Log.e(TAG, "fallback to BACK failed", e2);
+            }
+        }
     }
 
     private void analyzeFrame(ImageProxy ip) {
