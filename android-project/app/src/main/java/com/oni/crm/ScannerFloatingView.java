@@ -54,6 +54,10 @@ public class ScannerFloatingView extends FrameLayout {
     private FloatingLifecycle lifecycle;
     private Callback callback;
     private boolean detected = false;
+    private String lastBarcode = "";
+    private long lastBarcodeTime = 0;
+    private static final long DUPLICATE_WINDOW_MS = 2000;
+    private static final long SCAN_PAUSE_MS = 400;
 
     public ScannerFloatingView(@NonNull Context context) {
         super(context);
@@ -196,11 +200,13 @@ public class ScannerFloatingView extends FrameLayout {
                         if (detected) return;
                         for (Barcode b : bcs) {
                             String v = b.getRawValue();
-                            if (v != null && !v.isEmpty()) {
-                                detected = true;
-                                onDetected(v);
-                                return;
-                            }
+                            if (v == null || v.isEmpty()) continue;
+                            long now = System.currentTimeMillis();
+                            if (v.equals(lastBarcode) && (now - lastBarcodeTime) < DUPLICATE_WINDOW_MS) continue;
+                            lastBarcode = v;
+                            lastBarcodeTime = now;
+                            onDetectedContinuous(v);
+                            return;
                         }
                     })
                     .addOnFailureListener(e -> Log.e(TAG, "process failed", e))
@@ -209,6 +215,19 @@ public class ScannerFloatingView extends FrameLayout {
             Log.e(TAG, "analyze failed", e);
             ip.close();
         }
+    }
+
+    private void onDetectedContinuous(String value) {
+        Log.i(TAG, "DETECTED (continuous): " + value);
+        try {
+            Vibrator v = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
+            if (v != null) v.vibrate(80);
+        } catch (Exception ignored) {}
+        if (callback != null) callback.onBarcodeDetected(value);
+        detected = true;
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            detected = false;
+        }, SCAN_PAUSE_MS);
     }
 
     private void onDetected(String value) {

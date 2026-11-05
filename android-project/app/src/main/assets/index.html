@@ -4618,7 +4618,7 @@ function openBarcodeEdit(productId){
   document.getElementById('bce-gen').onclick=()=>{ codeEl.value=ean13GenerateFromSku(p.sku||p.id); updatePrev(); };
   const scanBtn=document.getElementById('bce-scan');
   if(scanBtn) scanBtn.onclick=()=>{ if(window._scannerBridge) _scannerBridge(); else if(window.Android&&typeof Android.scanBarcode==='function') Android.scanBarcode(); else showToast('Сканер недоступен'); };
-  window.onBarcodeScanned=function(json){ try{ const d=typeof json==='string'?JSON.parse(json):json; const code=String(d?.barcode||d?.code||d?.value||'').trim(); if(code){ codeEl.value=code; updatePrev(); } }catch(e){} };
+  window.onBarcodeScanned=function(json){try{ const d=typeof json==='string'?JSON.parse(json):json; const code=String(d?.barcode||d?.code||d?.value||'').trim(); if(code){ codeEl.value=code; updatePrev(); } }catch(e){} };
   document.getElementById('bce-save').onclick=async()=>{ const v=codeEl.value.trim(); if(!v){ p.barcode=''; } else if(!ean13Validate(v)){ showToast('Штрихкод должен быть валидным EAN-13'); return; } else { p.barcode=v; } await persist('products'); close(); showToast('Штрихкод сохранён'); };
   const clr=document.getElementById('bce-clear'); if(clr) clr.onclick=async()=>{ p.barcode=''; await persist('products'); close(); showToast('Штрихкод удалён'); };
 }
@@ -4632,7 +4632,8 @@ function openLabelPrintSheet(){
   const checks=()=>[...root.querySelectorAll('.lbl-check')]; document.getElementById('lbl-select-all').onclick=()=>checks().forEach(c=>c.checked=true); document.getElementById('lbl-select-none').onclick=()=>checks().forEach(c=>c.checked=false);
   document.getElementById('lbl-print').onclick=()=>{ const ids=checks().filter(c=>c.checked).map(c=>c.dataset.id); if(!ids.length){ showToast('Выберите хотя бы один товар'); return; } const html=labelPrintHtml(ids); try{ if(window.Android&&typeof window.Android.printReceipt==='function'){ window.Android.printReceipt(html); return; } }catch(e){} const w=window.open('about:blank','_blank'); if(!w){ showToast('Не удалось открыть печать'); return; } w.document.open(); w.document.write(html); w.document.close(); };
 }
-function labelPrintHtml(ids){ const list=ids.map(id=>products.find(p=>p.id===id)).filter(Boolean); return `<!doctype html><html><head><meta charset="utf-8"><title>Этикетки</title><style>@page{size:A4;margin:6mm}body{font-family:Arial,sans-serif;margin:0;padding:0}.grid{display:grid;grid-template-columns:repeat(4,43mm);gap:2mm}.label{width:43mm;height:25mm;border:0.3mm dashed #999;padding:1mm;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;page-break-inside:avoid}.name{font-size:8pt;font-weight:700;line-height:1.1;overflow:hidden;max-height:7mm}.price{font-size:11pt;font-weight:800;text-align:right;line-height:1}.bc{margin-top:auto;text-align:center}.bc svg{width:38mm;height:8mm;display:block;margin:0 auto}</style></head><body><div class="grid">${list.map(p=>`<div class="label"><div class="name">${escapeHtml(p.name)}</div><div class="price">${fmtMoney(p.price)}</div><div class="bc">${p.barcode?ean13ToSvg(p.barcode,{width:160,height:34,showText:false}):''}</div></div>`).join('')}</div></body></html>`; }
+function labelPrintHtml(ids){ const list=ids.map(id=>products.find(p=>p.id===id)).filter(Boolean); return `<!doctype html><html><head><meta charset="utf-8"><title>Этикетки</title><style>@page{size:A4;margin:6mm}body{font-family:Arial,sans-serif;margin:0;padding:0}.grid{display:grid;grid-template-columns:repeat(4,43mm);gap:2mm}.label{width:43mm;height:25mm;border:0.3mm dashed #999;padding:1mm;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;page-break-inside:avoid}.name{font-size:8pt;font-weight:700;line-height:1.1;overflow:hidden;max-height:7mm}.price{font-size:11pt;font-weight:800;text-align:right;line-height:1}.bc{margin-top:auto;text-align:center}.bc svg{width:38mm;height:8mm;display:block;margin:0 auto}</style></head><body><div class="grid">${list.map(p=>`<div class="label"><div class="name">${escapeHtml(p.name)}</div><div class="price">${fmtMoney(p.price)}</div><div class="bc">${p.barcode?ean13ToSvg(p.barcode,{width:160,height:34,showText:false}):''}</div></div>`).join('')}</div>
+</body></html>`; }
 
 /* ===================== GIFT CARDS ===================== */
 function giftCardCode(){ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<12;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12); }
@@ -5436,7 +5437,8 @@ function buildZReportHtml(shift, data){
   <tr class="total"><td>Чистыми</td><td>${fmt(data.netTotal)}</td></tr>
   </table>
   <div class="center">Отчёт сформирован ${new Date().toLocaleString('ru-RU')}</div>
-  </body></html>`;
+  
+</body></html>`;
 }
 
 function openZReport(shiftId){
@@ -5548,7 +5550,8 @@ function openReceiptModal(order){
       <tr><td>Скидка</td><td>− ${fmtMoney(order.discount||0)}</td></tr>
       <tr class="total"><td>ИТОГО</td><td>${fmtMoney(order.total)}</td></tr>${paymentRow}${commentRow}
       </table><div class="center">Спасибо за покупку!</div>
-      </body></html>`;
+      
+</body></html>`;
     try{
       if(window.Android && typeof window.Android.printReceipt==='function'){
         window.Android.printReceipt(printHtml);
@@ -6717,12 +6720,12 @@ function openInventorySessionScreen(sessionId){
     document.getElementById('inv-session-close').onclick=close; document.getElementById('inv-session-ov').onclick=e=>{if(e.target.id==='inv-session-ov')close();};
     const saveDraft=async()=>{ session.items=session.items||{}; root.querySelectorAll('.inv-actual').forEach(el=>{const it=session.items[el.dataset.invId];if(it)it.actualQty=el.value===''?null:Math.max(0,Math.floor(Number(el.value)||0));}); await persist('inventorySessions'); };
     root.querySelectorAll('.inv-actual').forEach(el=>el.onchange=saveDraft);
-    const addProduct=p=>{if(!p)return;session.items=session.items||{};if(!session.items[p.id])session.items[p.id]={productId:p.id,name:p.name||'',sku:p.sku||'',bookQty:Number(p.qty)||0,actualQty:null,cost:Number(p.cost)||0};render();};
+    ;;const addProduct=p=>{if(!p)return;session.items=session.items||{};if(!session.items[p.id])session.items[p.id]={productId:p.id,name:p.name||"",sku:p.sku||"",bookQty:Number(p.qty)||0,actualQty:null,cost:Number(p.cost)||0};render();};
     const results=document.getElementById('inv-search-results'), search=document.getElementById('inv-search');
     const showResults=()=>{const q=search.value.trim();const list=inventoryProductSearch(q);results.style.display='block';results.innerHTML=list.map(p=>`<button type="button" class="list-row" data-inv-add="${escapeHtml(p.id)}" style="width:100%;text-align:left;background:none;border:0"><div class="row-main"><div class="row-title">${escapeHtml(p.name)}</div><div class="row-sub">${escapeHtml(p.sku||'')} · ${escapeHtml(p.barcode||'')} · остаток ${Number(p.qty)||0}</div></div></button>`).join('')||'<div class="panel-body"><div class="empty">Ничего не найдено</div></div>';results.querySelectorAll('[data-inv-add]').forEach(b=>b.onclick=()=>{const p=products.find(x=>x.id===b.dataset.invAdd);results.style.display='none';addProduct(p);});};
     search.oninput=showResults;
     const scan=()=>{if(window._scannerBridge)window._scannerBridge();else if(window.Android&&typeof window.Android.scanBarcode==='function')window.Android.scanBarcode();else showToast('Сканер недоступен');}; document.getElementById('inv-scan').onclick=scan;
-    window.onBarcodeScanned=function(json){try{const d=typeof json==='string'?JSON.parse(json):json;const code=String(d?.barcode||d?.code||d?.value||json||'').trim();if(!code)return;const p=products.find(x=>String(x.barcode||'').trim()===code);if(!p){showToast('Товар со штрихкодом не найден');return;}addProduct(p);}catch(e){showToast('Не удалось обработать штрихкод');}};
+    window.onBarcodeScanned=function(json){try{const d=typeof json==='string'?JSON.parse(json):json;const code=String(d?.barcode||d?.code||d?.value||json||'').trim();if(!code)return;const p=products.find(x=>String(x.barcode||'').trim()===code);if(!p){showToast('Товар со штрихкодом не найден');return;}if(typeof currentView!=='undefined'&&currentView==='orders'&&typeof cart!=='undefined'&&typeof renderCartBar==='function'){var __posLine=cart.find(function(l){return l.productId===p.id;});if(__posLine){if(__posLine.emergencySale||__posLine.qty<p.qty)__posLine.qty++;}else{cart.push({productId:p.id,qty:1,price:p.price,emergencySale:false});}try{renderCartBar();}catch(_e){}try{if(typeof feedbackAddToCart==='function')feedbackAddToCart();}catch(_e){}try{if(typeof showPosNotice==='function')showPosNotice(p.name+' \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d \u0432 \u0447\u0435\u043a');}catch(_e){}}else{addProduct(p);try{render();}catch(_e){}} }catch(e){showToast('Не удалось обработать штрихкод');}};
     const finish=()=>finishInventorySession(session.id); document.getElementById('inv-finish').onclick=finish; document.getElementById('inv-finish-bottom').onclick=finish;
   };
   render();
@@ -6753,7 +6756,8 @@ function showInventoryClosedScreen(sessionId){
   const close=()=>{root.innerHTML='';safeRender();};document.getElementById('inv-closed-close').onclick=close;document.getElementById('inv-closed-done').onclick=close;document.getElementById('inv-closed-print').onclick=()=>printInventoryAct(s.id);
 }
 function buildInventoryPrintHtml(s){
-  const rows=Object.values(s.items||{});return `<html><head><meta charset="utf-8"><title>Акт инвентаризации</title><style>body{font-family:Arial,sans-serif;padding:18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px;text-align:left}.num{text-align:right}.line{border-top:1px solid #ccc;margin:12px 0}</style></head><body><h2>Акт инвентаризации</h2><div>Дата: ${escapeHtml(fmtDate(s.closedAt||s.startedAt))}</div><div>Ответственный: ${escapeHtml(s.startedByName||'')}</div><div>${escapeHtml(s.comment||'')}</div><div class="line"></div><table><thead><tr><th>Товар</th><th>SKU</th><th>Учёт</th><th>Факт</th><th>Отклонение</th></tr></thead><tbody>${rows.map(it=>`<tr><td>${escapeHtml(it.name||'')}</td><td>${escapeHtml(it.sku||'')}</td><td class="num">${Number(it.bookQty)||0}</td><td class="num">${Number(it.actualQty)||0}</td><td class="num">${Number(it.diff)||0}</td></tr>`).join('')}</tbody></table></body></html>`;
+  const rows=Object.values(s.items||{});return `<html><head><meta charset="utf-8"><title>Акт инвентаризации</title><style>body{font-family:Arial,sans-serif;padding:18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px;text-align:left}.num{text-align:right}.line{border-top:1px solid #ccc;margin:12px 0}</style></head><body><h2>Акт инвентаризации</h2><div>Дата: ${escapeHtml(fmtDate(s.closedAt||s.startedAt))}</div><div>Ответственный: ${escapeHtml(s.startedByName||'')}</div><div>${escapeHtml(s.comment||'')}</div><div class="line"></div><table><thead><tr><th>Товар</th><th>SKU</th><th>Учёт</th><th>Факт</th><th>Отклонение</th></tr></thead><tbody>${rows.map(it=>`<tr><td>${escapeHtml(it.name||'')}</td><td>${escapeHtml(it.sku||'')}</td><td class="num">${Number(it.bookQty)||0}</td><td class="num">${Number(it.actualQty)||0}</td><td class="num">${Number(it.diff)||0}</td></tr>`).join('')}</tbody></table>
+</body></html>`;
 }
 function printInventoryAct(sessionId){const s=inventorySessions.find(x=>x.id===sessionId);if(!s)return;const html=buildInventoryPrintHtml(s);if(window.Android&&typeof window.Android.printReceipt==='function'){try{window.Android.printReceipt(html);return;}catch(e){}}const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),250);}}
 function openInventorySessionDetail(sessionId){
@@ -7170,5 +7174,89 @@ window._scannerBridge = function() {
 </script>
 <!-- === /POS floating scanner === -->
 <script src="ui-extra.js"></script>
+
+
+
+<!-- ONI-POS-SCAN-HANDLER-V3 -->
+<script>
+(function(){
+function __oniInstallScanHandlerV3(){
+    window.onBarcodeScanned = function(json){
+        try {
+            var d = typeof json === 'string' ? JSON.parse(json) : json;
+            var code = String((d && (d.barcode || d.code || d.value)) || '').trim();
+            if (!code) return;
+
+            var found = null;
+            if (typeof products !== 'undefined' && Array.isArray(products)) {
+                for (var i = 0; i < products.length; i++) {
+                    var pp = products[i];
+                    if (pp.isCategoryPlaceholder) continue;
+                    var bcs = (typeof productBarcodes === 'function') ? productBarcodes(pp) : [String(pp.barcode || '').trim()];
+                    if (bcs && bcs.indexOf(code) >= 0) { found = pp; break; }
+                }
+            }
+            if (!found) {
+                if (typeof showToast === 'function') showToast('\u0428\u0442\u0440\u0438\u0445\u043a\u043e\u0434 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d: ' + code);
+                return;
+            }
+
+            var isPOS = (typeof currentView !== 'undefined' && currentView === 'orders') && (typeof ordersSubView !== 'undefined' && ordersSubView === 'pos');
+            var hasCart = (typeof cart !== 'undefined' && Array.isArray(cart));
+
+            if (isPOS && hasCart) {
+                var line = cart.find(function(x){ return x.productId === found.id; });
+                if (line) {
+                    if (line.emergencySale || line.qty < (found.qty || 999999)) line.qty++;
+                } else {
+                    cart.push({ productId: found.id, qty: 1, price: found.price, emergencySale: false });
+                }
+                console.log('[ONI-SCAN3] push/inc cart.len=' + cart.length);
+
+                // Persist (cart === _carts[active].items, синхронизация не нужна)
+                try { if (typeof _saveCarts === 'function') _saveCarts(); } catch(_e) {}
+
+                // Re-render modal if open — CORRECT selector
+                var modalRoot = document.getElementById('modal-root');
+                var sheetOpen = !!(modalRoot && modalRoot.querySelector('.sheet-overlay'));
+                console.log('[ONI-SCAN3] sheetOpen=' + sheetOpen);
+                if (sheetOpen && typeof openCartSheet === 'function') {
+                    try {
+                        openCartSheet();  // re-render from cart
+                        console.log('[ONI-SCAN3] openCartSheet() re-rendered');
+                    } catch(_e) { console.log('[ONI-SCAN3] openCartSheet err: ' + _e.message); }
+                }
+
+                // Always update bottom bar
+                try { if (typeof renderCartBar === 'function') renderCartBar(); } catch(_e) {}
+
+                // DOM verify
+                setTimeout(function(){
+                    try {
+                        var cnt = document.querySelectorAll('#modal-root .cart-items .cart-item').length;
+                        console.log('[ONI-SCAN3] DOM items=' + cnt + ' cart.len=' + cart.length);
+                    } catch(_e) {}
+                }, 100);
+
+                try { if (typeof feedbackAddToCart === 'function') feedbackAddToCart(); } catch(_e) {}
+                try { if (typeof showPosNotice === 'function') showPosNotice((found.name || '\u0422\u043e\u0432\u0430\u0440') + ' \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d \u0432 \u0447\u0435\u043a'); } catch(_e) {}
+                return;
+            }
+
+            if (typeof session !== 'undefined' && session && session.items) {
+                if (!session.items[found.id]) session.items[found.id] = { productId: found.id, name: found.name || '', sku: found.sku || '', bookQty: Number(found.qty) || 0, actualQty: null, cost: Number(found.cost) || 0 };
+                try { if (typeof render === 'function') render(); } catch(_e) {}
+                return;
+            }
+
+            if (typeof addProduct === 'function') addProduct(found);
+        } catch(e) { console.log('[ONI-SCAN3] ERROR ' + (e && e.message)); }
+    };
+}
+__oniInstallScanHandlerV3();
+setTimeout(__oniInstallScanHandlerV3, 500);
+setTimeout(__oniInstallScanHandlerV3, 2000);
+})();
+</script>
 </body>
 </html>
